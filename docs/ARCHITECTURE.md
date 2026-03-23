@@ -410,4 +410,167 @@ storage:
 
 ---
 
-## ❓ Переходим к следующему этапу? (Этап 3 - Backend Kotlin)
+# Этап 6: Рекомендательная система
+
+## 📌 Что делаем
+
+Реализуем гибридную рекомендательную систему: Rule-based + AI.
+
+## 🧠 Гибридный алгоритм
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                  HYBRID RECOMMENDATION ENGINE                    │
+└─────────────────────────────────────────────────────────────────┘
+
+┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
+│  User Profile    │───►│  Rule-Based     │───►│   AI Scoring    │
+│  (skin_type,     │    │  Filtering      │    │   (Embeddings)  │
+│   concerns,      │    │                 │    │                 │
+│   allergies)     │    │  - Skin type   │    │  - Cosine sim   │
+│                  │    │  - Allergies    │    │  - Concern match│
+│                  │    │  - Concerns     │    │  - Goals match  │
+└──────────────────┘    └──────────────────┘    └──────────────────┘
+                                  │                        │
+                                  └──────────┬─────────────┘
+                                             ▼
+                                  ┌──────────────────┐
+                                  │   Combine & Rank │
+                                  │                  │
+                                  │  Score =         │
+                                  │  0.4 * similarity│
+                                  │  + 0.3 * concern │
+                                  │  + 0.2 * skin    │
+                                  │  + 0.1 * popular │
+                                  └──────────────────┘
+```
+
+## 💻 Компоненты
+
+### 1. Hybrid Recommendation Engine
+
+```python
+# ai-service/app/services/hybrid_recommendation.py
+class HybridRecommendationEngine:
+    """Hybrid: Rule-based + AI Vector Search"""
+    
+    def get_recommendations(self, user_profile, products, limit=10):
+        # Step 1: Rule-based filtering
+        filtered = self._rule_based_filter(user_profile, products)
+        
+        # Step 2: AI scoring with vector similarity  
+        scored = self._ai_scoring(user_profile, filtered)
+        
+        # Step 3: Combine and rank
+        ranked = sorted(scored, key=lambda x: x['score'], reverse=True)
+        return ranked[:limit]
+    
+    def _rule_based_filter(self, user_profile, products):
+        """Rule-based filtering by skin type, allergies, concerns"""
+        # Filter by skin type compatibility
+        # Filter out allergens
+        # Flag products matching concerns
+        return filtered
+    
+    def _ai_scoring(self, user_profile, products):
+        """AI-powered scoring with embeddings"""
+        # Calculate cosine similarity
+        # Add concern match bonus (30%)
+        # Add skin type bonus (20%)
+        # Add popularity bonus (10%)
+        return scored_products
+```
+
+### 2. Ingredient Analyzer
+
+```python
+# ai-service/app/services/ingredient_analyzer.py
+class IngredientAnalyzer:
+    """Analyze cosmetic ingredients for safety"""
+    
+    INGREDIENT_DB = {
+        "water": {"safety": "SAFE", "category": "SOLVENT"},
+        "glycerin": {"safety": "SAFE", "category": "HUMECTANT"},
+        "retinol": {"safety": "CAUTION", "risks": ["раздражение"]},
+        "fragrance": {"safety": "CAUTION", "risks": ["аллергия"]},
+        "parabens": {"safety": "AVOID", "risks": ["эндокринные"]},
+    }
+    
+    CONFLICTS = [
+        (["retinol", "vitamin c"], "Не использовать вместе"),
+        (["benzoyl peroxide", "retinol"], "Снижает эффективность"),
+    ]
+    
+    def analyze(self, ingredients):
+        # Count safety levels
+        # Check conflicts
+        # Calculate overall score
+        return analysis_result
+    
+    def check_skin_type_compatibility(self, ingredients, skin_type):
+        # Check if ingredients are suitable for skin type
+        return compatibility_result
+```
+
+## 📊 Scoring Formula
+
+```
+Final Score = 0.4 * CosineSimilarity + 0.3 * ConcernMatch + 0.2 * SkinTypeMatch + 0.1 * Popularity
+```
+
+| Factor | Weight | Description |
+|--------|--------|-------------|
+| Cosine Similarity | 40% | Vector similarity between user profile and product |
+| Concern Match | 30% | Product targets user's skin concerns |
+| Skin Type Match | 20% | Product is suitable for user's skin type |
+| Popularity | 10% | Social proof from other users |
+
+## 📄 Примеры запросов
+
+```bash
+# Гибридные рекомендации
+curl -X POST http://localhost:9001/api/v1/recommendations/hybrid \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "123",
+    "skin_type": "DRY",
+    "concerns": ["DRYNESS", "AGING"],
+    "allergies": [],
+    "goals": ["HYDRATION", "ANTI_AGING"],
+    "limit": 10
+  }'
+
+# Анализ состава
+curl -X POST http://localhost:9001/api/v1/ingredients/analyze \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ingredients": ["water", "glycerin", "retinol", "fragrance"],
+    "skin_type": "SENSITIVE"
+  }'
+```
+
+## 📄 Документация
+
+**Endpoints:**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | /recommendations/hybrid | Гибридные рекомендации |
+| POST | /ingredients/analyze | Анализ состава |
+| GET | /ingredients/db/{name} | Информация об ингредиенте |
+
+**Алгоритм:**
+1. Rule-based фильтрация (аллергии, тип кожи)
+2. AI scoring через embeddings
+3. Комбинирование факторов
+4. Ранжирование
+
+**Безопасность ингредиентов:**
+- SAFE: Вода, глицерин, гиалуроновая кислота, ниацинамид
+- MODERATE: Салициловая кислота, AHA, витамин C
+- CAUTION: Ретинол, отдушка, спирт
+- AVOID: Парабены, синтетические красители
+
+---
+
+## ❓ Переходим к следующему этапу? (Этап 7 - RAG ассистент)
