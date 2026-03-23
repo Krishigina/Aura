@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 import logging
 
 from app.core.config import settings
-from app.api.routes import rag, recommendations, ingredients
+from app.api.routes import rag_router, recommendations_router, hybrid_recommendations_router, ingredients_router
 from app.models.schemas import HealthResponse
 
 logging.basicConfig(
@@ -33,9 +33,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(rag.router, prefix="/api/v1")
-app.include_router(recommendations.router, prefix="/api/v1")
-app.include_router(ingredients.router, prefix="/api/v1")
+app.include_router(rag_router, prefix="/api/v1")
+app.include_router(recommendations_router, prefix="/api/v1")
+app.include_router(hybrid_recommendations_router, prefix="/api/v1")
+app.include_router(ingredients_router, prefix="/api/v1")
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
