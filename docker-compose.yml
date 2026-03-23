@@ -116,6 +116,18 @@ services:
       postgres:
         condition: service_healthy
 
+  # Admin Service (Web Dashboard)
+  admin-service:
+    build: ./backend/services/admin-service
+    container_name: aura_admin_service
+    ports:
+      - "8010:8010"
+    environment:
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/aura
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   # AI Service
   ai-service:
     build: ./ai-service
