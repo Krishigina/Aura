@@ -1,0 +1,48 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editors and IDEs
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Environment files
+.env
+.env.local
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+venv/
+
+# Node.js
+node_modules/
+dist/
+.vite/
+
+# JVM and Kotlin
+.gradle/
+build/
+out/
+target/
+*.class
+*.jar
+*.war
+*.ear
+
+# Logs
+*.log
+
+# Local temp and backup files
+*.bak
+*.tmp
+*.swp
+*.swo
