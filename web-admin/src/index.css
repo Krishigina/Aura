@@ -138,21 +138,6 @@
   color: var(--color-on-surface);
 }
 
-/* Modal Styles */
-.modal {
-  width: 100%;
-  max-width: 560px;
-  max-height: 90vh;
-  overflow-y: auto;
-  padding: var(--spacing-xl);
-  animation: slideIn var(--transition-normal) ease-out;
-  scrollbar-width: none;
-}
-
-.modal::-webkit-scrollbar {
-  display: none;
-}
-
 /* Dark Form Styles */
 [data-theme="dark"] .form-group label {
   color: var(--color-gray-400);
