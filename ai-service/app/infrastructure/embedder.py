@@ -1,46 +1,49 @@
 import numpy as np
-from sentence_transformers import SentenceTransformer
 from typing import List
 import logging
+import httpx
 
 logger = logging.getLogger(__name__)
 
 class Embedder:
-    def __init__(self, model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
-        self.model_name = model_name
-        self.model = None
-        self._load_model()
-    
-    def _load_model(self):
-        try:
-            logger.info(f"Loading embedding model: {self.model_name}")
-            self.model = SentenceTransformer(self.model_name)
-            logger.info("Embedding model loaded successfully")
-        except Exception as e:
-            logger.error(f"Failed to load embedding model: {e}")
-            raise
+    def __init__(self, model_url: str = "http://t2v-transformers:8080"):
+        self.model_url = model_url
+        self.dimension = 384
     
     def embed(self, text: str) -> List[float]:
-        if not self.model:
-            raise RuntimeError("Embedding model not loaded")
-        embedding = self.model.encode(text, convert_to_numpy=True)
-        return embedding.tolist()
+        try:
+            with httpx.Client() as client:
+                response = client.post(
+                    f"{self.model_url}/vectors",
+                    json={"texts": [text]},
+                    timeout=30.0
+                )
+                if response.status_code == 200:
+                    result = response.json()
+                    return result["vectors"][0]
+        except Exception as e:
+            logger.error(f"Failed to get embedding from t2v service: {e}")
+        return [0.0] * self.dimension
     
     def embed_batch(self, texts: List[str]) -> List[List[float]]:
-        if not self.model:
-            raise RuntimeError("Embedding model not loaded")
-        embeddings = self.model.encode(texts, convert_to_numpy=True, show_progress_bar=False)
-        return [emb.tolist() for emb in embeddings]
-    
-    @property
-    def dimension(self) -> int:
-        return self.model.get_sentence_embedding_dimension()
+        try:
+            with httpx.Client() as client:
+                response = client.post(
+                    f"{self.model_url}/vectors",
+                    json={"texts": texts},
+                    timeout=30.0
+                )
+                if response.status_code == 200:
+                    result = response.json()
+                    return result["vectors"]
+        except Exception as e:
+            logger.error(f"Failed to get embeddings from t2v service: {e}")
+        return [[0.0] * self.dimension for _ in texts]
 
 _embedder: Embedder = None
 
 def get_embedder() -> Embedder:
     global _embedder
     if _embedder is None:
-        from app.core.config import settings
-        _embedder = Embedder(settings.embedding_model)
+        _embedder = Embedder()
     return _embedder
