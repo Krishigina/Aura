@@ -9,8 +9,8 @@ class AuraApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         startKoin {
-            androidContext()
-            modules(appModule(this@AuraApplication))
+            androidContext(this@AuraApplication)
+            modules(appModule)
         }
     }
 }
