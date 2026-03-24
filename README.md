@@ -32,7 +32,9 @@ docker-compose ps
 | Product Service | http://localhost:8003 | Каталог продуктов |
 | Recommendation Service | http://localhost:8004 | Рекомендации |
 | Tracker Service | http://localhost:8005 | Трекер, напоминания |
+| Admin Service | http://localhost:8010 | Панель управления |
 | AI Service | http://localhost:9001 | RAG, рекомендации |
+| Web Admin | http://localhost:8010 | Веб-интерфейс |
 | PostgreSQL | localhost:5432 | База данных |
 | Redis | localhost:6379 | Кэш |
 | Weaviate | localhost:8080 | Vector DB |

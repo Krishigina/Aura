@@ -1,0 +1,129 @@
+.procedures-page {
+  animation: fadeIn var(--transition-normal) ease-out;
+}
+
+.procedures-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--spacing-lg);
+}
+
+.procedure-card {
+  padding: var(--spacing-lg);
+}
+
+.procedure-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--spacing-md);
+}
+
+.procedure-header h4 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+
+.procedure-meta {
+  display: flex;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-md);
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: 14px;
+  color: var(--color-gray-600);
+}
+
+.meta-item svg {
+  color: var(--color-mint-green);
+}
+
+.procedure-category {
+  font-size: 13px;
+  color: var(--color-gray-500);
+  padding: 4px 12px;
+  background: var(--color-gray-100);
+  border-radius: var(--radius-full);
+  display: inline-block;
+}
+
+.clickable {
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-mint);
+}
+
+.procedure-actions {
+  display: flex;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--color-gray-100);
+}
+
+.search-wrapper {
+  position: relative;
+  flex: 1;
+  min-width: 250px;
+}
+
+.search-wrapper .search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  color: var(--color-gray-400);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.search-wrapper .search-input {
+  width: 100%;
+  padding: 10px 12px 10px 44px;
+  font-family: var(--font-family);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-on-surface);
+  background: var(--color-surface);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.search-wrapper .search-input:focus {
+  border-color: var(--color-mint-green);
+  box-shadow: 0 0 0 3px rgba(167, 243, 208, 0.2);
+}
+
+.search-wrapper .search-input::placeholder {
+  color: var(--color-gray-400);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+.modal-header h3 {
+  margin-bottom: 0;
+}
+
+.empty-state {
+  text-align: center;
+  padding: var(--spacing-2xl);
+  color: var(--color-gray-500);
+}

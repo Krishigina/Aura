@@ -1,0 +1,284 @@
+import { useState, useEffect } from 'react'
+import { useAuth } from '../context/AuthContext'
+import { Search, Plus, Edit2, Trash2, X, Image, FileText, Tag, DollarSign } from 'lucide-react'
+import './Products.css'
+
+const STORAGE_KEY = 'aura_products'
+
+const SEGMENTS = ['Бюджетная', 'Люкс', 'Профессиональная', 'Космецевтика']
+const BRANDS = ['Aura', 'La Roche-Posay', 'Vichy', 'Bioderma', 'CeraVe', 'The Ordinary', 'Paula\'s Choice', 'Cosrx', 'Eucerin', 'Nivea']
+const CATEGORIES = ['Очищение', 'Увлажнение', 'Сыворотки', 'SPF', 'Уход', 'Маска', 'Тоник', 'Крем', 'Масло']
+const VOLUMES = ['15мл', '30мл', '50мл', '75мл', '100мл', '150мл', '200мл', '250мл', '500мл', '1л']
+
+const defaultProducts = [
+  { id: 1, name: 'Hydrating Serum', brand: 'Aura', category: 'Сыворотки', description: 'Увлажняющая сыворотка с гиалуроновой кислотой', images: [], volume: '30мл', segment: 'Люкс' },
+  { id: 2, name: 'Vitamin C Cream', brand: 'Aura', category: 'Увлажнение', description: 'Антиоксидантный крем с витамином C', images: [], volume: '50мл', segment: 'Бюджетная' },
+  { id: 3, name: 'Barrier Repair', brand: 'Aura', category: 'Уход', description: 'Восстанавливающий крем для кожного барьера', images: [], volume: '50мл', segment: 'Профессиональная' },
+  { id: 4, name: 'SPF 50+ Protection', brand: 'Aura', category: 'SPF', description: 'Солнцезащитный крем SPF 50+', images: [], volume: '50мл', segment: 'Люкс' },
+  { id: 5, name: 'Cleansing Foam', brand: 'Aura', category: 'Очищение', description: 'Мягкая пенка для умывания', images: [], volume: '150мл', segment: 'Бюджетная' },
+]
+
+function loadProducts() {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    return stored ? JSON.parse(stored) : defaultProducts
+  } catch {
+    return defaultProducts
+  }
+}
+
+function saveProducts(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+}
+
+export default function Products() {
+  const { hasPermission } = useAuth()
+  const [products, setProducts] = useState(loadProducts)
+  const [search, setSearch] = useState('')
+  const [category, setCategory] = useState('Все')
+  const [showModal, setShowModal] = useState(false)
+  const [editingProduct, setEditingProduct] = useState(null)
+  const [deleteModal, setDeleteModal] = useState(null)
+
+  useEffect(() => {
+    saveProducts(products)
+  }, [products])
+
+  const canEdit = hasPermission('products')
+
+  const filteredProducts = products.filter(product => {
+    const matchesSearch = product.name.toLowerCase().includes(search.toLowerCase()) || 
+                         product.brand.toLowerCase().includes(search.toLowerCase()) ||
+                         product.description?.toLowerCase().includes(search.toLowerCase())
+    const matchesCategory = category === 'Все' || product.category === category
+    return matchesSearch && matchesCategory
+  })
+
+  const handleDelete = (product) => {
+    setDeleteModal(product)
+  }
+
+  const confirmDelete = () => {
+    if (deleteModal) {
+      setProducts(prev => prev.filter(p => p.id !== deleteModal.id))
+      setDeleteModal(null)
+    }
+  }
+
+  const handleEdit = (product) => {
+    setEditingProduct(product)
+    setShowModal(true)
+  }
+
+  const handleSave = (e) => {
+    e.preventDefault()
+    const formData = new FormData(e.target)
+    
+    const imageUrls = formData.get('images')?.split('\n').filter(url => url.trim()) || []
+    
+    const product = {
+      id: editingProduct?.id || Date.now(),
+      name: formData.get('name'),
+      brand: formData.get('brand'),
+      category: formData.get('category'),
+      description: formData.get('description') || '',
+      images: imageUrls,
+      volume: formData.get('volume'),
+      segment: formData.get('segment')
+    }
+
+    if (editingProduct) {
+      setProducts(prev => prev.map(p => p.id === editingProduct.id ? product : p))
+    } else {
+      setProducts(prev => [product, ...prev])
+    }
+
+    setShowModal(false)
+    setEditingProduct(null)
+  }
+
+  const openAddModal = () => {
+    setEditingProduct(null)
+    setShowModal(true)
+  }
+
+  const getSegmentClass = (segment) => {
+    const classes = {
+      'Бюджетная': 'segment-budget',
+      'Люкс': 'segment-lux',
+      'Профессиональная': 'segment-pro',
+      'Космецевтика': 'segment-cosmeceutical'
+    }
+    return classes[segment] || 'segment-budget'
+  }
+
+  return (
+    <div className="products-page">
+      <div className="page-header">
+        <div>
+          <h2>Продукты</h2>
+          <p>Управление косметическими средствами</p>
+        </div>
+        {canEdit && (
+          <button className="btn btn-primary" onClick={openAddModal}>
+            <Plus size={18} />
+            Добавить продукт
+          </button>
+        )}
+      </div>
+
+      <div className="filters-bar glass-card">
+        <div className="search-wrapper">
+          <Search className="search-icon" />
+          <input
+            type="text"
+            placeholder="Поиск продуктов..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="search-input"
+          />
+        </div>
+        <div className="category-tabs">
+          <button className={`category-tab ${category === 'Все' ? 'active' : ''}`} onClick={() => setCategory('Все')}>Все</button>
+          {CATEGORIES.map(cat => (
+            <button key={cat} className={`category-tab ${category === cat ? 'active' : ''}`} onClick={() => setCategory(cat)}>
+              {cat}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="table-card glass-card">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Название</th>
+              <th>Бренд</th>
+              <th>Категория</th>
+              <th>Объём</th>
+              <th>Сегмент</th>
+              {canEdit && <th>Действия</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {filteredProducts.map(product => (
+              <tr key={product.id} onClick={() => handleEdit(product)} style={{cursor: canEdit ? 'pointer' : 'default'}}>
+                <td>
+                  <div className="product-name">{product.name}</div>
+                  {product.description && <div className="product-desc">{product.description.substring(0, 50)}...</div>}
+                </td>
+                <td><span className="brand-badge">{product.brand}</span></td>
+                <td><span className="category-badge">{product.category}</span></td>
+                <td>{product.volume}</td>
+                <td><span className={`segment-badge ${getSegmentClass(product.segment)}`}>{product.segment}</span></td>
+                {canEdit && (
+                  <td>
+                    <div className="action-buttons">
+                      <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); handleEdit(product); }}>
+                        <Edit2 size={16} />
+                      </button>
+                      <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); handleDelete(product); }}>
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {filteredProducts.length === 0 && (
+        <div className="empty-state glass-card">
+          <p>Продукты не найдены</p>
+        </div>
+      )}
+
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal glass-card modal-wide" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{editingProduct ? 'Редактировать продукт' : 'Добавить продукт'}</h3>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowModal(false)}><X size={20} /></button>
+            </div>
+            <form onSubmit={handleSave}>
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>Название *</label>
+                  <input name="name" defaultValue={editingProduct?.name} className="input" required placeholder="Название продукта" />
+                </div>
+                <div className="form-group">
+                  <label>Бренд *</label>
+                  <select name="brand" defaultValue={editingProduct?.brand || 'Aura'} className="input">
+                    {BRANDS.map(brand => (
+                      <option key={brand} value={brand}>{brand}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Категория</label>
+                  <select name="category" defaultValue={editingProduct?.category || 'Увлажнение'} className="input">
+                    {CATEGORIES.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Объём</label>
+                  <select name="volume" defaultValue={editingProduct?.volume || '50мл'} className="input">
+                    {VOLUMES.map(vol => (
+                      <option key={vol} value={vol}>{vol}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Сегмент</label>
+                  <select name="segment" defaultValue={editingProduct?.segment || 'Бюджетная'} className="input">
+                    {SEGMENTS.map(seg => (
+                      <option key={seg} value={seg}>{seg}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label>Описание</label>
+                  <textarea name="description" defaultValue={editingProduct?.description || ''} className="input textarea" rows="3" placeholder="Описание продукта..." />
+                </div>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label>Фотографии (по одной URL на строку)</label>
+                  <textarea 
+                    name="images" 
+                    defaultValue={editingProduct?.images?.join('\n') || ''} 
+                    className="input textarea" 
+                    rows="4" 
+                    placeholder="https://example.com/image1.jpg&#10;https://example.com/image2.jpg&#10;https://example.com/image3.jpg"
+                  />
+                  <small style={{color: 'var(--color-gray-400)', fontSize: '12px'}}>Введите URL изображений, по одному на строку</small>
+                </div>
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>Отмена</button>
+                <button type="submit" className="btn btn-primary">Сохранить</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {deleteModal && (
+        <div className="modal-overlay" onClick={() => setDeleteModal(null)}>
+          <div className="modal glass-card" onClick={e => e.stopPropagation()} style={{maxWidth: '400px'}}>
+            <h3>Удалить продукт?</h3>
+            <p style={{marginTop: '8px', color: 'var(--color-gray-500)'}}>
+              Вы уверены, что хотите удалить "{deleteModal.name}"?
+            </p>
+            <div className="modal-actions">
+              <button className="btn btn-ghost" onClick={() => setDeleteModal(null)}>Отмена</button>
+              <button className="btn btn-danger" onClick={confirmDelete}>Удалить</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

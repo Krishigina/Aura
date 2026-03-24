@@ -1,0 +1,145 @@
+.reports-page {
+  animation: fadeIn var(--transition-normal) ease-out;
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.chart-card {
+  padding: var(--spacing-lg);
+}
+
+.chart-card h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-on-surface);
+  margin-bottom: var(--spacing-md);
+}
+
+.chart-container {
+  height: 280px;
+}
+
+.reports-section {
+  padding: var(--spacing-lg);
+}
+
+.reports-section h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-on-surface);
+  margin-bottom: var(--spacing-lg);
+}
+
+.reports-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.report-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-md);
+}
+
+.report-icon {
+  width: 48px;
+  height: 48px;
+  background: rgba(167, 243, 208, 0.2);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-mint-green-dark);
+}
+
+.report-info {
+  flex: 1;
+}
+
+.report-info h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+
+.report-info p {
+  font-size: 13px;
+  color: var(--color-gray-500);
+}
+
+.report-meta {
+  font-size: 12px;
+  color: var(--color-gray-400);
+}
+
+.export-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.export-card {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-md);
+}
+
+.export-icon {
+  width: 48px;
+  height: 48px;
+  background: rgba(251, 111, 232, 0.2);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-pink);
+}
+
+.export-info {
+  flex: 1;
+}
+
+.export-info h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+
+.export-info p {
+  font-size: 13px;
+  color: var(--color-gray-500);
+}
+
+/* Dark Theme */
+[data-theme="dark"] .report-item,
+[data-theme="dark"] .export-card {
+  background: var(--color-gray-100);
+}
+
+[data-theme="dark"] .report-icon {
+  background: rgba(167, 243, 208, 0.15);
+  color: var(--color-mint-green);
+}
+
+[data-theme="dark"] .export-icon {
+  background: rgba(251, 111, 232, 0.15);
+  color: var(--color-pink);
+}
+
+@media (max-width: 1024px) {
+  .charts-grid {
+    grid-template-columns: 1fr;
+  }
+}
