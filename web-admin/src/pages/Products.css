@@ -167,6 +167,53 @@
   color: #059669;
 }
 
+.modal-wide {
+  max-width: 700px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+.modal-header h3 {
+  margin-bottom: 0;
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: var(--spacing-2xl);
+  color: var(--color-gray-500);
+}
+
+.compatibility {
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+}
+
+.compatibility.high {
+  background: rgba(167, 243, 208, 0.2);
+  color: var(--color-success);
+}
+
+.compatibility.medium {
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--color-warning);
+}
+
+.compatibility.low {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--color-error);
+}
+
 .clickable {
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -201,15 +248,8 @@
 .modal {
   width: 100%;
   max-width: 560px;
-  max-height: 90vh;
-  overflow-y: auto;
   padding: var(--spacing-xl);
   animation: slideIn var(--transition-normal) ease-out;
-  scrollbar-width: none;
-}
-
-.modal::-webkit-scrollbar {
-  display: none;
 }
 
 .modal h3 {
@@ -217,21 +257,6 @@
   font-weight: 600;
   margin-bottom: var(--spacing-lg);
   color: var(--color-on-surface);
-}
-
-.modal-wide {
-  max-width: 700px;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-lg);
-}
-
-.modal-header h3 {
-  margin-bottom: 0;
 }
 
 .form-grid {
@@ -252,11 +277,6 @@
   color: var(--color-gray-700);
 }
 
-.textarea {
-  resize: vertical;
-  min-height: 80px;
-}
-
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -264,33 +284,6 @@
   margin-top: var(--spacing-lg);
   padding-top: var(--spacing-lg);
   border-top: 1px solid var(--color-gray-200);
-}
-
-.empty-state {
-  text-align: center;
-  padding: var(--spacing-2xl);
-  color: var(--color-gray-500);
-}
-
-.compatibility {
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: var(--radius-full);
-}
-
-.compatibility.high {
-  background: rgba(167, 243, 208, 0.2);
-  color: var(--color-success);
-}
-
-.compatibility.medium {
-  background: rgba(245, 158, 11, 0.2);
-  color: var(--color-warning);
-}
-
-.compatibility.low {
-  background: rgba(239, 68, 68, 0.2);
-  color: var(--color-error);
 }
 
 /* Responsive */
@@ -334,8 +327,4 @@
   background: var(--color-gray-100);
   border-color: var(--color-gray-300);
   color: var(--color-on-surface);
-}
-
-[data-theme="dark"] .modal-actions {
-  border-top-color: rgba(255, 255, 255, 0.1);
 }

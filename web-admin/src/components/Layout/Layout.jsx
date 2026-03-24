@@ -14,6 +14,7 @@ import {
   X,
   ChevronLeft
 } from 'lucide-react'
+import './Layout.css'
 
 const menuItems = [
   { path: '/', icon: LayoutDashboard, label: 'Дашборд', permission: 'dashboard' },
