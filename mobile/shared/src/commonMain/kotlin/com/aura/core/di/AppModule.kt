@@ -4,7 +4,5 @@ import com.aura.core.data.api.AuraApiClient
 import org.koin.dsl.module
 
 val appModule = module {
-    single { AuraApiClient("http://10.0.2.2:8000", get()) }
+    single { AuraApiClient("http://10.0.2.2:8000") }
 }
-
-class TokenManager { fun getAccessToken(): String? = null }
