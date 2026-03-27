@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { Search, Plus, Edit2, Trash2, X, Image, FileText, Tag, DollarSign, Settings, Check } from 'lucide-react'
+import { Search, Plus, Edit2, Trash2, X, Image, FileText, Tag, DollarSign, Settings, Check, ChevronDown, ChevronRight, Package } from 'lucide-react'
 import './Products.css'
 
 const STORAGE_KEY = 'aura_products'
@@ -69,6 +69,13 @@ function saveEnums(enums) {
   }
 }
 
+const dictConfig = {
+  brands: { label: 'Бренды', icon: Package, color: '#9333EA' },
+  categories: { label: 'Категории', icon: Tag, color: '#059669' },
+  segments: { label: 'Сегменты', icon: Check, color: '#D97706' },
+  volumes: { label: 'Объёмы', icon: Image, color: '#2563EB' }
+}
+
 export default function Products() {
   const { hasPermission, user } = useAuth()
   const [products, setProducts] = useState(loadProducts)
@@ -78,9 +85,11 @@ export default function Products() {
   const [showModal, setShowModal] = useState(false)
   const [editingProduct, setEditingProduct] = useState(null)
   const [deleteModal, setDeleteModal] = useState(null)
-  const [showDictionaries, setShowDictionaries] = useState(false)
-  const [newEnumValue, setNewEnumValue] = useState('')
-  const [activeEnum, setActiveEnum] = useState(null)
+  const [showDictPanel, setShowDictPanel] = useState(false)
+  const [expandedDict, setExpandedDict] = useState(null)
+  const [newValue, setNewValue] = useState('')
+  const [editingValue, setEditingValue] = useState(null)
+  const [editValue, setEditValue] = useState('')
 
   const canEdit = hasPermission('products')
   const canManageEnums = user?.role === 'admin'
@@ -101,144 +110,68 @@ export default function Products() {
     return matchesSearch && matchesCategory
   })
 
-  const handleDelete = (product) => {
-    setDeleteModal(product)
-  }
-
+  const handleDelete = (product) => setDeleteModal(product)
   const confirmDelete = () => {
     if (deleteModal) {
       setProducts(prev => prev.filter(p => p.id !== deleteModal.id))
       setDeleteModal(null)
     }
   }
-
-  const handleEdit = (product) => {
-    setEditingProduct(product)
-    setShowModal(true)
-  }
+  const handleEdit = (product) => { setEditingProduct(product); setShowModal(true) }
+  const openAddModal = () => { setEditingProduct(null); setShowModal(true) }
 
   const handleSave = (e) => {
     e.preventDefault()
     const formData = new FormData(e.target)
-    
-    const imageUrls = formData.get('images')?.split('\n').filter(url => url.trim()) || []
-    
     const product = {
       id: editingProduct?.id || Date.now(),
       name: formData.get('name'),
       brand: formData.get('brand'),
       category: formData.get('category'),
       description: formData.get('description') || '',
-      images: imageUrls,
+      images: formData.get('images')?.split('\n').filter(url => url.trim()) || [],
       volume: formData.get('volume'),
       segment: formData.get('segment')
     }
-
     if (editingProduct) {
       setProducts(prev => prev.map(p => p.id === editingProduct.id ? product : p))
     } else {
       setProducts(prev => [product, ...prev])
     }
-
     setShowModal(false)
     setEditingProduct(null)
   }
 
-  const openAddModal = () => {
-    setEditingProduct(null)
-    setShowModal(true)
-  }
-
   const getSegmentClass = (segment) => {
-    const classes = {
-      'Бюджетная': 'segment-budget',
-      'Люкс': 'segment-lux',
-      'Профессиональная': 'segment-pro',
-      'Космецевтика': 'segment-cosmeceutical'
-    }
+    const classes = { 'Бюджетная': 'segment-budget', 'Люкс': 'segment-lux', 'Профессиональная': 'segment-pro', 'Космецевтика': 'segment-cosmeceutical' }
     return classes[segment] || 'segment-budget'
   }
 
-  const addEnumValue = (key) => {
-    if (!newEnumValue.trim()) return
+  const toggleDict = (key) => setExpandedDict(expandedDict === key ? null : key)
+  
+  const addValue = (key) => {
+    if (!newValue.trim()) return
+    setEnums(prev => ({ ...prev, [key]: [...prev[key], newValue.trim()] }))
+    setNewValue('')
+  }
+  
+  const deleteValue = (key, value) => {
+    setEnums(prev => ({ ...prev, [key]: prev[key].filter(v => v !== value) }))
+  }
+  
+  const startEdit = (key, value) => {
+    setEditingValue({ key, value })
+    setEditValue(value)
+  }
+  
+  const saveEdit = () => {
+    if (!editValue.trim()) return
     setEnums(prev => ({
       ...prev,
-      [key]: [...prev[key], newEnumValue.trim()]
+      [editingValue.key]: prev[editingValue.key].map(v => v === editingValue.value ? editValue.trim() : v)
     }))
-    setNewEnumValue('')
-  }
-
-  const deleteEnumValue = (key, value) => {
-    setEnums(prev => ({
-      ...prev,
-      [key]: prev[key].filter(v => v !== value)
-    }))
-  }
-
-  const DictionarySection = () => {
-    const dictLabels = {
-      brands: 'Бренды',
-      categories: 'Категории',
-      segments: 'Сегменты',
-      volumes: 'Объёмы'
-    }
-
-    if (!showDictionaries) {
-      return (
-        canManageEnums && (
-          <button className="btn btn-ghost" onClick={() => setShowDictionaries(true)}>
-            <Settings size={16} />Управление справочниками
-          </button>
-        )
-      )
-    }
-
-    return (
-      <div className="dictionaries-panel glass-card">
-        <div className="dictionaries-header">
-          <h3>Управление справочниками</h3>
-          <button className="btn btn-ghost btn-sm" onClick={() => setShowDictionaries(false)}>
-            <X size={16} />
-          </button>
-        </div>
-        
-        <div className="dictionaries-grid">
-          {Object.entries(enums).map(([key, values]) => (
-            <div key={key} className="dictionary-section">
-              <h4>{dictLabels[key]}</h4>
-              <div className="dictionary-tags">
-                {values.map((value, idx) => (
-                  <span key={idx} className="dictionary-tag">
-                    {value}
-                    <button className="tag-remove" onClick={() => deleteEnumValue(key, value)}>
-                      <X size={12} />
-                    </button>
-                  </span>
-                ))}
-              </div>
-              {canManageEnums && (
-                <div className="add-value-row">
-                  <input
-                    type="text"
-                    className="input input-sm"
-                    placeholder="Добавить..."
-                    value={activeEnum === key ? newEnumValue : ''}
-                    onChange={e => {
-                      setActiveEnum(key)
-                      setNewEnumValue(e.target.value)
-                    }}
-                    onKeyDown={e => e.key === 'Enter' && addEnumValue(key)}
-                  />
-                  <button className="btn btn-sm btn-primary" onClick={() => addEnumValue(key)}>
-                    <Plus size={14} />
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    )
+    setEditingValue(null)
+    setEditValue('')
   }
 
   return (
@@ -249,33 +182,83 @@ export default function Products() {
           <p>Управление косметическими средствами</p>
         </div>
         <div className="header-actions">
-          <DictionarySection />
+          {canManageEnums && (
+            <button className={`btn ${showDictPanel ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setShowDictPanel(!showDictPanel)}>
+              <Settings size={16} />{showDictPanel ? 'Скрыть' : 'Справочники'}
+            </button>
+          )}
           {canEdit && (
             <button className="btn btn-primary" onClick={openAddModal}>
-              <Plus size={18} />
-              Добавить продукт
+              <Plus size={18} />Добавить
             </button>
           )}
         </div>
       </div>
 
+      {showDictPanel && canManageEnums && (
+        <div className="dict-panel glass-card">
+          <div className="dict-panel-header">
+            <h3>Справочники</h3>
+            <p>Управление значениями справочников для продуктов</p>
+          </div>
+          <div className="dict-accordion">
+            {Object.entries(dictConfig).map(([key, config]) => {
+              const Icon = config.icon
+              const values = enums[key] || []
+              const isExpanded = expandedDict === key
+              return (
+                <div key={key} className="dict-item">
+                  <button className="dict-item-header" onClick={() => toggleDict(key)} style={{ borderColor: isExpanded ? config.color : 'transparent' }}>
+                    <div className="dict-header-left">
+                      <div className="dict-icon" style={{ background: `${config.color}20`, color: config.color }}><Icon size={18} /></div>
+                      <span className="dict-label">{config.label}</span>
+                      <span className="dict-count">{values.length}</span>
+                    </div>
+                    <ChevronDown size={18} className={`dict-chevron ${isExpanded ? 'rotated' : ''}`} />
+                  </button>
+                  {isExpanded && (
+                    <div className="dict-item-content">
+                      <div className="dict-values-list">
+                        {values.map((value, idx) => (
+                          <div key={idx} className="dict-value-row">
+                            {editingValue?.key === key && editingValue?.value === value ? (
+                              <div className="dict-edit-row">
+                                <input className="input input-sm" value={editValue} onChange={e => setEditValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && saveEdit()} autoFocus />
+                                <button className="btn btn-sm btn-primary" onClick={saveEdit}><Check size={14} /></button>
+                                <button className="btn btn-sm btn-ghost" onClick={() => { setEditingValue(null); setEditValue('') }}><X size={14} /></button>
+                              </div>
+                            ) : (
+                              <span className="dict-value">{value}</span>
+                            )}
+                            <div className="dict-value-actions">
+                              <button className="btn btn-icon btn-ghost" onClick={() => startEdit(key, value)} title="Редактировать"><Edit2 size={14} /></button>
+                              <button className="btn btn-icon btn-ghost btn-danger" onClick={() => deleteValue(key, value)} title="Удалить"><Trash2 size={14} /></button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="dict-add-row">
+                        <input className="input input-sm" placeholder="Добавить значение..." value={key === expandedDict ? newValue : ''} onChange={e => { setExpandedDict(key); setNewValue(e.target.value) }} onKeyDown={e => e.key === 'Enter' && addValue(key)} />
+                        <button className="btn btn-sm btn-primary" onClick={() => addValue(key)} disabled={!newValue.trim()}><Plus size={14} />Добавить</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="filters-bar glass-card">
         <div className="search-wrapper">
           <Search className="search-icon" />
-          <input
-            type="text"
-            placeholder="Поиск продуктов..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="search-input"
-          />
+          <input type="text" placeholder="Поиск..." value={search} onChange={e => setSearch(e.target.value)} className="search-input" />
         </div>
         <div className="category-tabs">
           <button key="all" className={`category-tab ${category === 'Все' ? 'active' : ''}`} onClick={() => setCategory('Все')}>Все</button>
           {enums.categories.map((cat, idx) => (
-            <button key={cat || idx} className={`category-tab ${category === cat ? 'active' : ''}`} onClick={() => setCategory(cat)}>
-              {cat}
-            </button>
+            <button key={cat || idx} className={`category-tab ${category === cat ? 'active' : ''}`} onClick={() => setCategory(cat)}>{cat}</button>
           ))}
         </div>
       </div>
@@ -283,22 +266,12 @@ export default function Products() {
       <div className="table-card glass-card">
         <table className="table">
           <thead>
-            <tr>
-              <th>Название</th>
-              <th>Бренд</th>
-              <th>Категория</th>
-              <th>Объём</th>
-              <th>Сегмент</th>
-              {canEdit && <th>Действия</th>}
-            </tr>
+            <tr><th>Название</th><th>Бренд</th><th>Категория</th><th>Объём</th><th>Сегмент</th>{canEdit && <th>Действия</th>}</tr>
           </thead>
           <tbody>
             {filteredProducts.map((product, idx) => (
               <tr key={product?.id || idx} onClick={() => handleEdit(product)} style={{cursor: canEdit ? 'pointer' : 'default'}}>
-                <td>
-                  <div className="product-name">{product.name}</div>
-                  {product.description && <div className="product-desc">{product.description.substring(0, 50)}...</div>}
-                </td>
+                <td><div className="product-name">{product.name}</div>{product.description && <div className="product-desc">{product.description.substring(0, 50)}...</div>}</td>
                 <td><span className="brand-badge">{product.brand}</span></td>
                 <td><span className="category-badge">{product.category}</span></td>
                 <td>{product.volume}</td>
@@ -306,12 +279,8 @@ export default function Products() {
                 {canEdit && (
                   <td>
                     <div className="action-buttons">
-                      <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); handleEdit(product); }}>
-                        <Edit2 size={16} />
-                      </button>
-                      <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); handleDelete(product); }}>
-                        <Trash2 size={16} />
-                      </button>
+                      <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); handleEdit(product) }}><Edit2 size={16} /></button>
+                      <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); handleDelete(product) }}><Trash2 size={16} /></button>
                     </div>
                   </td>
                 )}
@@ -321,71 +290,44 @@ export default function Products() {
         </table>
       </div>
 
-      {filteredProducts.length === 0 && (
-        <div className="empty-state glass-card">
-          <p>Продукты не найдены</p>
-        </div>
-      )}
+      {filteredProducts.length === 0 && <div className="empty-state glass-card"><p>Продукты не найдены</p></div>}
 
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal glass-card modal-wide" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>{editingProduct ? 'Редактировать продукт' : 'Добавить продукт'}</h3>
+              <h3>{editingProduct ? 'Редактировать' : 'Добавить продукт'}</h3>
               <button className="btn btn-ghost btn-sm" onClick={() => setShowModal(false)}><X size={20} /></button>
             </div>
             <form onSubmit={handleSave}>
               <div className="form-grid">
-                <div className="form-group">
-                  <label>Название *</label>
-                  <input name="name" defaultValue={editingProduct?.name} className="input" required placeholder="Название продукта" />
-                </div>
+                <div className="form-group"><label>Название *</label><input name="name" defaultValue={editingProduct?.name} className="input" required /></div>
                 <div className="form-group">
                   <label>Бренд *</label>
                   <select name="brand" defaultValue={editingProduct?.brand || 'Aura'} className="input">
-                    {enums.brands.map(brand => (
-                      <option key={brand} value={brand}>{brand}</option>
-                    ))}
+                    {enums.brands.map(brand => <option key={brand} value={brand}>{brand}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
                   <label>Категория</label>
                   <select name="category" defaultValue={editingProduct?.category || 'Увлажнение'} className="input">
-                    {enums.categories.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
+                    {enums.categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
                   <label>Объём</label>
                   <select name="volume" defaultValue={editingProduct?.volume || '50мл'} className="input">
-                    {enums.volumes.map(vol => (
-                      <option key={vol} value={vol}>{vol}</option>
-                    ))}
+                    {enums.volumes.map(vol => <option key={vol} value={vol}>{vol}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
                   <label>Сегмент</label>
                   <select name="segment" defaultValue={editingProduct?.segment || 'Бюджетная'} className="input">
-                    {enums.segments.map(seg => (
-                      <option key={seg} value={seg}>{seg}</option>
-                    ))}
+                    {enums.segments.map(seg => <option key={seg} value={seg}>{seg}</option>)}
                   </select>
                 </div>
-                <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                  <label>Описание</label>
-                  <textarea name="description" defaultValue={editingProduct?.description || ''} className="input textarea" rows="3" placeholder="Описание продукта..." />
-                </div>
-                <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                  <label>Фотографии (по одной URL на строку)</label>
-                  <textarea 
-                    name="images" 
-                    defaultValue={editingProduct?.images?.join('\n') || ''} 
-                    className="input textarea" 
-                    rows="4" 
-                    placeholder="https://example.com/image1.jpg"
-                  />
-                </div>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Описание</label><textarea name="description" defaultValue={editingProduct?.description || ''} className="input textarea" rows="3" /></div>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Фотографии (URL)</label><textarea name="images" defaultValue={editingProduct?.images?.join('\n') || ''} className="input textarea" rows="4" placeholder="URL на строку" /></div>
               </div>
               <div className="modal-actions">
                 <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>Отмена</button>
@@ -400,9 +342,7 @@ export default function Products() {
         <div className="modal-overlay" onClick={() => setDeleteModal(null)}>
           <div className="modal glass-card" onClick={e => e.stopPropagation()} style={{maxWidth: '400px'}}>
             <h3>Удалить продукт?</h3>
-            <p style={{marginTop: '8px', color: 'var(--color-gray-500)'}}>
-              Вы уверены, что хотите удалить "{deleteModal.name}"?
-            </p>
+            <p style={{marginTop: '8px', color: 'var(--color-gray-500)'}}>Вы уверены, что хотите удалить "{deleteModal.name}"?</p>
             <div className="modal-actions">
               <button className="btn btn-ghost" onClick={() => setDeleteModal(null)}>Отмена</button>
               <button className="btn btn-danger" onClick={confirmDelete}>Удалить</button>
