@@ -1,34 +1,26 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { Search, Eye, Edit2, Trash2, Mail, Phone, Calendar, X } from 'lucide-react'
+import { usersApi } from '../api'
+import Select from '../components/Select'
 import './Users.css'
 
-const STORAGE_KEY = 'aura_users'
-
 const defaultUsers = [
-  { id: 1, name: 'Елена Иванова', email: 'elena@example.com', phone: '+7 999 123-45-67', skinType: 'Комбинированная', date: '15.01.2026', status: 'active', role: 'user', nickname: '@elena_ivanova' },
-  { id: 2, name: 'Мария Петрова', email: 'maria@example.com', phone: '+7 999 234-56-78', skinType: 'Сухая', date: '10.02.2026', status: 'active', role: 'user', nickname: '@maria_petrova' },
-  { id: 3, name: 'Анна Сидорова', email: 'anna@example.com', phone: '+7 999 345-67-89', skinType: 'Жирная', date: '05.03.2026', status: 'inactive', role: 'user', nickname: '@anna_sidorova' },
-  { id: 4, name: 'Анна Петрова', email: 'anna.cosmetologist@aura.com', phone: '+7 999 456-78-90', skinType: 'Нормальная', date: '01.01.2026', status: 'active', role: 'cosmetologist', nickname: '@skin_expert' },
-  { id: 5, name: 'Елена Волкова', email: 'elena.cosmetologist@aura.com', phone: '+7 999 567-89-01', skinType: 'Нормальная', date: '01.01.2026', status: 'active', role: 'cosmetologist', nickname: '@beauty_consultant' },
-  { id: 6, name: 'Мария Соколова', email: 'maria.cosmetologist@aura.com', phone: '+7 999 678-90-12', skinType: 'Нормальная', date: '01.01.2026', status: 'active', role: 'cosmetologist', nickname: '@derma_pro' },
+  { id: 1, name: 'Елена Иванова', email: 'elena@example.com', phone: '+7 999 123-45-67', skinType: 'Комбинированная', status: 'active', role: 'user', nickname: '@elena_ivanova' },
+  { id: 2, name: 'Мария Петрова', email: 'maria@example.com', phone: '+7 999 234-56-78', skinType: 'Сухая', status: 'active', role: 'user', nickname: '@maria_petrova' },
+  { id: 3, name: 'Анна Сидорова', email: 'anna@example.com', phone: '+7 999 345-67-89', skinType: 'Жирная', status: 'inactive', role: 'user', nickname: '@anna_sidorova' },
+  { id: 4, name: 'Анна Петрова', email: 'anna.cosmetologist@aura.com', phone: '+7 999 456-78-90', skinType: 'Нормальная', status: 'active', role: 'cosmetologist', nickname: '@skin_expert' },
+  { id: 5, name: 'Елена Волкова', email: 'elena.cosmetologist@aura.com', phone: '+7 999 567-89-01', skinType: 'Нормальная', status: 'active', role: 'cosmetologist', nickname: '@beauty_consultant' },
+  { id: 6, name: 'Мария Соколова', email: 'maria.cosmetologist@aura.com', phone: '+7 999 678-90-12', skinType: 'Нормальная', status: 'active', role: 'cosmetologist', nickname: '@derma_pro' },
 ]
 
 const skinTypes = ['Нормальная', 'Сухая', 'Жирная', 'Комбинированная', 'Чувствительная']
-const userRoles = ['user', 'cosmetologist', 'manager', 'admin']
-
-function loadUsers() {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    return stored ? JSON.parse(stored) : defaultUsers
-  } catch {
-    return defaultUsers
-  }
-}
-
-function saveUsers(data) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-}
+const userRoles = [
+  { value: 'user', label: 'Пользователь' },
+  { value: 'cosmetologist', label: 'Косметолог' },
+  { value: 'manager', label: 'Менеджер' },
+  { value: 'admin', label: 'Администратор' }
+]
 
 function generateNickname(name) {
   return '@' + name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z_]/g, '')
@@ -36,7 +28,8 @@ function generateNickname(name) {
 
 export default function Users() {
   const { hasPermission } = useAuth()
-  const [users, setUsers] = useState(loadUsers)
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModal, setDeleteModal] = useState(null)
@@ -46,7 +39,7 @@ export default function Users() {
     name: '', 
     email: '', 
     phone: '', 
-    skinType: 'Нормальная', 
+    skinType: '', 
     status: 'active',
     role: 'user',
     nickname: ''
@@ -55,66 +48,91 @@ export default function Users() {
   const canEdit = hasPermission('users')
 
   useEffect(() => {
-    saveUsers(users)
-  }, [users])
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      const usersData = await usersApi.getAll().catch(() => [])
+      setUsers(usersData.length > 0 ? usersData : defaultUsers)
+    } catch (err) {
+      setUsers(defaultUsers)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const filtered = users.filter(u => 
-    u.name.toLowerCase().includes(search.toLowerCase()) || 
-    u.email.toLowerCase().includes(search.toLowerCase()) ||
+    u.name?.toLowerCase().includes(search.toLowerCase()) || 
+    u.email?.toLowerCase().includes(search.toLowerCase()) ||
     (u.nickname && u.nickname.toLowerCase().includes(search.toLowerCase()))
   )
 
   const openAddModal = () => {
     setEditingUser(null)
-    setForm({ name: '', email: '', phone: '', skinType: 'Нормальная', status: 'active', role: 'user', nickname: '' })
+    setForm({ name: '', email: '', phone: '', skinType: skinTypes[0], status: 'active', role: 'user', nickname: '' })
     setModalOpen(true)
   }
 
   const openEditModal = (user) => {
     setEditingUser(user)
     setForm({
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-      skinType: user.skinType,
-      status: user.status,
+      name: user.name || '',
+      email: user.email || '',
+      phone: user.phone || '',
+      skinType: user.skinType || '',
+      status: user.status || 'active',
       role: user.role || 'user',
-      nickname: user.nickname || generateNickname(user.name)
+      nickname: user.nickname || ''
     })
     setModalOpen(true)
   }
 
-  const handleNameChange = (name) => {
-    const nickname = generateNickname(name)
-    setForm({...form, name, nickname})
+  const handleInputChange = (e) => {
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
+    if (name === 'name') {
+      setForm(prev => ({ ...prev, nickname: generateNickname(value) }))
+    }
   }
 
-  const handleSave = () => {
+  const handleSelectChange = (name, value) => {
+    setForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  const handleSave = async () => {
     if (!form.name || !form.email) return
 
     const nickname = form.nickname || generateNickname(form.name)
-
-    if (editingUser) {
-      setUsers(prev => prev.map(u => 
-        u.id === editingUser.id 
-          ? { ...u, ...form, nickname }
-          : u
-      ))
-    } else {
-      const newUser = {
-        id: Date.now(),
-        ...form,
-        nickname,
-        date: new Date().toLocaleDateString('ru-RU')
-      }
-      setUsers(prev => [newUser, ...prev])
+    const userData = {
+      ...form,
+      nickname,
+      avatar: ''
     }
-    setModalOpen(false)
+
+    try {
+      if (editingUser) {
+        const updated = await usersApi.update(editingUser.id, userData)
+        setUsers(prev => prev.map(u => u.id === editingUser.id ? updated : u))
+      } else {
+        const created = await usersApi.create(userData)
+        setUsers(prev => [created, ...prev])
+      }
+      setModalOpen(false)
+    } catch (err) {
+      console.error('Error saving user:', err)
+    }
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (deleteModal) {
-      setUsers(prev => prev.filter(u => u.id !== deleteModal.id))
+      try {
+        await usersApi.delete(deleteModal.id)
+        setUsers(prev => prev.filter(u => u.id !== deleteModal.id))
+      } catch (err) {
+        console.error('Error deleting user:', err)
+      }
       setDeleteModal(null)
     }
   }
@@ -127,6 +145,20 @@ export default function Users() {
       user: { label: 'Пользователь', class: 'badge-success' }
     }
     return badges[role] || badges.user
+  }
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return ''
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('ru-RU')
+  }
+
+  if (loading) {
+    return (
+      <div className="users-page">
+        <div className="loading-state">Загрузка...</div>
+      </div>
+    )
   }
 
   return (
@@ -151,7 +183,7 @@ export default function Users() {
       <div className="users-grid">
         {filtered.map(user => (
           <div key={user.id} className="user-card glass-card clickable" onClick={() => openEditModal(user)}>
-            <div className="user-avatar">{user.name[0]}</div>
+            <div className="user-avatar">{user.name?.[0] || 'U'}</div>
             <div className="user-info">
               <h4>{user.name} <span className={`badge ${getRoleBadge(user.role).class}`} style={{marginLeft: '8px', fontSize: '10px'}}>{getRoleBadge(user.role).label}</span></h4>
               <div className="user-info-row"><Mail size={14} />{user.email}</div>
@@ -161,13 +193,13 @@ export default function Users() {
                 <span className="skin-type">{user.skinType}</span>
                 <span className={`status ${user.status}`}>{user.status === 'active' ? 'Активен' : 'Неактивен'}</span>
               </div>
-              <div className="user-info-row join-date"><Calendar size={14} />С {user.date}</div>
+              <div className="user-info-row join-date"><Calendar size={14} />С {formatDate(user.created_at)}</div>
             </div>
             {canEdit && (
               <div className="user-actions">
-                <button className="btn btn-ghost btn-sm" onClick={() => setViewModal(user)}><Eye size={16} /></button>
-                <button className="btn btn-ghost btn-sm" onClick={() => openEditModal(user)}><Edit2 size={16} /></button>
-                <button className="btn btn-ghost btn-sm" onClick={() => setDeleteModal(user)}><Trash2 size={16} /></button>
+                <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); setViewModal(user) }}><Eye size={16} /></button>
+                <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); openEditModal(user) }}><Edit2 size={16} /></button>
+                <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); setDeleteModal(user) }}><Trash2 size={16} /></button>
               </div>
             )}
           </div>
@@ -188,7 +220,7 @@ export default function Users() {
               <button className="btn btn-ghost btn-sm" onClick={() => setViewModal(null)}><X size={20} /></button>
             </div>
             <div className="user-profile">
-              <div className="profile-avatar">{viewModal.name[0]}</div>
+              <div className="profile-avatar">{viewModal.name?.[0] || 'U'}</div>
               <div className="profile-details">
                 <div className="profile-row"><span>Имя:</span> {viewModal.name}</div>
                 <div className="profile-row"><span>Никнейм:</span> {viewModal.nickname}</div>
@@ -197,7 +229,7 @@ export default function Users() {
                 <div className="profile-row"><span>Телефон:</span> {viewModal.phone}</div>
                 <div className="profile-row"><span>Тип кожи:</span> {viewModal.skinType}</div>
                 <div className="profile-row"><span>Статус:</span> {viewModal.status === 'active' ? 'Активен' : 'Неактивен'}</div>
-                <div className="profile-row"><span>Дата регистрации:</span> {viewModal.date}</div>
+                <div className="profile-row"><span>Дата регистрации:</span> {formatDate(viewModal.created_at)}</div>
               </div>
             </div>
             <div className="modal-actions">
@@ -215,46 +247,25 @@ export default function Users() {
               <button className="btn btn-ghost btn-sm" onClick={() => setModalOpen(false)}><X size={20} /></button>
             </div>
             <div className="form-grid">
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label>Имя</label>
-                <input className="input" value={form.name} onChange={e => handleNameChange(e.target.value)} placeholder="Полное имя" />
+              <div className="form-group">
+                <label>Имя *</label>
+                <input className="input" name="name" value={form.name} onChange={handleInputChange} placeholder="Полное имя" required />
               </div>
               <div className="form-group">
                 <label>Никнейм</label>
-                <input className="input" value={form.nickname} onChange={e => setForm({...form, nickname: e.target.value})} placeholder="@username" />
+                <input className="input" name="nickname" value={form.nickname} onChange={handleInputChange} placeholder="@username" />
               </div>
+              <Select label="Роль" name="role" value={form.role} onChange={handleSelectChange} options={userRoles.map(r => r.label)} />
               <div className="form-group">
-                <label>Роль</label>
-                <select className="input" value={form.role} onChange={e => setForm({...form, role: e.target.value})}>
-                  <option value="user">Пользователь</option>
-                  <option value="cosmetologist">Косметолог</option>
-                  <option value="manager">Менеджер</option>
-                  <option value="admin">Администратор</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Email</label>
-                <input className="input" type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} />
+                <label>Email *</label>
+                <input className="input" name="email" type="email" value={form.email} onChange={handleInputChange} required />
               </div>
               <div className="form-group">
                 <label>Телефон</label>
-                <input className="input" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} placeholder="+7 999 123-45-67" />
+                <input className="input" name="phone" value={form.phone} onChange={handleInputChange} placeholder="+7 999 123-45-67" />
               </div>
-              <div className="form-group">
-                <label>Тип кожи</label>
-                <select className="input" value={form.skinType} onChange={e => setForm({...form, skinType: e.target.value})}>
-                  {skinTypes.map(type => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Статус</label>
-                <select className="input" value={form.status} onChange={e => setForm({...form, status: e.target.value})}>
-                  <option value="active">Активен</option>
-                  <option value="inactive">Неактивен</option>
-                </select>
-              </div>
+              <Select label="Тип кожи" name="skinType" value={form.skinType} onChange={handleSelectChange} options={skinTypes} placeholder="Выберите тип кожи" />
+              <Select label="Статус" name="status" value={form.status} onChange={handleSelectChange} options={['Активен', 'Неактивен']} />
             </div>
             <div className="modal-actions">
               <button className="btn btn-ghost" onClick={() => setModalOpen(false)}>Отмена</button>
