@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { Search, Plus, Edit2, Trash2, X, Image, FileText, Tag, DollarSign } from 'lucide-react'
+import { Search, Plus, Edit2, Trash2, X, Image, FileText, Tag, DollarSign, Settings, Check } from 'lucide-react'
 import './Products.css'
 
 const STORAGE_KEY = 'aura_products'
@@ -51,11 +51,11 @@ function loadEnums() {
     for (const [key, storageKey] of Object.entries(STORAGE_KEYS)) {
       const stored = localStorage.getItem(storageKey)
       const parsed = stored ? JSON.parse(stored) : null
-      result[key] = Array.isArray(parsed) && parsed.every(v => typeof v === 'string') ? parsed : defaultEnums[key]
+      result[key] = Array.isArray(parsed) && parsed.every(v => typeof v === 'string') ? parsed : [...defaultEnums[key]]
     }
     return result
   } catch {
-    return defaultEnums
+    return { ...defaultEnums }
   }
 }
 
@@ -63,8 +63,14 @@ function saveProducts(data) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
 }
 
+function saveEnums(enums) {
+  for (const [key, storageKey] of Object.entries(STORAGE_KEYS)) {
+    localStorage.setItem(storageKey, JSON.stringify(enums[key]))
+  }
+}
+
 export default function Products() {
-  const { hasPermission } = useAuth()
+  const { hasPermission, user } = useAuth()
   const [products, setProducts] = useState(loadProducts)
   const [enums, setEnums] = useState(() => loadEnums())
   const [search, setSearch] = useState('')
@@ -72,19 +78,20 @@ export default function Products() {
   const [showModal, setShowModal] = useState(false)
   const [editingProduct, setEditingProduct] = useState(null)
   const [deleteModal, setDeleteModal] = useState(null)
+  const [showDictionaries, setShowDictionaries] = useState(false)
+  const [newEnumValue, setNewEnumValue] = useState('')
+  const [activeEnum, setActiveEnum] = useState(null)
+
+  const canEdit = hasPermission('products')
+  const canManageEnums = user?.role === 'admin'
 
   useEffect(() => {
     saveProducts(products)
   }, [products])
 
   useEffect(() => {
-    const loaded = loadEnums()
-    if (JSON.stringify(loaded) !== JSON.stringify(enums)) {
-      setEnums(loaded)
-    }
-  }, [])
-
-  const canEdit = hasPermission('products')
+    saveEnums(enums)
+  }, [enums])
 
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(search.toLowerCase()) || 
@@ -152,6 +159,88 @@ export default function Products() {
     return classes[segment] || 'segment-budget'
   }
 
+  const addEnumValue = (key) => {
+    if (!newEnumValue.trim()) return
+    setEnums(prev => ({
+      ...prev,
+      [key]: [...prev[key], newEnumValue.trim()]
+    }))
+    setNewEnumValue('')
+  }
+
+  const deleteEnumValue = (key, value) => {
+    setEnums(prev => ({
+      ...prev,
+      [key]: prev[key].filter(v => v !== value)
+    }))
+  }
+
+  const DictionarySection = () => {
+    const dictLabels = {
+      brands: 'Бренды',
+      categories: 'Категории',
+      segments: 'Сегменты',
+      volumes: 'Объёмы'
+    }
+
+    if (!showDictionaries) {
+      return (
+        canManageEnums && (
+          <button className="btn btn-ghost" onClick={() => setShowDictionaries(true)}>
+            <Settings size={16} />Управление справочниками
+          </button>
+        )
+      )
+    }
+
+    return (
+      <div className="dictionaries-panel glass-card">
+        <div className="dictionaries-header">
+          <h3>Управление справочниками</h3>
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowDictionaries(false)}>
+            <X size={16} />
+          </button>
+        </div>
+        
+        <div className="dictionaries-grid">
+          {Object.entries(enums).map(([key, values]) => (
+            <div key={key} className="dictionary-section">
+              <h4>{dictLabels[key]}</h4>
+              <div className="dictionary-tags">
+                {values.map((value, idx) => (
+                  <span key={idx} className="dictionary-tag">
+                    {value}
+                    <button className="tag-remove" onClick={() => deleteEnumValue(key, value)}>
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+              {canManageEnums && (
+                <div className="add-value-row">
+                  <input
+                    type="text"
+                    className="input input-sm"
+                    placeholder="Добавить..."
+                    value={activeEnum === key ? newEnumValue : ''}
+                    onChange={e => {
+                      setActiveEnum(key)
+                      setNewEnumValue(e.target.value)
+                    }}
+                    onKeyDown={e => e.key === 'Enter' && addEnumValue(key)}
+                  />
+                  <button className="btn btn-sm btn-primary" onClick={() => addEnumValue(key)}>
+                    <Plus size={14} />
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="products-page">
       <div className="page-header">
@@ -159,12 +248,15 @@ export default function Products() {
           <h2>Продукты</h2>
           <p>Управление косметическими средствами</p>
         </div>
-        {canEdit && (
-          <button className="btn btn-primary" onClick={openAddModal}>
-            <Plus size={18} />
-            Добавить продукт
-          </button>
-        )}
+        <div className="header-actions">
+          <DictionarySection />
+          {canEdit && (
+            <button className="btn btn-primary" onClick={openAddModal}>
+              <Plus size={18} />
+              Добавить продукт
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="filters-bar glass-card">
@@ -201,7 +293,7 @@ export default function Products() {
             </tr>
           </thead>
           <tbody>
-              {filteredProducts.map((product, idx) => (
+            {filteredProducts.map((product, idx) => (
               <tr key={product?.id || idx} onClick={() => handleEdit(product)} style={{cursor: canEdit ? 'pointer' : 'default'}}>
                 <td>
                   <div className="product-name">{product.name}</div>
@@ -291,9 +383,8 @@ export default function Products() {
                     defaultValue={editingProduct?.images?.join('\n') || ''} 
                     className="input textarea" 
                     rows="4" 
-                    placeholder="https://example.com/image1.jpg&#10;https://example.com/image2.jpg&#10;https://example.com/image3.jpg"
+                    placeholder="https://example.com/image1.jpg"
                   />
-                  <small style={{color: 'var(--color-gray-400)', fontSize: '12px'}}>Введите URL изображений, по одному на строку</small>
                 </div>
               </div>
               <div className="modal-actions">
