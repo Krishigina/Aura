@@ -646,3 +646,57 @@
 .fullpage-item:hover .fullpage-actions {
   opacity: 1;
 }
+
+/* Suggestions Dropdown */
+.dict-input-wrapper {
+  flex: 1;
+  position: relative;
+}
+
+.suggestions-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  max-height: 150px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+
+.suggestion-item {
+  width: 100%;
+  padding: 8px 12px;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-on-surface);
+  transition: background var(--transition-fast);
+}
+
+.suggestion-item:hover {
+  background: var(--color-gray-100);
+}
+
+.suggestion-item:first-child {
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.suggestion-item:last-child {
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+[data-theme="dark"] .suggestions-dropdown {
+  background: var(--color-gray-100);
+  border-color: var(--color-gray-700);
+}
+
+[data-theme="dark"] .suggestion-item:hover {
+  background: var(--color-gray-200);
+}

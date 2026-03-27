@@ -81,6 +81,7 @@ export default function Products() {
   const [showDictPanel, setShowDictPanel] = useState(false)
   const [expandedDict, setExpandedDict] = useState(null)
   const [newValue, setNewValue] = useState('')
+  const [newValueSuggestions, setNewValueSuggestions] = useState([])
   const [editValue, setEditValue] = useState('')
   const [editingValue, setEditingValue] = useState(null)
   const [fullPageDict, setFullPageDict] = useState(null)
@@ -260,13 +261,47 @@ export default function Products() {
                         ))}
                       </div>
                       <div className="dict-add-row">
-                        <input 
-                          className="input input-sm" 
-                          placeholder="Добавить значение..." 
-                          value={key === expandedDict ? newValue : ''} 
-                          onChange={e => { setExpandedDict(key); setNewValue(e.target.value) }} 
-                          onKeyDown={e => e.key === 'Enter' && addValue()} 
-                        />
+                        <div className="dict-input-wrapper">
+                          <input 
+                            className="input input-sm" 
+                            placeholder="Добавить значение..." 
+                            value={key === expandedDict ? newValue : ''} 
+                            onChange={e => { 
+                              setExpandedDict(key)
+                              const val = e.target.value
+                              setNewValue(val)
+                              if (val.trim()) {
+                                const matches = (enums[key] || []).filter(v => v.toLowerCase().includes(val.toLowerCase()))
+                                setNewValueSuggestions(matches.slice(0, 5))
+                              } else {
+                                setNewValueSuggestions([])
+                              }
+                            }} 
+                            onKeyDown={e => e.key === 'Enter' && addValue()} 
+                            onFocus={() => {
+                              if (newValue.trim()) {
+                                const matches = (enums[key] || []).filter(v => v.toLowerCase().includes(newValue.toLowerCase()))
+                                setNewValueSuggestions(matches.slice(0, 5))
+                              }
+                            }}
+                          />
+                          {newValueSuggestions.length > 0 && newValue && (
+                            <div className="suggestions-dropdown">
+                              {newValueSuggestions.map((suggestion, idx) => (
+                                <button 
+                                  key={idx} 
+                                  className="suggestion-item"
+                                  onClick={() => {
+                                    setNewValue(suggestion)
+                                    setNewValueSuggestions([])
+                                  }}
+                                >
+                                  {suggestion}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                         <button className="btn btn-sm btn-primary" onClick={addValue} disabled={!newValue.trim()}><Plus size={14} />Добавить</button>
                       </div>
                     </div>
