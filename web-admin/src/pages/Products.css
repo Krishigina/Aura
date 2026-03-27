@@ -579,25 +579,62 @@
 
 /* Full Page Dictionary */
 .fullpage-dict-overlay {
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
 }
 
 .fullpage-dict {
   width: 100%;
-  max-width: 800px;
-  max-height: 90vh;
-}
-
-.fullpage-dict-content {
-  max-height: 60vh;
-  overflow: hidden;
+  max-width: 520px;
+  max-height: 85vh;
   display: flex;
   flex-direction: column;
 }
 
+.fullpage-dict-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--color-gray-200);
+}
+
+.fullpage-dict-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fullpage-dict-title-group {
+  flex: 1;
+}
+
+.fullpage-dict-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-on-surface);
+  margin-bottom: 2px;
+}
+
+.fullpage-dict-subtitle {
+  font-size: 13px;
+  color: var(--color-gray-500);
+}
+
+.fullpage-dict-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding-top: var(--spacing-md);
+}
+
 .fullpage-search {
   position: relative;
-  margin-bottom: var(--spacing-md);
 }
 
 .fullpage-search .search-icon {
@@ -616,24 +653,35 @@
 .fullpage-list {
   flex: 1;
   overflow-y: auto;
-  border: 1px solid var(--color-gray-200);
-  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
 }
 
 .fullpage-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   padding: var(--spacing-sm) var(--spacing-md);
-  border-bottom: 1px solid var(--color-gray-100);
-}
-
-.fullpage-item:last-child {
-  border-bottom: none;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+  cursor: default;
 }
 
 .fullpage-item:hover {
   background: var(--color-gray-50);
+}
+
+.fullpage-item span {
+  font-size: 14px;
+  color: var(--color-on-surface);
+}
+
+.fullpage-item-count {
+  font-size: 12px;
+  color: var(--color-gray-400);
+  min-width: 24px;
+  text-align: right;
 }
 
 .fullpage-actions {
@@ -645,6 +693,43 @@
 
 .fullpage-item:hover .fullpage-actions {
   opacity: 1;
+}
+
+.fullpage-empty {
+  text-align: center;
+  padding: var(--spacing-xl);
+  color: var(--color-gray-500);
+  font-size: 14px;
+}
+
+.fullpage-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--color-gray-200);
+  margin-top: var(--spacing-md);
+}
+
+.fullpage-count {
+  font-size: 13px;
+  color: var(--color-gray-500);
+}
+
+.fullpage-footer .btn {
+  cursor: pointer;
+}
+
+[data-theme="dark"] .fullpage-dict-header {
+  border-bottom-color: var(--color-gray-700);
+}
+
+[data-theme="dark"] .fullpage-item:hover {
+  background: var(--color-gray-200);
+}
+
+[data-theme="dark"] .fullpage-footer {
+  border-top-color: var(--color-gray-700);
 }
 
 /* Suggestions Dropdown */

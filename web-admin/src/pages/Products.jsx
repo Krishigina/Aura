@@ -81,10 +81,10 @@ export default function Products() {
   const [showDictPanel, setShowDictPanel] = useState(false)
   const [expandedDict, setExpandedDict] = useState(null)
   const [newValue, setNewValue] = useState('')
-  const [newValueSuggestions, setNewValueSuggestions] = useState([])
   const [editValue, setEditValue] = useState('')
   const [editingValue, setEditingValue] = useState(null)
   const [fullPageDict, setFullPageDict] = useState(null)
+  const [fullPageFilter, setFullPageFilter] = useState('')
   const [confirmAction, setConfirmAction] = useState(null)
 
   const canEdit = hasPermission('products')
@@ -242,7 +242,7 @@ export default function Products() {
                   {isExpanded && (
                     <div className="dict-item-content">
                       <div className="dict-values-list">
-                        {values.map((value, idx) => (
+                        {values.filter(v => !newValue || v.toLowerCase().includes(newValue.toLowerCase())).map((value, idx) => (
                           <div key={idx} className="dict-value-row">
                             {editingValue?.key === key && editingValue?.value === value ? (
                               <div className="dict-edit-row">
@@ -261,47 +261,16 @@ export default function Products() {
                         ))}
                       </div>
                       <div className="dict-add-row">
-                        <div className="dict-input-wrapper">
-                          <input 
-                            className="input input-sm" 
-                            placeholder="Добавить значение..." 
-                            value={key === expandedDict ? newValue : ''} 
-                            onChange={e => { 
-                              setExpandedDict(key)
-                              const val = e.target.value
-                              setNewValue(val)
-                              if (val.trim()) {
-                                const matches = (enums[key] || []).filter(v => v.toLowerCase().includes(val.toLowerCase()))
-                                setNewValueSuggestions(matches.slice(0, 5))
-                              } else {
-                                setNewValueSuggestions([])
-                              }
-                            }} 
-                            onKeyDown={e => e.key === 'Enter' && addValue()} 
-                            onFocus={() => {
-                              if (newValue.trim()) {
-                                const matches = (enums[key] || []).filter(v => v.toLowerCase().includes(newValue.toLowerCase()))
-                                setNewValueSuggestions(matches.slice(0, 5))
-                              }
-                            }}
-                          />
-                          {newValueSuggestions.length > 0 && newValue && (
-                            <div className="suggestions-dropdown">
-                              {newValueSuggestions.map((suggestion, idx) => (
-                                <button 
-                                  key={idx} 
-                                  className="suggestion-item"
-                                  onClick={() => {
-                                    setNewValue(suggestion)
-                                    setNewValueSuggestions([])
-                                  }}
-                                >
-                                  {suggestion}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                        <input 
+                          className="input input-sm" 
+                          placeholder="Добавить значение..." 
+                          value={key === expandedDict ? newValue : ''} 
+                          onChange={e => { 
+                            setExpandedDict(key)
+                            setNewValue(e.target.value)
+                          }} 
+                          onKeyDown={e => e.key === 'Enter' && addValue()} 
+                        />
                         <button className="btn btn-sm btn-primary" onClick={addValue} disabled={!newValue.trim()}><Plus size={14} />Добавить</button>
                       </div>
                     </div>
@@ -432,28 +401,51 @@ export default function Products() {
       {fullPageDict && (
         <div className="modal-overlay fullpage-dict-overlay" onClick={closeFullPage}>
           <div className="modal glass-card fullpage-dict" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>{dictConfig[fullPageDict].label}</h3>
+            <div className="fullpage-dict-header">
+              <div className="fullpage-dict-icon" style={{ background: `${dictConfig[fullPageDict].color}20`, color: dictConfig[fullPageDict].color }}>
+                {(() => {
+                  const Icon = dictConfig[fullPageDict].icon
+                  return <Icon size={24} />
+                })()}
+              </div>
+              <div className="fullpage-dict-title-group">
+                <h3 className="fullpage-dict-title">{dictConfig[fullPageDict].label}</h3>
+                <p className="fullpage-dict-subtitle">Управление значениями справочника</p>
+              </div>
               <button className="btn btn-ghost btn-sm" onClick={closeFullPage}><X size={20} /></button>
             </div>
             <div className="fullpage-dict-content">
               <div className="fullpage-search">
                 <Search className="search-icon" />
-                <input type="text" placeholder="Фильтр..." className="search-input" />
+                <input 
+                  type="text" 
+                  placeholder="Поиск..." 
+                  className="search-input" 
+                  value={fullPageFilter}
+                  onChange={e => setFullPageFilter(e.target.value)}
+                  autoFocus
+                />
               </div>
               <div className="fullpage-list">
-                {(enums[fullPageDict] || []).map((value, idx) => (
-                  <div key={idx} className="fullpage-item">
-                    <span>{value}</span>
-                    <div className="fullpage-actions">
-                      <button className="btn btn-ghost btn-sm" onClick={() => { closeFullPage(); startEdit(fullPageDict, value) }}><Edit2 size={14} /></button>
-                      <button className="btn btn-ghost btn-sm btn-danger" onClick={() => { deleteValue(fullPageDict, value) }}><Trash2 size={14} /></button>
+                {(() => {
+                  const filtered = (enums[fullPageDict] || []).filter(v => !fullPageFilter || v.toLowerCase().includes(fullPageFilter.toLowerCase()))
+                  if (filtered.length === 0) {
+                    return <div className="fullpage-empty">Ничего не найдено</div>
+                  }
+                  return filtered.map((value, idx) => (
+                    <div key={idx} className="fullpage-item">
+                      <span>{value}</span>
+                      <div className="fullpage-actions">
+                        <button className="btn btn-ghost btn-sm" onClick={() => { closeFullPage(); startEdit(fullPageDict, value) }}><Edit2 size={14} /></button>
+                        <button className="btn btn-ghost btn-sm btn-danger" onClick={() => { deleteValue(fullPageDict, value) }}><Trash2 size={14} /></button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                })()}
               </div>
             </div>
-            <div className="modal-actions">
+            <div className="fullpage-footer">
+              <span className="fullpage-count">{enums[fullPageDict]?.length || 0} значений</span>
               <button className="btn btn-primary" onClick={closeFullPage}>Закрыть</button>
             </div>
           </div>
