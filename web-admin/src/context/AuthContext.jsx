@@ -45,7 +45,7 @@ export function AuthProvider({ children }) {
     if (!user) return true // Allow when not logged in (for login page)
     
     const permissions = {
-      admin: ['dashboard', 'products', 'procedures', 'content', 'users', 'reports', 'settings', 'system'],
+      admin: ['dashboard', 'products', 'procedures', 'content', 'users', 'reports', 'settings', 'dictionaries', 'admin'],
       manager: ['dashboard', 'products', 'procedures', 'content', 'users', 'reports', 'settings'],
       cosmetolog: ['dashboard', 'content', 'settings'],
     }

@@ -24,7 +24,7 @@ const menuItems = [
   { path: '/content', icon: BookOpen, label: 'Контент', permission: 'content' },
   { path: '/users', icon: Users, label: 'Пользователи', permission: 'users' },
   { path: '/reports', icon: BarChart3, label: 'Отчеты', permission: 'reports' },
-  { path: '/dictionaries', icon: BookA, label: 'Справочники', permission: 'admin' },
+  { path: '/dictionaries', icon: BookA, label: 'Справочники', permission: 'dictionaries' },
   { path: '/settings', icon: Settings, label: 'Настройки', permission: 'settings' },
 ]
 
