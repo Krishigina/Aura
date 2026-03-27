@@ -76,53 +76,56 @@ const initDB = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
 
-      CREATE TABLE IF NOT EXISTS dictionaries (
+      CREATE TABLE IF NOT EXISTS brands (
         id SERIAL PRIMARY KEY,
-        key VARCHAR(100) NOT NULL,
-        value VARCHAR(255) NOT NULL,
-        UNIQUE(key, value)
+        value VARCHAR(255) NOT NULL UNIQUE
+      );
+
+      CREATE TABLE IF NOT EXISTS categories (
+        id SERIAL PRIMARY KEY,
+        value VARCHAR(255) NOT NULL UNIQUE
+      );
+
+      CREATE TABLE IF NOT EXISTS segments (
+        id SERIAL PRIMARY KEY,
+        value VARCHAR(255) NOT NULL UNIQUE
+      );
+
+      CREATE TABLE IF NOT EXISTS volumes (
+        id SERIAL PRIMARY KEY,
+        value VARCHAR(255) NOT NULL UNIQUE
       );
     `);
 
-    const dictResult = await client.query('SELECT COUNT(*) FROM dictionaries');
-    if (parseInt(dictResult.rows[0].count) === 0) {
-      const defaultDicts = [
-        { key: 'brands', value: 'Aura' },
-        { key: 'brands', value: 'La Roche-Posay' },
-        { key: 'brands', value: 'Vichy' },
-        { key: 'brands', value: 'Bioderma' },
-        { key: 'brands', value: 'CeraVe' },
-        { key: 'brands', value: 'The Ordinary' },
-        { key: 'brands', value: "Paula's Choice" },
-        { key: 'brands', value: 'Cosrx' },
-        { key: 'brands', value: 'Eucerin' },
-        { key: 'brands', value: 'Nivea' },
-        { key: 'categories', value: 'Очищение' },
-        { key: 'categories', value: 'Увлажнение' },
-        { key: 'categories', value: 'Сыворотки' },
-        { key: 'categories', value: 'SPF' },
-        { key: 'categories', value: 'Уход' },
-        { key: 'categories', value: 'Маска' },
-        { key: 'categories', value: 'Тоник' },
-        { key: 'categories', value: 'Крем' },
-        { key: 'categories', value: 'Масло' },
-        { key: 'segments', value: 'Бюджетная' },
-        { key: 'segments', value: 'Люкс' },
-        { key: 'segments', value: 'Профессиональная' },
-        { key: 'segments', value: 'Космецевтика' },
-        { key: 'volumes', value: '15мл' },
-        { key: 'volumes', value: '30мл' },
-        { key: 'volumes', value: '50мл' },
-        { key: 'volumes', value: '75мл' },
-        { key: 'volumes', value: '100мл' },
-        { key: 'volumes', value: '150мл' },
-        { key: 'volumes', value: '200мл' },
-        { key: 'volumes', value: '250мл' },
-        { key: 'volumes', value: '500мл' },
-        { key: 'volumes', value: '1л' },
-      ];
-      for (const dict of defaultDicts) {
-        await client.query('INSERT INTO dictionaries (key, value) VALUES ($1, $2)', [dict.key, dict.value]);
+    const brandsCount = await client.query('SELECT COUNT(*) FROM brands');
+    if (parseInt(brandsCount.rows[0].count) === 0) {
+      const defaultBrands = ['Aura', 'La Roche-Posay', 'Vichy', 'Bioderma', 'CeraVe', 'The Ordinary', "Paula's Choice", 'Cosrx', 'Eucerin', 'Nivea'];
+      for (const value of defaultBrands) {
+        await client.query('INSERT INTO brands (value) VALUES ($1)', [value]);
+      }
+    }
+
+    const categoriesCount = await client.query('SELECT COUNT(*) FROM categories');
+    if (parseInt(categoriesCount.rows[0].count) === 0) {
+      const defaultCategories = ['Очищение', 'Увлажнение', 'Сыворотки', 'SPF', 'Уход', 'Маска', 'Тоник', 'Крем', 'Масло'];
+      for (const value of defaultCategories) {
+        await client.query('INSERT INTO categories (value) VALUES ($1)', [value]);
+      }
+    }
+
+    const segmentsCount = await client.query('SELECT COUNT(*) FROM segments');
+    if (parseInt(segmentsCount.rows[0].count) === 0) {
+      const defaultSegments = ['Бюджетная', 'Люкс', 'Профессиональная', 'Космецевтика'];
+      for (const value of defaultSegments) {
+        await client.query('INSERT INTO segments (value) VALUES ($1)', [value]);
+      }
+    }
+
+    const volumesCount = await client.query('SELECT COUNT(*) FROM volumes');
+    if (parseInt(volumesCount.rows[0].count) === 0) {
+      const defaultVolumes = ['15мл', '30мл', '50мл', '75мл', '100мл', '150мл', '200мл', '250мл', '500мл', '1л'];
+      for (const value of defaultVolumes) {
+        await client.query('INSERT INTO volumes (value) VALUES ($1)', [value]);
       }
     }
 
@@ -183,9 +186,20 @@ app.delete('/api/products/:id', async (req, res) => {
   }
 });
 
+const dictTableMap = {
+  brands: 'brands',
+  categories: 'categories',
+  segments: 'segments',
+  volumes: 'volumes'
+}
+
 app.get('/api/dictionaries/:key', async (req, res) => {
   try {
-    const result = await query('SELECT value FROM dictionaries WHERE key=$1 ORDER BY id', [req.params.key]);
+    const table = dictTableMap[req.params.key]
+    if (!table) {
+      return res.status(400).json({ error: 'Unknown dictionary key' })
+    }
+    const result = await query(`SELECT value FROM ${table} ORDER BY id`);
     res.json(result.rows.map(r => r.value));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -194,10 +208,14 @@ app.get('/api/dictionaries/:key', async (req, res) => {
 
 app.post('/api/dictionaries/:key', async (req, res) => {
   try {
+    const table = dictTableMap[req.params.key]
+    if (!table) {
+      return res.status(400).json({ error: 'Unknown dictionary key' })
+    }
     const { value } = req.body;
     const result = await query(
-      'INSERT INTO dictionaries (key, value) VALUES ($1, $2) RETURNING *',
-      [req.params.key, value]
+      `INSERT INTO ${table} (value) VALUES ($1) RETURNING *`,
+      [value]
     );
     res.json(result.rows[0]);
   } catch (err) {
@@ -207,10 +225,14 @@ app.post('/api/dictionaries/:key', async (req, res) => {
 
 app.put('/api/dictionaries/:key', async (req, res) => {
   try {
+    const table = dictTableMap[req.params.key]
+    if (!table) {
+      return res.status(400).json({ error: 'Unknown dictionary key' })
+    }
     const { oldValue, newValue } = req.body;
     const result = await query(
-      'UPDATE dictionaries SET value=$1 WHERE key=$2 AND value=$3 RETURNING *',
-      [newValue, req.params.key, oldValue]
+      `UPDATE ${table} SET value=$1 WHERE value=$2 RETURNING *`,
+      [newValue, oldValue]
     );
     res.json(result.rows[0]);
   } catch (err) {
@@ -220,7 +242,11 @@ app.put('/api/dictionaries/:key', async (req, res) => {
 
 app.delete('/api/dictionaries/:key/:value', async (req, res) => {
   try {
-    await query('DELETE FROM dictionaries WHERE key=$1 AND value=$2', [req.params.key, req.params.value]);
+    const table = dictTableMap[req.params.key]
+    if (!table) {
+      return res.status(400).json({ error: 'Unknown dictionary key' })
+    }
+    await query(`DELETE FROM ${table} WHERE value=$1`, [req.params.value]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
