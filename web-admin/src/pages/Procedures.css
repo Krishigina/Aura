@@ -2,6 +2,12 @@
   animation: fadeIn var(--transition-normal) ease-out;
 }
 
+.loading-state {
+  text-align: center;
+  padding: var(--spacing-2xl);
+  color: var(--color-gray-500);
+}
+
 .procedures-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
