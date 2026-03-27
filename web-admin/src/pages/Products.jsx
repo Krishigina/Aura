@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
-import { Search, Plus, Edit2, Trash2, X, Image, Tag, Settings, Check, Package, AlertTriangle, ExternalLink } from 'lucide-react'
+import { Search, Plus, Edit2, Trash2, X, Image, Tag, Check, Package, AlertTriangle } from 'lucide-react'
 import { productsApi, dictionariesApi } from '../api'
 import Select from '../components/Select'
 import './Products.css'
@@ -13,16 +13,9 @@ const defaultEnums = {
   volumes: ['15мл', '30мл', '50мл', '75мл', '100мл', '150мл', '200мл', '250мл', '500мл', '1л']
 }
 
-const dictConfig = {
-  brands: { label: 'Бренды', icon: Package, color: '#9333EA' },
-  categories: { label: 'Категории', icon: Tag, color: '#059669' },
-  segments: { label: 'Сегменты', icon: Check, color: '#D97706' },
-  volumes: { label: 'Объёмы', icon: Image, color: '#2563EB' }
-}
-
 export default function Products() {
-  const { hasPermission, user } = useAuth()
-  const { success, error, info } = useToast()
+  const { hasPermission } = useAuth()
+  const { success, error } = useToast()
   const [products, setProducts] = useState([])
   const [enums, setEnums] = useState(defaultEnums)
   const [loading, setLoading] = useState(true)
@@ -31,14 +24,6 @@ export default function Products() {
   const [showModal, setShowModal] = useState(false)
   const [editingProduct, setEditingProduct] = useState(null)
   const [deleteModal, setDeleteModal] = useState(null)
-  const [showDictPanel, setShowDictPanel] = useState(false)
-  const [expandedDict, setExpandedDict] = useState(null)
-  const [newValue, setNewValue] = useState('')
-  const [editValue, setEditValue] = useState('')
-  const [editingValue, setEditingValue] = useState(null)
-  const [fullPageDict, setFullPageDict] = useState(null)
-  const [fullPageFilter, setFullPageFilter] = useState('')
-  const [confirmAction, setConfirmAction] = useState(null)
   const [formData, setFormData] = useState({
     name: '',
     brand: '',
@@ -50,7 +35,6 @@ export default function Products() {
   })
 
   const canEdit = hasPermission('products')
-  const canManageEnums = user?.role === 'admin'
 
   useEffect(() => {
     loadData()
@@ -172,77 +156,6 @@ export default function Products() {
     return classes[segment] || 'segment-budget'
   }
 
-  const toggleDict = (key) => setExpandedDict(expandedDict === key ? null : key)
-
-  const checkDuplicates = (key, value) => {
-    const values = enums[key] || []
-    return values.filter(v => v.toLowerCase().includes(value.toLowerCase()))
-  }
-
-  const addValue = async () => {
-    if (!newValue.trim()) return
-    const duplicates = checkDuplicates(expandedDict, newValue)
-    if (duplicates.length > 0) {
-      error(`Найдены похожие значения: ${duplicates.join(', ')}`)
-      return
-    }
-    try {
-      await dictionariesApi.create(expandedDict, newValue.trim())
-      setEnums(prev => ({ ...prev, [expandedDict]: [...prev[expandedDict], newValue.trim()] }))
-      info(`Добавлено: ${newValue}`)
-      setNewValue('')
-    } catch (err) {
-      error('Ошибка добавления')
-    }
-  }
-
-  const deleteValue = (key, value) => {
-    setConfirmAction({ type: 'deleteEnum', key, value, label: `удалить "${value}" из ${dictConfig[key].label.toLowerCase()}` })
-  }
-
-  const confirmActionHandler = async () => {
-    if (!confirmAction) return
-    if (confirmAction.type === 'deleteEnum') {
-      try {
-        await dictionariesApi.delete(confirmAction.key, confirmAction.value)
-        setEnums(prev => ({ ...prev, [confirmAction.key]: prev[confirmAction.key].filter(v => v !== confirmAction.value) }))
-        info(`Удалено: ${confirmAction.value}`)
-      } catch (err) {
-        error('Ошибка удаления')
-      }
-    }
-    setConfirmAction(null)
-  }
-
-  const startEdit = (key, value) => {
-    setEditingValue({ key, value })
-    setEditValue(value)
-  }
-
-  const saveEdit = async () => {
-    if (!editValue.trim()) return
-    const duplicates = checkDuplicates(editingValue.key, editValue).filter(v => v !== editingValue.value)
-    if (duplicates.length > 0) {
-      error(`Такое значение уже есть: ${duplicates.join(', ')}`)
-      return
-    }
-    try {
-      await dictionariesApi.update(editingValue.key, editingValue.value, editValue.trim())
-      setEnums(prev => ({
-        ...prev,
-        [editingValue.key]: prev[editingValue.key].map(v => v === editingValue.value ? editValue.trim() : v)
-      }))
-      success(`Изменено: ${editingValue.value} → ${editValue}`)
-      setEditingValue(null)
-      setEditValue('')
-    } catch (err) {
-      error('Ошибка сохранения')
-    }
-  }
-
-  const openFullPage = (key) => setFullPageDict(key)
-  const closeFullPage = () => setFullPageDict(null)
-
   if (loading) {
     return (
       <div className="products-page">
@@ -259,11 +172,6 @@ export default function Products() {
           <p>Управление косметическими средствами</p>
         </div>
         <div className="header-actions">
-          {canManageEnums && (
-            <button className={`btn ${showDictPanel ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setShowDictPanel(!showDictPanel)}>
-              <Settings size={16} />{showDictPanel ? 'Скрыть' : 'Справочники'}
-            </button>
-          )}
           {canEdit && (
             <button className="btn btn-primary" onClick={openAddModal}>
               <Plus size={18} />Добавить
@@ -271,73 +179,6 @@ export default function Products() {
           )}
         </div>
       </div>
-
-      {showDictPanel && canManageEnums && (
-        <div className="dict-panel glass-card">
-          <div className="dict-panel-header">
-            <h3>Справочники</h3>
-            <p>Управление значениями справочников для продуктов</p>
-          </div>
-          <div className="dict-accordion">
-            {Object.entries(dictConfig).map(([key, config]) => {
-              const Icon = config.icon
-              const values = enums[key] || []
-              const isExpanded = expandedDict === key
-              return (
-                <div key={key} className="dict-item">
-                  <button className="dict-item-header" onClick={() => toggleDict(key)} style={{ borderColor: isExpanded ? config.color : 'transparent' }}>
-                    <div className="dict-header-left">
-                      <div className="dict-icon" style={{ background: `${config.color}20`, color: config.color }}><Icon size={18} /></div>
-                      <span className="dict-label">{config.label}</span>
-                      <span className="dict-count">{values.length}</span>
-                    </div>
-                    <div className="dict-header-right">
-                      {values.length > 10 && <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); openFullPage(key) }}><ExternalLink size={14} />Открыть все</button>}
-                      <Check size={18} className={`dict-chevron ${isExpanded ? 'rotated' : ''}`} />
-                    </div>
-                  </button>
-                  {isExpanded && (
-                    <div className="dict-item-content">
-                      <div className="dict-values-list">
-                        {values.filter(v => !newValue || v.toLowerCase().includes(newValue.toLowerCase())).map((value, idx) => (
-                          <div key={idx} className="dict-value-row">
-                            {editingValue?.key === key && editingValue?.value === value ? (
-                              <div className="dict-edit-row">
-                                <input className="input input-sm" value={editValue} onChange={e => setEditValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && saveEdit()} autoFocus />
-                                <button className="btn btn-sm btn-primary" onClick={saveEdit}><Check size={14} /></button>
-                                <button className="btn btn-sm btn-ghost" onClick={() => { setEditingValue(null); setEditValue('') }}><X size={14} /></button>
-                              </div>
-                            ) : (
-                              <span className="dict-value">{value}</span>
-                            )}
-                            <div className="dict-value-actions">
-                              <button className="btn btn-icon btn-ghost" onClick={() => startEdit(key, value)} title="Редактировать"><Edit2 size={14} /></button>
-                              <button className="btn btn-icon btn-ghost btn-danger" onClick={() => deleteValue(key, value)} title="Удалить"><Trash2 size={14} /></button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="dict-add-row">
-                        <input 
-                          className="input input-sm" 
-                          placeholder="Добавить значение..." 
-                          value={key === expandedDict ? newValue : ''} 
-                          onChange={e => { 
-                            setExpandedDict(key)
-                            setNewValue(e.target.value)
-                          }} 
-                          onKeyDown={e => e.key === 'Enter' && addValue()} 
-                        />
-                        <button className="btn btn-sm btn-primary" onClick={addValue} disabled={!newValue.trim()}><Plus size={14} />Добавить</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
 
       <div className="filters-bar glass-card">
         <div className="search-wrapper">
@@ -416,74 +257,6 @@ export default function Products() {
             <div className="modal-actions">
               <button className="btn btn-ghost" onClick={() => setDeleteModal(null)}>Отмена</button>
               <button className="btn btn-danger" onClick={confirmDelete}>Удалить</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {confirmAction && (
-        <div className="modal-overlay" onClick={() => setConfirmAction(null)}>
-          <div className="modal glass-card confirm-modal" onClick={e => e.stopPropagation()}>
-            <div className="confirm-icon"><AlertTriangle size={32} /></div>
-            <h3>Подтверждение</h3>
-            <p>Вы уверены, что хотите {confirmAction.label}?</p>
-            <div className="modal-actions">
-              <button className="btn btn-ghost" onClick={() => setConfirmAction(null)}>Отмена</button>
-              <button className="btn btn-danger" onClick={confirmActionHandler}>Подтвердить</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {fullPageDict && (
-        <div className="modal-overlay fullpage-dict-overlay" onClick={closeFullPage}>
-          <div className="modal glass-card fullpage-dict" onClick={e => e.stopPropagation()}>
-            <div className="fullpage-dict-header">
-              <div className="fullpage-dict-icon" style={{ background: `${dictConfig[fullPageDict].color}20`, color: dictConfig[fullPageDict].color }}>
-                {(() => {
-                  const Icon = dictConfig[fullPageDict].icon
-                  return <Icon size={24} />
-                })()}
-              </div>
-              <div className="fullpage-dict-title-group">
-                <h3 className="fullpage-dict-title">{dictConfig[fullPageDict].label}</h3>
-                <p className="fullpage-dict-subtitle">Управление значениями справочника</p>
-              </div>
-              <button className="btn btn-ghost btn-sm" onClick={closeFullPage}><X size={20} /></button>
-            </div>
-            <div className="fullpage-dict-content">
-              <div className="fullpage-search">
-                <Search className="search-icon" />
-                <input 
-                  type="text" 
-                  placeholder="Поиск..." 
-                  className="search-input" 
-                  value={fullPageFilter}
-                  onChange={e => setFullPageFilter(e.target.value)}
-                  autoFocus
-                />
-              </div>
-              <div className="fullpage-list">
-                {(() => {
-                  const filtered = (enums[fullPageDict] || []).filter(v => !fullPageFilter || v.toLowerCase().includes(fullPageFilter.toLowerCase()))
-                  if (filtered.length === 0) {
-                    return <div className="fullpage-empty">Ничего не найдено</div>
-                  }
-                  return filtered.map((value, idx) => (
-                    <div key={idx} className="fullpage-item">
-                      <span>{value}</span>
-                      <div className="fullpage-actions">
-                        <button className="btn btn-ghost btn-sm" onClick={() => { closeFullPage(); startEdit(fullPageDict, value) }}><Edit2 size={14} /></button>
-                        <button className="btn btn-ghost btn-sm btn-danger" onClick={() => { deleteValue(fullPageDict, value) }}><Trash2 size={14} /></button>
-                      </div>
-                    </div>
-                  ))
-                })()}
-              </div>
-            </div>
-            <div className="fullpage-footer">
-              <span className="fullpage-count">{enums[fullPageDict]?.length || 0} значений</span>
-              <button className="btn btn-primary" onClick={closeFullPage}>Закрыть</button>
             </div>
           </div>
         </div>

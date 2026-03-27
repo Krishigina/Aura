@@ -1,16 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { Search, Plus, Edit2, Trash2, BookOpen, Tag, Calendar, User, X, Settings } from 'lucide-react'
+import { Search, Plus, Edit2, Trash2, BookOpen, Tag, Calendar, User, X } from 'lucide-react'
 import { contentApi, dictionariesApi, usersApi } from '../api'
 import Select from '../components/Select'
-import DictionaryPanel from '../components/DictionaryPanel'
 import './Content.css'
 
 const defaultContentCategories = ['Уход за кожей', 'Ингредиенты', 'Защита', 'Процедуры', 'Питание', 'Образ жизни']
-
-const contentDictConfig = {
-  contentCategories: { label: 'Категории контента', icon: Settings, color: '#EC4899' }
-}
 
 export default function Content() {
   const { user, hasPermission } = useAuth()
@@ -22,9 +17,6 @@ export default function Content() {
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModal, setDeleteModal] = useState(null)
   const [editingArticle, setEditingArticle] = useState(null)
-  const [showDictPanel, setShowDictPanel] = useState(false)
-  const [fullPageDict, setFullPageDict] = useState(null)
-  const [fullPageFilter, setFullPageFilter] = useState('')
   const [form, setForm] = useState({ 
     title: '', 
     category: '', 
@@ -37,7 +29,6 @@ export default function Content() {
 
   const canCreate = hasPermission('content_create')
   const canEdit = hasPermission('content_edit_own')
-  const canManageEnums = user?.role === 'admin'
 
   useEffect(() => {
     loadData()
@@ -147,36 +138,6 @@ export default function Content() {
     }
   }
 
-  const handleDictAdd = async (key, value) => {
-    try {
-      await dictionariesApi.create(key, value)
-      setContentCategories(prev => [...prev, value])
-    } catch (err) {
-      console.error('Error adding dictionary value:', err)
-    }
-  }
-
-  const handleDictDelete = async (key, value) => {
-    try {
-      await dictionariesApi.delete(key, value)
-      setContentCategories(prev => prev.filter(v => v !== value))
-    } catch (err) {
-      console.error('Error deleting dictionary value:', err)
-    }
-  }
-
-  const handleDictUpdate = async (key, oldValue, newValue) => {
-    try {
-      await dictionariesApi.update(key, oldValue, newValue)
-      setContentCategories(prev => prev.map(v => v === oldValue ? newValue : v))
-    } catch (err) {
-      console.error('Error updating dictionary value:', err)
-    }
-  }
-
-  const openFullPage = (key) => setFullPageDict(key)
-  const closeFullPage = () => { setFullPageDict(null); setFullPageFilter('') }
-
   const formatDate = (dateStr) => {
     if (!dateStr) return ''
     const date = new Date(dateStr)
@@ -198,33 +159,10 @@ export default function Content() {
           <h2>База знаний</h2>
           <p>Управление статьями и контентом</p>
         </div>
-        <div className="header-actions">
-          {canManageEnums && (
-            <button className={`btn ${showDictPanel ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setShowDictPanel(!showDictPanel)}>
-              <Settings size={16} />{showDictPanel ? 'Скрыть' : 'Справочники'}
-            </button>
-          )}
-          {canCreate && (
-            <button className="btn btn-primary" onClick={openAddModal}><Plus size={18} />Добавить статью</button>
-          )}
-        </div>
+        {canCreate && (
+          <button className="btn btn-primary" onClick={openAddModal}><Plus size={18} />Добавить статью</button>
+        )}
       </div>
-
-      {showDictPanel && canManageEnums && (
-        <DictionaryPanel
-          dictionaries={{ contentCategories }}
-          config={contentDictConfig}
-          onAdd={handleDictAdd}
-          onDelete={handleDictDelete}
-          onUpdate={handleDictUpdate}
-          canEdit={canManageEnums}
-          onFullPage={openFullPage}
-          fullPageDict={fullPageDict}
-          onCloseFullPage={closeFullPage}
-          fullPageFilter={fullPageFilter}
-          onFullPageFilterChange={setFullPageFilter}
-        />
-      )}
 
       <div className="filters-bar glass-card">
         <div className="search-wrapper">
