@@ -100,6 +100,11 @@ const initDB = async () => {
         id SERIAL PRIMARY KEY,
         value VARCHAR(255) NOT NULL UNIQUE
       );
+
+      CREATE TABLE IF NOT EXISTS content_categories (
+        id SERIAL PRIMARY KEY,
+        value VARCHAR(255) NOT NULL UNIQUE
+      );
     `);
 
     const brandsCount = await client.query('SELECT COUNT(*) FROM brands');
@@ -139,6 +144,14 @@ const initDB = async () => {
       const defaultProcedureCategories = ['Чистка', 'Увлажнение', 'Инъекции', 'Эпиляция', 'Массаж', 'Пилинг', 'Уход'];
       for (const value of defaultProcedureCategories) {
         await client.query('INSERT INTO procedure_categories (value) VALUES ($1)', [value]);
+      }
+    }
+
+    const contentCategoriesCount = await client.query('SELECT COUNT(*) FROM content_categories');
+    if (parseInt(contentCategoriesCount.rows[0].count) === 0) {
+      const defaultContentCategories = ['Уход за кожей', 'Ингредиенты', 'Защита', 'Процедуры', 'Питание', 'Образ жизни'];
+      for (const value of defaultContentCategories) {
+        await client.query('INSERT INTO content_categories (value) VALUES ($1)', [value]);
       }
     }
 
@@ -204,7 +217,8 @@ const dictTableMap = {
   categories: 'categories',
   segments: 'segments',
   volumes: 'volumes',
-  procedureCategories: 'procedure_categories'
+  procedureCategories: 'procedure_categories',
+  contentCategories: 'content_categories'
 }
 
 app.get('/api/dictionaries/:key', async (req, res) => {
