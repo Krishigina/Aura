@@ -5,10 +5,19 @@ import './Products.css'
 
 const STORAGE_KEY = 'aura_products'
 
-const SEGMENTS = ['Бюджетная', 'Люкс', 'Профессиональная', 'Космецевтика']
-const BRANDS = ['Aura', 'La Roche-Posay', 'Vichy', 'Bioderma', 'CeraVe', 'The Ordinary', 'Paula\'s Choice', 'Cosrx', 'Eucerin', 'Nivea']
-const CATEGORIES = ['Очищение', 'Увлажнение', 'Сыворотки', 'SPF', 'Уход', 'Маска', 'Тоник', 'Крем', 'Масло']
-const VOLUMES = ['15мл', '30мл', '50мл', '75мл', '100мл', '150мл', '200мл', '250мл', '500мл', '1л']
+const STORAGE_KEYS = {
+  brands: 'aura_brands',
+  categories: 'aura_categories',
+  segments: 'aura_segments',
+  volumes: 'aura_volumes'
+}
+
+const defaultEnums = {
+  brands: ['Aura', 'La Roche-Posay', 'Vichy', 'Bioderma', 'CeraVe', 'The Ordinary', "Paula's Choice", 'Cosrx', 'Eucerin', 'Nivea'],
+  categories: ['Очищение', 'Увлажнение', 'Сыворотки', 'SPF', 'Уход', 'Маска', 'Тоник', 'Крем', 'Масло'],
+  segments: ['Бюджетная', 'Люкс', 'Профессиональная', 'Космецевтика'],
+  volumes: ['15мл', '30мл', '50мл', '75мл', '100мл', '150мл', '200мл', '250мл', '500мл', '1л']
+}
 
 const defaultProducts = [
   { id: 1, name: 'Hydrating Serum', brand: 'Aura', category: 'Сыворотки', description: 'Увлажняющая сыворотка с гиалуроновой кислотой', images: [], volume: '30мл', segment: 'Люкс' },
@@ -27,6 +36,19 @@ function loadProducts() {
   }
 }
 
+function loadEnums() {
+  try {
+    const result = {}
+    for (const [key, storageKey] of Object.entries(STORAGE_KEYS)) {
+      const stored = localStorage.getItem(storageKey)
+      result[key] = stored ? JSON.parse(stored) : defaultEnums[key]
+    }
+    return result
+  } catch {
+    return defaultEnums
+  }
+}
+
 function saveProducts(data) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
 }
@@ -34,6 +56,7 @@ function saveProducts(data) {
 export default function Products() {
   const { hasPermission } = useAuth()
   const [products, setProducts] = useState(loadProducts)
+  const [enums, setEnums] = useState(loadEnums)
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('Все')
   const [showModal, setShowModal] = useState(false)
@@ -43,6 +66,10 @@ export default function Products() {
   useEffect(() => {
     saveProducts(products)
   }, [products])
+
+  useEffect(() => {
+    setEnums(loadEnums())
+  }, [])
 
   const canEdit = hasPermission('products')
 
@@ -140,7 +167,7 @@ export default function Products() {
         </div>
         <div className="category-tabs">
           <button className={`category-tab ${category === 'Все' ? 'active' : ''}`} onClick={() => setCategory('Все')}>Все</button>
-          {CATEGORIES.map(cat => (
+          {enums.categories.map(cat => (
             <button key={cat} className={`category-tab ${category === cat ? 'active' : ''}`} onClick={() => setCategory(cat)}>
               {cat}
             </button>
@@ -211,7 +238,7 @@ export default function Products() {
                 <div className="form-group">
                   <label>Бренд *</label>
                   <select name="brand" defaultValue={editingProduct?.brand || 'Aura'} className="input">
-                    {BRANDS.map(brand => (
+                    {enums.brands.map(brand => (
                       <option key={brand} value={brand}>{brand}</option>
                     ))}
                   </select>
@@ -219,7 +246,7 @@ export default function Products() {
                 <div className="form-group">
                   <label>Категория</label>
                   <select name="category" defaultValue={editingProduct?.category || 'Увлажнение'} className="input">
-                    {CATEGORIES.map(cat => (
+                    {enums.categories.map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </select>
@@ -227,7 +254,7 @@ export default function Products() {
                 <div className="form-group">
                   <label>Объём</label>
                   <select name="volume" defaultValue={editingProduct?.volume || '50мл'} className="input">
-                    {VOLUMES.map(vol => (
+                    {enums.volumes.map(vol => (
                       <option key={vol} value={vol}>{vol}</option>
                     ))}
                   </select>
@@ -235,7 +262,7 @@ export default function Products() {
                 <div className="form-group">
                   <label>Сегмент</label>
                   <select name="segment" defaultValue={editingProduct?.segment || 'Бюджетная'} className="input">
-                    {SEGMENTS.map(seg => (
+                    {enums.segments.map(seg => (
                       <option key={seg} value={seg}>{seg}</option>
                     ))}
                   </select>
