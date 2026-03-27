@@ -1,131 +1,153 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { Search, Plus, Edit2, Trash2, BookOpen, Tag, Calendar, User, X } from 'lucide-react'
+import { contentApi, usersApi } from '../api'
+import Select from '../components/Select'
 import './Content.css'
 
-const STORAGE_KEY_ARTICLES = 'aura_articles'
-const STORAGE_KEY_USERS = 'aura_users'
-
-const defaultArticles = [
-  { id: 1, title: 'Как подобрать увлажняющий крем', category: 'Уход за кожей', tags: ['увлажнение', 'сухая кожа'], author: '@skin_expert', date: '20.03.2026' },
-  { id: 2, title: 'Витамин C: польза и применение', category: 'Ингредиенты', tags: ['витамин C', 'антиоксидант'], author: '@beauty_consultant', date: '18.03.2026' },
-  { id: 3, title: 'SPF: почему важен каждый день', category: 'Защита', tags: ['spf', 'защита от солнца'], author: '@derma_pro', date: '15.03.2026' },
-]
-
-const defaultCosmetologists = [
-  { id: 1, name: 'Анна Петрова', nickname: '@skin_expert', role: 'cosmetologist' },
-  { id: 2, name: 'Елена Волкова', nickname: '@beauty_consultant', role: 'cosmetologist' },
-  { id: 3, name: 'Мария Соколова', nickname: '@derma_pro', role: 'cosmetologist' },
-]
-
-const contentCategories = ['Уход за кожей', 'Ингредиенты', 'Защита', 'Процедуры', 'Питание', 'Образ жизни']
-
-function loadArticles() {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY_ARTICLES)
-    return stored ? JSON.parse(stored) : defaultArticles
-  } catch {
-    return defaultArticles
-  }
-}
-
-function saveArticles(data) {
-  localStorage.setItem(STORAGE_KEY_ARTICLES, JSON.stringify(data))
-}
-
-function loadCosmetologists() {
-  try {
-    const storedUsers = localStorage.getItem(STORAGE_KEY_USERS)
-    if (storedUsers) {
-      const users = JSON.parse(storedUsers)
-      const cosmetologists = users.filter(u => u.role === 'cosmetologist')
-      if (cosmetologists.length > 0) {
-        return cosmetologists.map(u => ({
-          id: u.id,
-          name: u.name,
-          nickname: u.nickname || `@${u.name.toLowerCase().replace(/\s+/g, '_')}`,
-          role: 'cosmetologist'
-        }))
-      }
-    }
-    return defaultCosmetologists
-  } catch {
-    return defaultCosmetologists
-  }
-}
+const defaultContentCategories = ['Уход за кожей', 'Ингредиенты', 'Защита', 'Процедуры', 'Питание', 'Образ жизни']
 
 export default function Content() {
   const { user, hasPermission } = useAuth()
-  const [articles, setArticles] = useState(loadArticles)
-  const [cosmetologists, setCosmetologists] = useState(loadCosmetologists)
+  const [articles, setArticles] = useState([])
+  const [cosmetologists, setCosmetologists] = useState([])
+  const [contentCategories, setContentCategories] = useState(defaultContentCategories)
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModal, setDeleteModal] = useState(null)
   const [editingArticle, setEditingArticle] = useState(null)
-  const [form, setForm] = useState({ title: '', category: 'Уход за кожей', tags: '', author: '@skin_expert' })
+  const [form, setForm] = useState({ 
+    title: '', 
+    category: '', 
+    tags: '', 
+    author: '',
+    body: '',
+    image_url: '',
+    published: false
+  })
 
   const canCreate = hasPermission('content_create')
   const canEdit = hasPermission('content_edit_own')
 
   useEffect(() => {
-    saveArticles(articles)
-  }, [articles])
-
-  useEffect(() => {
-    setCosmetologists(loadCosmetologists())
+    loadData()
   }, [])
 
-  const filtered = articles.filter(a => a.title.toLowerCase().includes(search.toLowerCase()))
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      const [articlesData, usersData] = await Promise.all([
+        contentApi.getAll().catch(() => []),
+        usersApi.getAll().catch(() => [])
+      ])
+      setArticles(articlesData)
+      const cosmetologistsList = usersData.filter(u => u.role === 'cosmetologist').map(u => ({
+        id: u.id,
+        name: u.name,
+        nickname: u.nickname || `@${u.name?.toLowerCase().replace(/\s+/g, '_') || 'user'}`,
+        role: 'cosmetologist'
+      }))
+      setCosmetologists(cosmetologistsList)
+    } catch (err) {
+      setArticles([])
+      setCosmetologists([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const filtered = articles.filter(a => a.title?.toLowerCase().includes(search.toLowerCase()))
 
   const openAddModal = () => {
     setEditingArticle(null)
-    const defaultAuthor = cosmetologists[0]?.nickname || '@skin_expert'
-    setForm({ title: '', category: 'Уход за кожей', tags: '', author: defaultAuthor })
+    setForm({ 
+      title: '', 
+      category: contentCategories[0] || '', 
+      tags: '', 
+      author: cosmetologists[0]?.nickname || '',
+      body: '',
+      image_url: '',
+      published: false
+    })
     setModalOpen(true)
   }
 
   const openEditModal = (article) => {
     setEditingArticle(article)
     setForm({
-      title: article.title,
-      category: article.category,
-      tags: article.tags.join(', '),
-      author: article.author
+      title: article.title || '',
+      category: article.category || '',
+      tags: article.tags?.join(', ') || '',
+      author: article.author || '',
+      body: article.body || '',
+      image_url: article.image_url || '',
+      published: article.published || false
     })
     setModalOpen(true)
   }
 
-  const handleSave = () => {
+  const handleInputChange = (e) => {
+    const { name, value, type, checked } = e.target
+    setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }))
+  }
+
+  const handleSelectChange = (name, value) => {
+    setForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  const handleSave = async () => {
     if (!form.title) return
 
     const tags = form.tags.split(',').map(t => t.trim()).filter(Boolean)
-    const today = new Date().toLocaleDateString('ru-RU')
-
-    if (editingArticle) {
-      setArticles(prev => prev.map(a => 
-        a.id === editingArticle.id 
-          ? { ...a, title: form.title, category: form.category, tags, author: form.author }
-          : a
-      ))
-    } else {
-      const newArticle = {
-        id: Date.now(),
-        title: form.title,
-        category: form.category,
-        tags,
-        author: form.author,
-        date: today
-      }
-      setArticles(prev => [newArticle, ...prev])
+    const articleData = {
+      title: form.title,
+      category: form.category,
+      tags,
+      author: form.author,
+      body: form.body || '',
+      image_url: form.image_url || '',
+      published: form.published
     }
-    setModalOpen(false)
+
+    try {
+      if (editingArticle) {
+        const updated = await contentApi.update(editingArticle.id, articleData)
+        setArticles(prev => prev.map(a => a.id === editingArticle.id ? updated : a))
+      } else {
+        const created = await contentApi.create(articleData)
+        setArticles(prev => [created, ...prev])
+      }
+      setModalOpen(false)
+    } catch (err) {
+      console.error('Error saving article:', err)
+    }
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (deleteModal) {
-      setArticles(prev => prev.filter(a => a.id !== deleteModal.id))
+      try {
+        await contentApi.delete(deleteModal.id)
+        setArticles(prev => prev.filter(a => a.id !== deleteModal.id))
+      } catch (err) {
+        console.error('Error deleting article:', err)
+      }
       setDeleteModal(null)
     }
+  }
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return ''
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('ru-RU')
+  }
+
+  if (loading) {
+    return (
+      <div className="content-page">
+        <div className="loading-state">Загрузка...</div>
+      </div>
+    )
   }
 
   return (
@@ -156,18 +178,18 @@ export default function Content() {
               <div className="article-meta">
                 <span className="meta-tag"><Tag size={14} />{article.category}</span>
                 <span className="meta-tag"><User size={14} />{article.author}</span>
-                <span className="meta-tag"><Calendar size={14} />{article.date}</span>
+                <span className="meta-tag"><Calendar size={14} />{formatDate(article.created_at)}</span>
               </div>
               <div className="article-tags">
-                {article.tags.map(tag => (
+                {article.tags?.map(tag => (
                   <span key={tag} className="tag">{tag}</span>
                 ))}
               </div>
             </div>
             {(canEdit || user?.role === 'admin') && (
               <div className="article-actions">
-                <button className="btn btn-ghost btn-sm" onClick={() => openEditModal(article)}><Edit2 size={16} /></button>
-                <button className="btn btn-ghost btn-sm" onClick={() => setDeleteModal(article)}><Trash2 size={16} /></button>
+                <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); openEditModal(article) }}><Edit2 size={16} /></button>
+                <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); setDeleteModal(article) }}><Trash2 size={16} /></button>
               </div>
             )}
           </div>
@@ -189,28 +211,35 @@ export default function Content() {
             </div>
             <div className="form-grid">
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label>Заголовок</label>
-                <input className="input" value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="Название статьи" />
+                <label>Заголовок *</label>
+                <input className="input" name="title" value={form.title} onChange={handleInputChange} placeholder="Название статьи" required />
               </div>
-              <div className="form-group">
-                <label>Категория</label>
-                <select className="input" value={form.category} onChange={e => setForm({...form, category: e.target.value})}>
-                  {contentCategories.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Автор</label>
-                <select className="input" value={form.author} onChange={e => setForm({...form, author: e.target.value})}>
-                  {cosmetologists.map(cos => (
-                    <option key={cos.id} value={cos.nickname}>{cos.nickname} ({cos.name})</option>
-                  ))}
-                </select>
-              </div>
+              <Select label="Категория" name="category" value={form.category} onChange={handleSelectChange} options={contentCategories} placeholder="Выберите категорию" />
+              <Select 
+                label="Автор" 
+                name="author" 
+                value={form.author} 
+                onChange={handleSelectChange} 
+                options={cosmetologists.map(c => c.nickname)} 
+                placeholder="Выберите автора" 
+              />
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label>Теги (через запятую)</label>
-                <input className="input" value={form.tags} onChange={e => setForm({...form, tags: e.target.value})} placeholder="увлажнение, сухая кожа" />
+                <input className="input" name="tags" value={form.tags} onChange={handleInputChange} placeholder="увлажнение, сухая кожа" />
+              </div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                <label>Изображение (URL)</label>
+                <input className="input" name="image_url" value={form.image_url} onChange={handleInputChange} placeholder="https://..." />
+              </div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                <label>Содержание</label>
+                <textarea className="input textarea" name="body" value={form.body} onChange={handleInputChange} rows="4" />
+              </div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                <label className="checkbox-label">
+                  <input type="checkbox" name="published" checked={form.published} onChange={handleInputChange} />
+                  Опубликовано
+                </label>
               </div>
             </div>
             <div className="modal-actions">
