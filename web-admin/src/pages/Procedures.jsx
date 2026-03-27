@@ -1,19 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { Search, Plus, Edit2, Trash2, Clock, DollarSign, X, Settings } from 'lucide-react'
+import { Search, Plus, Edit2, Trash2, Clock, DollarSign, X } from 'lucide-react'
 import { proceduresApi, dictionariesApi } from '../api'
 import Select from '../components/Select'
-import DictionaryPanel from '../components/DictionaryPanel'
 import './Procedures.css'
 
 const defaultProcedureCategories = ['Чистка', 'Увлажнение', 'Инъекции', 'Эпиляция', 'Массаж', 'Пилинг', 'Уход']
 
-const procedureDictConfig = {
-  procedureCategories: { label: 'Категории процедур', icon: Settings, color: '#8B5CF6' }
-}
-
 export default function Procedures() {
-  const { user, hasPermission } = useAuth()
+  const { hasPermission } = useAuth()
   const [procedures, setProcedures] = useState([])
   const [categories, setCategories] = useState(defaultProcedureCategories)
   const [loading, setLoading] = useState(true)
@@ -22,9 +17,6 @@ export default function Procedures() {
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModal, setDeleteModal] = useState(null)
   const [editingProcedure, setEditingProcedure] = useState(null)
-  const [showDictPanel, setShowDictPanel] = useState(false)
-  const [fullPageDict, setFullPageDict] = useState(null)
-  const [fullPageFilter, setFullPageFilter] = useState('')
   const [form, setForm] = useState({ 
     name: '', 
     duration: '', 
@@ -35,7 +27,6 @@ export default function Procedures() {
   })
 
   const canEdit = hasPermission('procedures')
-  const canManageEnums = user?.role === 'admin'
 
   useEffect(() => {
     loadData()
@@ -137,36 +128,6 @@ export default function Procedures() {
     }
   }
 
-  const handleDictAdd = async (key, value) => {
-    try {
-      await dictionariesApi.create(key, value)
-      setCategories(prev => [...prev, value])
-    } catch (err) {
-      console.error('Error adding dictionary value:', err)
-    }
-  }
-
-  const handleDictDelete = async (key, value) => {
-    try {
-      await dictionariesApi.delete(key, value)
-      setCategories(prev => prev.filter(v => v !== value))
-    } catch (err) {
-      console.error('Error deleting dictionary value:', err)
-    }
-  }
-
-  const handleDictUpdate = async (key, oldValue, newValue) => {
-    try {
-      await dictionariesApi.update(key, oldValue, newValue)
-      setCategories(prev => prev.map(v => v === oldValue ? newValue : v))
-    } catch (err) {
-      console.error('Error updating dictionary value:', err)
-    }
-  }
-
-  const openFullPage = (key) => setFullPageDict(key)
-  const closeFullPage = () => { setFullPageDict(null); setFullPageFilter('') }
-
   if (loading) {
     return (
       <div className="procedures-page">
@@ -182,33 +143,10 @@ export default function Procedures() {
           <h2>Процедуры</h2>
           <p>Управление салонными процедурами</p>
         </div>
-        <div className="header-actions">
-          {canManageEnums && (
-            <button className={`btn ${showDictPanel ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setShowDictPanel(!showDictPanel)}>
-              <Settings size={16} />{showDictPanel ? 'Скрыть' : 'Справочники'}
-            </button>
-          )}
-          {canEdit && (
-            <button className="btn btn-primary" onClick={openAddModal}><Plus size={18} />Добавить процедуру</button>
-          )}
-        </div>
+        {canEdit && (
+          <button className="btn btn-primary" onClick={openAddModal}><Plus size={18} />Добавить процедуру</button>
+        )}
       </div>
-
-      {showDictPanel && canManageEnums && (
-        <DictionaryPanel
-          dictionaries={{ procedureCategories: categories }}
-          config={procedureDictConfig}
-          onAdd={handleDictAdd}
-          onDelete={handleDictDelete}
-          onUpdate={handleDictUpdate}
-          canEdit={canManageEnums}
-          onFullPage={openFullPage}
-          fullPageDict={fullPageDict}
-          onCloseFullPage={closeFullPage}
-          fullPageFilter={fullPageFilter}
-          onFullPageFilterChange={setFullPageFilter}
-        />
-      )}
 
       <div className="filters-bar glass-card">
         <div className="search-wrapper">

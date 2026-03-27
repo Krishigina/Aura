@@ -1,0 +1,96 @@
+.dictionaries-page {
+  animation: fadeIn var(--transition-normal) ease-out;
+}
+
+.loading-state {
+  text-align: center;
+  padding: var(--spacing-2xl);
+  color: var(--color-gray-500);
+}
+
+.dict-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.dict-group {
+  background: var(--color-surface);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.dict-group-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-lg);
+  background: transparent;
+  border: none;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.dict-group-header:hover {
+  background: var(--color-gray-50);
+}
+
+.dict-group-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.dict-group-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dict-group-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+
+.dict-group-count {
+  font-size: 12px;
+  color: var(--color-gray-500);
+  background: var(--color-gray-100);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+.dict-group-chevron {
+  color: var(--color-gray-400);
+  transition: transform var(--transition-fast);
+}
+
+.dict-group-chevron.rotated {
+  transform: rotate(180deg);
+}
+
+.dict-group-content {
+  padding: 0 var(--spacing-lg) var(--spacing-lg);
+}
+
+/* Dark theme */
+[data-theme="dark"] .dict-group {
+  border-color: var(--color-gray-700);
+  background: var(--color-gray-100);
+}
+
+[data-theme="dark"] .dict-group-header:hover {
+  background: var(--color-gray-200);
+}
+
+[data-theme="dark"] .dict-group-count {
+  background: var(--color-gray-700);
+  color: var(--color-gray-300);
+}

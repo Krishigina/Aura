@@ -12,7 +12,8 @@ import {
   LogOut,
   Menu,
   X,
-  ChevronLeft
+  ChevronLeft,
+  BookA
 } from 'lucide-react'
 import './Layout.css'
 
@@ -23,6 +24,7 @@ const menuItems = [
   { path: '/content', icon: BookOpen, label: 'Контент', permission: 'content' },
   { path: '/users', icon: Users, label: 'Пользователи', permission: 'users' },
   { path: '/reports', icon: BarChart3, label: 'Отчеты', permission: 'reports' },
+  { path: '/dictionaries', icon: BookA, label: 'Справочники', permission: 'admin' },
   { path: '/settings', icon: Settings, label: 'Настройки', permission: 'settings' },
 ]
 
