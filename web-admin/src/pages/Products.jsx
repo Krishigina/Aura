@@ -1,64 +1,16 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
-import { Search, Plus, Edit2, Trash2, X, Image, FileText, Tag, DollarSign, Settings, Check, ChevronDown, ChevronRight, Package, AlertTriangle, ExternalLink } from 'lucide-react'
+import { Search, Plus, Edit2, Trash2, X, Image, Tag, Settings, Check, Package, AlertTriangle, ExternalLink } from 'lucide-react'
+import { productsApi, dictionariesApi } from '../api'
+import Select from '../components/Select'
 import './Products.css'
-
-const STORAGE_KEY = 'aura_products'
-
-const STORAGE_KEYS = {
-  brands: 'aura_brands',
-  categories: 'aura_categories',
-  segments: 'aura_segments',
-  volumes: 'aura_volumes'
-}
 
 const defaultEnums = {
   brands: ['Aura', 'La Roche-Posay', 'Vichy', 'Bioderma', 'CeraVe', 'The Ordinary', "Paula's Choice", 'Cosrx', 'Eucerin', 'Nivea'],
   categories: ['Очищение', 'Увлажнение', 'Сыворотки', 'SPF', 'Уход', 'Маска', 'Тоник', 'Крем', 'Масло'],
   segments: ['Бюджетная', 'Люкс', 'Профессиональная', 'Космецевтика'],
   volumes: ['15мл', '30мл', '50мл', '75мл', '100мл', '150мл', '200мл', '250мл', '500мл', '1л']
-}
-
-const defaultProducts = [
-  { id: 1, name: 'Hydrating Serum', brand: 'Aura', category: 'Сыворотки', description: 'Увлажняющая сыворотка с гиалуроновой кислотой', images: [], volume: '30мл', segment: 'Люкс' },
-  { id: 2, name: 'Vitamin C Cream', brand: 'Aura', category: 'Увлажнение', description: 'Антиоксидантный крем с витамином C', images: [], volume: '50мл', segment: 'Бюджетная' },
-  { id: 3, name: 'Barrier Repair', brand: 'Aura', category: 'Уход', description: 'Восстанавливающий крем для кожного барьера', images: [], volume: '50мл', segment: 'Профессиональная' },
-  { id: 4, name: 'SPF 50+ Protection', brand: 'Aura', category: 'SPF', description: 'Солнцезащитный крем SPF 50+', images: [], volume: '50мл', segment: 'Люкс' },
-  { id: 5, name: 'Cleansing Foam', brand: 'Aura', category: 'Очищение', description: 'Мягкая пенка для умывания', images: [], volume: '150мл', segment: 'Бюджетная' },
-]
-
-function isValidProduct(p) {
-  return p && typeof p === 'object' && typeof p.name === 'string' && typeof p.brand === 'string'
-}
-
-function loadProducts() {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (!stored) return defaultProducts
-    const parsed = JSON.parse(stored)
-    if (Array.isArray(parsed) && parsed.every(isValidProduct)) return parsed
-    return defaultProducts
-  } catch { return defaultProducts }
-}
-
-function loadEnums() {
-  try {
-    const result = {}
-    for (const [key, storageKey] of Object.entries(STORAGE_KEYS)) {
-      const stored = localStorage.getItem(storageKey)
-      const parsed = stored ? JSON.parse(stored) : null
-      result[key] = Array.isArray(parsed) && parsed.every(v => typeof v === 'string') ? parsed : [...defaultEnums[key]]
-    }
-    return result
-  } catch { return { ...defaultEnums } }
-}
-
-function saveProducts(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)) }
-function saveEnums(enums) {
-  for (const [key, storageKey] of Object.entries(STORAGE_KEYS)) {
-    localStorage.setItem(storageKey, JSON.stringify(enums[key]))
-  }
 }
 
 const dictConfig = {
@@ -71,8 +23,9 @@ const dictConfig = {
 export default function Products() {
   const { hasPermission, user } = useAuth()
   const { success, error, info } = useToast()
-  const [products, setProducts] = useState(loadProducts)
-  const [enums, setEnums] = useState(loadEnums)
+  const [products, setProducts] = useState([])
+  const [enums, setEnums] = useState(defaultEnums)
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('Все')
   const [showModal, setShowModal] = useState(false)
@@ -86,51 +39,132 @@ export default function Products() {
   const [fullPageDict, setFullPageDict] = useState(null)
   const [fullPageFilter, setFullPageFilter] = useState('')
   const [confirmAction, setConfirmAction] = useState(null)
+  const [formData, setFormData] = useState({
+    name: '',
+    brand: '',
+    category: '',
+    volume: '',
+    segment: '',
+    description: '',
+    images: ''
+  })
 
   const canEdit = hasPermission('products')
   const canManageEnums = user?.role === 'admin'
 
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      const [productsData, brandsData, categoriesData, segmentsData, volumesData] = await Promise.all([
+        productsApi.getAll().catch(() => []),
+        dictionariesApi.get('brands').catch(() => defaultEnums.brands),
+        dictionariesApi.get('categories').catch(() => defaultEnums.categories),
+        dictionariesApi.get('segments').catch(() => defaultEnums.segments),
+        dictionariesApi.get('volumes').catch(() => defaultEnums.volumes),
+      ])
+      setProducts(productsData)
+      setEnums({
+        brands: brandsData,
+        categories: categoriesData,
+        segments: segmentsData,
+        volumes: volumesData
+      })
+    } catch (err) {
+      error('Ошибка загрузки данных')
+      setProducts([])
+      setEnums(defaultEnums)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(search.toLowerCase()) || 
-                         product.brand.toLowerCase().includes(search.toLowerCase()) ||
+    const matchesSearch = product.name?.toLowerCase().includes(search.toLowerCase()) || 
+                         product.brand?.toLowerCase().includes(search.toLowerCase()) ||
                          product.description?.toLowerCase().includes(search.toLowerCase())
     const matchesCategory = category === 'Все' || product.category === category
     return matchesSearch && matchesCategory
   })
 
   const handleDelete = (product) => setDeleteModal(product)
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (deleteModal) {
-      setProducts(prev => prev.filter(p => p.id !== deleteModal.id))
+      try {
+        await productsApi.delete(deleteModal.id)
+        setProducts(prev => prev.filter(p => p.id !== deleteModal.id))
+        success(`Продукт "${deleteModal.name}" удалён`)
+      } catch (err) {
+        error('Ошибка удаления')
+      }
       setDeleteModal(null)
-      success(`Продукт "${deleteModal.name}" удалён`)
     }
   }
-  const handleEdit = (product) => { setEditingProduct(product); setShowModal(true) }
-  const openAddModal = () => { setEditingProduct(null); setShowModal(true) }
-
-  const handleSave = (e) => {
-    e.preventDefault()
-    const formData = new FormData(e.target)
-    const product = {
-      id: editingProduct?.id || Date.now(),
-      name: formData.get('name'),
-      brand: formData.get('brand'),
-      category: formData.get('category'),
-      description: formData.get('description') || '',
-      images: formData.get('images')?.split('\n').filter(url => url.trim()) || [],
-      volume: formData.get('volume'),
-      segment: formData.get('segment')
-    }
-    if (editingProduct) {
-      setProducts(prev => prev.map(p => p.id === editingProduct.id ? product : p))
-      success('Продукт обновлён')
-    } else {
-      setProducts(prev => [product, ...prev])
-      success('Продукт добавлен')
-    }
-    setShowModal(false)
+  const handleEdit = (product) => { 
+    setEditingProduct(product)
+    setFormData({
+      name: product.name || '',
+      brand: product.brand || '',
+      category: product.category || '',
+      volume: product.volume || '',
+      segment: product.segment || '',
+      description: product.description || '',
+      images: product.images?.join('\n') || ''
+    })
+    setShowModal(true) 
+  }
+  const openAddModal = () => { 
     setEditingProduct(null)
+    setFormData({
+      name: '',
+      brand: enums.brands[0] || '',
+      category: enums.categories[0] || '',
+      volume: enums.volumes[0] || '',
+      segment: enums.segments[0] || '',
+      description: '',
+      images: ''
+    })
+    setShowModal(true) 
+  }
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target
+    setFormData(prev => ({ ...prev, [name]: value }))
+  }
+
+  const handleSelectChange = (name, value) => {
+    setFormData(prev => ({ ...prev, [name]: value }))
+  }
+
+  const handleSave = async (e) => {
+    e.preventDefault()
+    const product = {
+      name: formData.name,
+      brand: formData.brand,
+      category: formData.category,
+      description: formData.description || '',
+      images: formData.images?.split('\n').filter(url => url.trim()) || [],
+      volume: formData.volume,
+      segment: formData.segment
+    }
+    try {
+      if (editingProduct) {
+        const updated = await productsApi.update(editingProduct.id, product)
+        setProducts(prev => prev.map(p => p.id === editingProduct.id ? updated : p))
+        success('Продукт обновлён')
+      } else {
+        const created = await productsApi.create(product)
+        setProducts(prev => [created, ...prev])
+        success('Продукт добавлен')
+      }
+      setShowModal(false)
+      setEditingProduct(null)
+    } catch (err) {
+      error('Ошибка сохранения')
+    }
   }
 
   const getSegmentClass = (segment) => {
@@ -145,27 +179,37 @@ export default function Products() {
     return values.filter(v => v.toLowerCase().includes(value.toLowerCase()))
   }
 
-  const addValue = () => {
+  const addValue = async () => {
     if (!newValue.trim()) return
     const duplicates = checkDuplicates(expandedDict, newValue)
     if (duplicates.length > 0) {
       error(`Найдены похожие значения: ${duplicates.join(', ')}`)
       return
     }
-    setEnums(prev => ({ ...prev, [expandedDict]: [...prev[expandedDict], newValue.trim()] }))
-    info(`Добавлено: ${newValue}`)
-    setNewValue('')
+    try {
+      await dictionariesApi.create(expandedDict, newValue.trim())
+      setEnums(prev => ({ ...prev, [expandedDict]: [...prev[expandedDict], newValue.trim()] }))
+      info(`Добавлено: ${newValue}`)
+      setNewValue('')
+    } catch (err) {
+      error('Ошибка добавления')
+    }
   }
 
   const deleteValue = (key, value) => {
     setConfirmAction({ type: 'deleteEnum', key, value, label: `удалить "${value}" из ${dictConfig[key].label.toLowerCase()}` })
   }
 
-  const confirmActionHandler = () => {
+  const confirmActionHandler = async () => {
     if (!confirmAction) return
     if (confirmAction.type === 'deleteEnum') {
-      setEnums(prev => ({ ...prev, [confirmAction.key]: prev[confirmAction.key].filter(v => v !== confirmAction.value) }))
-      info(`Удалено: ${confirmAction.value}`)
+      try {
+        await dictionariesApi.delete(confirmAction.key, confirmAction.value)
+        setEnums(prev => ({ ...prev, [confirmAction.key]: prev[confirmAction.key].filter(v => v !== confirmAction.value) }))
+        info(`Удалено: ${confirmAction.value}`)
+      } catch (err) {
+        error('Ошибка удаления')
+      }
     }
     setConfirmAction(null)
   }
@@ -175,24 +219,37 @@ export default function Products() {
     setEditValue(value)
   }
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editValue.trim()) return
     const duplicates = checkDuplicates(editingValue.key, editValue).filter(v => v !== editingValue.value)
     if (duplicates.length > 0) {
       error(`Такое значение уже есть: ${duplicates.join(', ')}`)
       return
     }
-    setEnums(prev => ({
-      ...prev,
-      [editingValue.key]: prev[editingValue.key].map(v => v === editingValue.value ? editValue.trim() : v)
-    }))
-    success(`Изменено: ${editingValue.value} → ${editValue}`)
-    setEditingValue(null)
-    setEditValue('')
+    try {
+      await dictionariesApi.update(editingValue.key, editingValue.value, editValue.trim())
+      setEnums(prev => ({
+        ...prev,
+        [editingValue.key]: prev[editingValue.key].map(v => v === editingValue.value ? editValue.trim() : v)
+      }))
+      success(`Изменено: ${editingValue.value} → ${editValue}`)
+      setEditingValue(null)
+      setEditValue('')
+    } catch (err) {
+      error('Ошибка сохранения')
+    }
   }
 
   const openFullPage = (key) => setFullPageDict(key)
   const closeFullPage = () => setFullPageDict(null)
+
+  if (loading) {
+    return (
+      <div className="products-page">
+        <div className="loading-state">Загрузка...</div>
+      </div>
+    )
+  }
 
   return (
     <div className="products-page">
@@ -236,7 +293,7 @@ export default function Products() {
                     </div>
                     <div className="dict-header-right">
                       {values.length > 10 && <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); openFullPage(key) }}><ExternalLink size={14} />Открыть все</button>}
-                      <ChevronDown size={18} className={`dict-chevron ${isExpanded ? 'rotated' : ''}`} />
+                      <Check size={18} className={`dict-chevron ${isExpanded ? 'rotated' : ''}`} />
                     </div>
                   </button>
                   {isExpanded && (
@@ -303,7 +360,7 @@ export default function Products() {
           <tbody>
             {filteredProducts.map((product, idx) => (
               <tr key={product?.id || idx} onClick={() => handleEdit(product)} style={{cursor: canEdit ? 'pointer' : 'default'}}>
-                <td><div className="product-name">{product.name}</div>{product.description && <div className="product-desc">{product.description.substring(0, 50)}...</div>}</td>
+                <td><div className="product-name">{product.name}</div>{product.description && <div className="product-desc">{product.description?.substring(0, 50)}...</div>}</td>
                 <td><span className="brand-badge">{product.brand}</span></td>
                 <td><span className="category-badge">{product.category}</span></td>
                 <td>{product.volume}</td>
@@ -331,35 +388,15 @@ export default function Products() {
               <h3>{editingProduct ? 'Редактировать' : 'Добавить продукт'}</h3>
               <button className="btn btn-ghost btn-sm" onClick={() => setShowModal(false)}><X size={20} /></button>
             </div>
-            <form onSubmit={handleSave}>
+            <form onSubmit={handleSave} className="product-form">
               <div className="form-grid">
-                <div className="form-group"><label>Название *</label><input name="name" defaultValue={editingProduct?.name} className="input" required /></div>
-                <div className="form-group">
-                  <label>Бренд *</label>
-                  <select name="brand" defaultValue={editingProduct?.brand || 'Aura'} className="input">
-                    {enums.brands.map(brand => <option key={brand} value={brand}>{brand}</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Категория</label>
-                  <select name="category" defaultValue={editingProduct?.category || 'Увлажнение'} className="input">
-                    {enums.categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Объём</label>
-                  <select name="volume" defaultValue={editingProduct?.volume || '50мл'} className="input">
-                    {enums.volumes.map(vol => <option key={vol} value={vol}>{vol}</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Сегмент</label>
-                  <select name="segment" defaultValue={editingProduct?.segment || 'Бюджетная'} className="input">
-                    {enums.segments.map(seg => <option key={seg} value={seg}>{seg}</option>)}
-                  </select>
-                </div>
-                <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Описание</label><textarea name="description" defaultValue={editingProduct?.description || ''} className="input textarea" rows="3" /></div>
-                <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Фотографии (URL)</label><textarea name="images" defaultValue={editingProduct?.images?.join('\n') || ''} className="input textarea" rows="4" placeholder="URL на строку" /></div>
+                <div className="form-group"><label>Название *</label><input name="name" value={formData.name} onChange={handleInputChange} className="input" required /></div>
+                <Select label="Бренд *" name="brand" value={formData.brand} onChange={handleSelectChange} options={enums.brands} />
+                <Select label="Категория" name="category" value={formData.category} onChange={handleSelectChange} options={enums.categories} placeholder="Выберите категорию" />
+                <Select label="Объём" name="volume" value={formData.volume} onChange={handleSelectChange} options={enums.volumes} placeholder="Выберите объём" />
+                <Select label="Сегмент" name="segment" value={formData.segment} onChange={handleSelectChange} options={enums.segments} placeholder="Выберите сегмент" />
+                <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Описание</label><textarea name="description" value={formData.description} onChange={handleInputChange} className="input textarea" rows="3" /></div>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Фотографии (URL)</label><textarea name="images" value={formData.images} onChange={handleInputChange} className="input textarea" rows="4" placeholder="URL на строку" /></div>
               </div>
               <div className="modal-actions">
                 <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>Отмена</button>
