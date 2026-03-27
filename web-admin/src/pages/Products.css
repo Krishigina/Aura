@@ -2,6 +2,12 @@
   animation: fadeIn var(--transition-normal) ease-out;
 }
 
+.loading-state {
+  text-align: center;
+  padding: var(--spacing-2xl);
+  color: var(--color-gray-500);
+}
+
 .page-header {
   display: flex;
   justify-content: space-between;

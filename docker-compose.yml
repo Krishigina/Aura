@@ -9,6 +9,7 @@ services:
       POSTGRES_DB: aura
       POSTGRES_USER: aura_user
       POSTGRES_PASSWORD: aura_password
+      POSTGRES_INITDB_ARGS: --encoding=UTF-8
     ports:
       - "5432:5432"
     volumes:
@@ -140,6 +141,33 @@ services:
     depends_on:
       weaviate:
         condition: service_started
+
+  # Admin API
+  admin-api:
+    build: ./backend/api
+    container_name: aura_admin_api
+    ports:
+      - "3001:3001"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=aura
+      - DB_USER=aura_user
+      - DB_PASSWORD=aura_password
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Web Admin
+  web-admin:
+    build: ./web-admin
+    container_name: aura_web_admin
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:3001/api
+    depends_on:
+      - admin-api
 
 volumes:
   postgres_data:
