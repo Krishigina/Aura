@@ -1,5 +1,14 @@
 import { useState } from 'react'
-import { Search, Plus, Edit2, Trash2, X, Check, ExternalLink } from 'lucide-react'
+import { Plus, Edit2, Trash2, X, Check, ChevronDown, ExternalLink } from 'lucide-react'
+
+function pluralize(n, one, two, five) {
+  const absN = Math.abs(n)
+  if (absN % 100 >= 11 && absN % 100 <= 19) return five
+  const mod10 = absN % 10
+  if (mod10 === 1) return one
+  if (mod10 >= 2 && mod10 <= 4) return two
+  return five
+}
 
 export default function DictionaryPanel({ 
   dictionaries, 
@@ -8,11 +17,7 @@ export default function DictionaryPanel({
   onUpdate, 
   canEdit = true,
   config = {},
-  onFullPage,
-  fullPageDict,
-  onCloseFullPage,
-  fullPageFilter,
-  onFullPageFilterChange
+  onFullPage
 }) {
   const [expandedDict, setExpandedDict] = useState(null)
   const [newValue, setNewValue] = useState('')
@@ -63,17 +68,9 @@ export default function DictionaryPanel({
     setEditValue('')
   }
 
-  const filteredFullPageValues = fullPageDict && dictionaries[fullPageDict] 
-    ? dictionaries[fullPageDict].filter(v => !fullPageFilter || v.toLowerCase().includes(fullPageFilter.toLowerCase()))
-    : []
-
   return (
     <>
       <div className="dict-panel glass-card">
-        <div className="dict-panel-header">
-          <h3>Справочники</h3>
-          <p>Управление значениями справочников</p>
-        </div>
         <div className="dict-accordion">
           {Object.entries(dictionaries).map(([key, values]) => {
             const dictConfigItem = config[key] || {}
@@ -90,12 +87,12 @@ export default function DictionaryPanel({
                     <span className="dict-count">{listValues.length}</span>
                   </div>
                   <div className="dict-header-right">
-                    {listValues.length > 10 && onFullPage && (
+                    {listValues.length > 0 && onFullPage && (
                       <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); onFullPage(key) }}>
                         <ExternalLink size={14} />Открыть все
                       </button>
                     )}
-                    <Check size={18} className={`dict-chevron ${isExpanded ? 'rotated' : ''}`} />
+                    <ChevronDown size={18} className={`dict-chevron ${isExpanded ? 'rotated' : ''}`} />
                   </div>
                 </button>
                 {isExpanded && (
@@ -143,60 +140,6 @@ export default function DictionaryPanel({
           })}
         </div>
       </div>
-
-      {fullPageDict && (
-        <div className="modal-overlay fullpage-dict-overlay" onClick={onCloseFullPage}>
-          <div className="modal glass-card fullpage-dict" onClick={e => e.stopPropagation()}>
-            <div className="fullpage-dict-header">
-              <div className="fullpage-dict-icon" style={{ background: `${config[fullPageDict]?.color}20`, color: config[fullPageDict]?.color }}>
-                {(() => {
-                  const Icon = config[fullPageDict]?.icon
-                  return Icon ? <Icon size={24} /> : null
-                })()}
-              </div>
-              <div className="fullpage-dict-title-group">
-                <h3 className="fullpage-dict-title">{config[fullPageDict]?.label || fullPageDict}</h3>
-                <p className="fullpage-dict-subtitle">Управление значениями справочника</p>
-              </div>
-              <button className="btn btn-ghost btn-sm" onClick={onCloseFullPage}><X size={20} /></button>
-            </div>
-            <div className="fullpage-dict-content">
-              <div className="fullpage-search">
-                <Search className="search-icon" />
-                <input 
-                  type="text" 
-                  placeholder="Поиск..." 
-                  className="search-input" 
-                  value={fullPageFilter}
-                  onChange={e => onFullPageFilterChange(e.target.value)}
-                  autoFocus
-                />
-              </div>
-              <div className="fullpage-list">
-                {filteredFullPageValues.length === 0 ? (
-                  <div className="fullpage-empty">Ничего не найдено</div>
-                ) : (
-                  filteredFullPageValues.map((value, idx) => (
-                    <div key={idx} className="fullpage-item">
-                      <span>{value}</span>
-                      {canEdit && (
-                        <div className="fullpage-actions">
-                          <button className="btn btn-ghost btn-sm" onClick={() => { onCloseFullPage(); startEdit(fullPageDict, value) }}><Edit2 size={14} /></button>
-                          <button className="btn btn-ghost btn-sm btn-danger" onClick={() => { onCloseFullPage(); handleDelete(fullPageDict, value) }}><Trash2 size={14} /></button>
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-            <div className="fullpage-footer">
-              <span className="fullpage-count">{dictionaries[fullPageDict]?.length || 0} значений</span>
-              <button className="btn btn-primary" onClick={onCloseFullPage}>Закрыть</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {confirmDelete && (
         <div className="modal-overlay" onClick={() => setConfirmDelete(null)}>

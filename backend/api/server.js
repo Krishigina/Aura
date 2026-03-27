@@ -105,6 +105,16 @@ const initDB = async () => {
         id SERIAL PRIMARY KEY,
         value VARCHAR(255) NOT NULL UNIQUE
       );
+
+      CREATE TABLE IF NOT EXISTS user_roles (
+        id SERIAL PRIMARY KEY,
+        value VARCHAR(255) NOT NULL UNIQUE
+      );
+
+      CREATE TABLE IF NOT EXISTS skin_types (
+        id SERIAL PRIMARY KEY,
+        value VARCHAR(255) NOT NULL UNIQUE
+      );
     `);
 
     const brandsCount = await client.query('SELECT COUNT(*) FROM brands');
@@ -152,6 +162,22 @@ const initDB = async () => {
       const defaultContentCategories = ['Уход за кожей', 'Ингредиенты', 'Защита', 'Процедуры', 'Питание', 'Образ жизни'];
       for (const value of defaultContentCategories) {
         await client.query('INSERT INTO content_categories (value) VALUES ($1)', [value]);
+      }
+    }
+
+    const userRolesCount = await client.query('SELECT COUNT(*) FROM user_roles');
+    if (parseInt(userRolesCount.rows[0].count) === 0) {
+      const defaultUserRoles = ['Пользователь', 'Косметолог', 'Менеджер', 'Администратор'];
+      for (const value of defaultUserRoles) {
+        await client.query('INSERT INTO user_roles (value) VALUES ($1)', [value]);
+      }
+    }
+
+    const skinTypesCount = await client.query('SELECT COUNT(*) FROM skin_types');
+    if (parseInt(skinTypesCount.rows[0].count) === 0) {
+      const defaultSkinTypes = ['Нормальная', 'Сухая', 'Жирная', 'Комбинированная', 'Чувствительная'];
+      for (const value of defaultSkinTypes) {
+        await client.query('INSERT INTO skin_types (value) VALUES ($1)', [value]);
       }
     }
 
@@ -218,7 +244,9 @@ const dictTableMap = {
   segments: 'segments',
   volumes: 'volumes',
   procedureCategories: 'procedure_categories',
-  contentCategories: 'content_categories'
+  contentCategories: 'content_categories',
+  userRoles: 'user_roles',
+  skinTypes: 'skin_types'
 }
 
 app.get('/api/dictionaries/:key', async (req, res) => {

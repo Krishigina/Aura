@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { Search, Eye, Edit2, Trash2, Mail, Phone, Calendar, X } from 'lucide-react'
+import { Search, Eye, Edit2, Trash2, Mail, Phone, Calendar, X, Plus } from 'lucide-react'
 import { usersApi } from '../api'
 import Select from '../components/Select'
 import './Users.css'
 
 const defaultUsers = [
-  { id: 1, name: 'Елена Иванова', email: 'elena@example.com', phone: '+7 999 123-45-67', skinType: 'Комбинированная', status: 'active', role: 'user', nickname: '@elena_ivanova' },
-  { id: 2, name: 'Мария Петрова', email: 'maria@example.com', phone: '+7 999 234-56-78', skinType: 'Сухая', status: 'active', role: 'user', nickname: '@maria_petrova' },
-  { id: 3, name: 'Анна Сидорова', email: 'anna@example.com', phone: '+7 999 345-67-89', skinType: 'Жирная', status: 'inactive', role: 'user', nickname: '@anna_sidorova' },
-  { id: 4, name: 'Анна Петрова', email: 'anna.cosmetologist@aura.com', phone: '+7 999 456-78-90', skinType: 'Нормальная', status: 'active', role: 'cosmetologist', nickname: '@skin_expert' },
-  { id: 5, name: 'Елена Волкова', email: 'elena.cosmetologist@aura.com', phone: '+7 999 567-89-01', skinType: 'Нормальная', status: 'active', role: 'cosmetologist', nickname: '@beauty_consultant' },
-  { id: 6, name: 'Мария Соколова', email: 'maria.cosmetologist@aura.com', phone: '+7 999 678-90-12', skinType: 'Нормальная', status: 'active', role: 'cosmetologist', nickname: '@derma_pro' },
+  { id: 1, name: 'Елена Иванова', email: 'elena@example.com', phone: '+7 999 123-45-67', skinType: 'Комбинированная', role: 'user', nickname: '@elena_ivanova' },
+  { id: 2, name: 'Мария Петрова', email: 'maria@example.com', phone: '+7 999 234-56-78', skinType: 'Сухая', role: 'user', nickname: '@maria_petrova' },
+  { id: 3, name: 'Анна Сидорова', email: 'anna@example.com', phone: '+7 999 345-67-89', skinType: 'Жирная', role: 'user', nickname: '@anna_sidorova' },
+  { id: 4, name: 'Анна Петрова', email: 'anna.cosmetologist@aura.com', phone: '+7 999 456-78-90', skinType: 'Нормальная', role: 'cosmetologist', nickname: '@skin_expert' },
+  { id: 5, name: 'Елена Волкова', email: 'elena.cosmetologist@aura.com', phone: '+7 999 567-89-01', skinType: 'Нормальная', role: 'cosmetologist', nickname: '@beauty_consultant' },
+  { id: 6, name: 'Мария Соколова', email: 'maria.cosmetologist@aura.com', phone: '+7 999 678-90-12', skinType: 'Нормальная', role: 'cosmetologist', nickname: '@derma_pro' },
 ]
 
 const skinTypes = ['Нормальная', 'Сухая', 'Жирная', 'Комбинированная', 'Чувствительная']
@@ -40,7 +40,6 @@ export default function Users() {
     email: '', 
     phone: '', 
     skinType: '', 
-    status: 'active',
     role: 'user',
     nickname: ''
   })
@@ -71,7 +70,7 @@ export default function Users() {
 
   const openAddModal = () => {
     setEditingUser(null)
-    setForm({ name: '', email: '', phone: '', skinType: skinTypes[0], status: 'active', role: 'user', nickname: '' })
+    setForm({ name: '', email: '', phone: '', skinType: skinTypes[0], role: 'user', nickname: '' })
     setModalOpen(true)
   }
 
@@ -82,7 +81,6 @@ export default function Users() {
       email: user.email || '',
       phone: user.phone || '',
       skinType: user.skinType || '',
-      status: user.status || 'active',
       role: user.role || 'user',
       nickname: user.nickname || ''
     })
@@ -169,7 +167,7 @@ export default function Users() {
           <p>Управление пользователями системы</p>
         </div>
         {canEdit && (
-          <button className="btn btn-primary" onClick={openAddModal}>Добавить пользователя</button>
+          <button className="btn btn-primary" onClick={openAddModal}><Plus size={16} />Добавить пользователя</button>
         )}
       </div>
 
@@ -191,7 +189,6 @@ export default function Users() {
               {user.nickname && <div className="user-info-row"><span style={{width: '14px'}}/>{user.nickname}</div>}
               <div className="user-meta">
                 <span className="skin-type">{user.skinType}</span>
-                <span className={`status ${user.status}`}>{user.status === 'active' ? 'Активен' : 'Неактивен'}</span>
               </div>
               <div className="user-info-row join-date"><Calendar size={14} />С {formatDate(user.created_at)}</div>
             </div>
@@ -228,7 +225,6 @@ export default function Users() {
                 <div className="profile-row"><span>Email:</span> {viewModal.email}</div>
                 <div className="profile-row"><span>Телефон:</span> {viewModal.phone}</div>
                 <div className="profile-row"><span>Тип кожи:</span> {viewModal.skinType}</div>
-                <div className="profile-row"><span>Статус:</span> {viewModal.status === 'active' ? 'Активен' : 'Неактивен'}</div>
                 <div className="profile-row"><span>Дата регистрации:</span> {formatDate(viewModal.created_at)}</div>
               </div>
             </div>
@@ -265,7 +261,6 @@ export default function Users() {
                 <input className="input" name="phone" value={form.phone} onChange={handleInputChange} placeholder="+7 999 123-45-67" />
               </div>
               <Select label="Тип кожи" name="skinType" value={form.skinType} onChange={handleSelectChange} options={skinTypes} placeholder="Выберите тип кожи" />
-              <Select label="Статус" name="status" value={form.status} onChange={handleSelectChange} options={['Активен', 'Неактивен']} />
             </div>
             <div className="modal-actions">
               <button className="btn btn-ghost" onClick={() => setModalOpen(false)}>Отмена</button>
