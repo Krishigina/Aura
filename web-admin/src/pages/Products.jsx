@@ -27,10 +27,19 @@ const defaultProducts = [
   { id: 5, name: 'Cleansing Foam', brand: 'Aura', category: 'Очищение', description: 'Мягкая пенка для умывания', images: [], volume: '150мл', segment: 'Бюджетная' },
 ]
 
+function isValidProduct(p) {
+  return p && typeof p === 'object' && typeof p.name === 'string' && typeof p.brand === 'string'
+}
+
 function loadProducts() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
-    return stored ? JSON.parse(stored) : defaultProducts
+    if (!stored) return defaultProducts
+    const parsed = JSON.parse(stored)
+    if (Array.isArray(parsed) && parsed.every(isValidProduct)) {
+      return parsed
+    }
+    return defaultProducts
   } catch {
     return defaultProducts
   }
@@ -41,7 +50,8 @@ function loadEnums() {
     const result = {}
     for (const [key, storageKey] of Object.entries(STORAGE_KEYS)) {
       const stored = localStorage.getItem(storageKey)
-      result[key] = stored ? JSON.parse(stored) : defaultEnums[key]
+      const parsed = stored ? JSON.parse(stored) : null
+      result[key] = Array.isArray(parsed) && parsed.every(v => typeof v === 'string') ? parsed : defaultEnums[key]
     }
     return result
   } catch {
@@ -56,7 +66,7 @@ function saveProducts(data) {
 export default function Products() {
   const { hasPermission } = useAuth()
   const [products, setProducts] = useState(loadProducts)
-  const [enums, setEnums] = useState(loadEnums)
+  const [enums, setEnums] = useState(() => loadEnums())
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('Все')
   const [showModal, setShowModal] = useState(false)
@@ -68,7 +78,10 @@ export default function Products() {
   }, [products])
 
   useEffect(() => {
-    setEnums(loadEnums())
+    const loaded = loadEnums()
+    if (JSON.stringify(loaded) !== JSON.stringify(enums)) {
+      setEnums(loaded)
+    }
   }, [])
 
   const canEdit = hasPermission('products')
@@ -166,9 +179,9 @@ export default function Products() {
           />
         </div>
         <div className="category-tabs">
-          <button className={`category-tab ${category === 'Все' ? 'active' : ''}`} onClick={() => setCategory('Все')}>Все</button>
-          {enums.categories.map(cat => (
-            <button key={cat} className={`category-tab ${category === cat ? 'active' : ''}`} onClick={() => setCategory(cat)}>
+          <button key="all" className={`category-tab ${category === 'Все' ? 'active' : ''}`} onClick={() => setCategory('Все')}>Все</button>
+          {enums.categories.map((cat, idx) => (
+            <button key={cat || idx} className={`category-tab ${category === cat ? 'active' : ''}`} onClick={() => setCategory(cat)}>
               {cat}
             </button>
           ))}
@@ -188,8 +201,8 @@ export default function Products() {
             </tr>
           </thead>
           <tbody>
-            {filteredProducts.map(product => (
-              <tr key={product.id} onClick={() => handleEdit(product)} style={{cursor: canEdit ? 'pointer' : 'default'}}>
+              {filteredProducts.map((product, idx) => (
+              <tr key={product?.id || idx} onClick={() => handleEdit(product)} style={{cursor: canEdit ? 'pointer' : 'default'}}>
                 <td>
                   <div className="product-name">{product.name}</div>
                   {product.description && <div className="product-desc">{product.description.substring(0, 50)}...</div>}
