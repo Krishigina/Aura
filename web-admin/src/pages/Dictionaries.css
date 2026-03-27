@@ -94,3 +94,38 @@
   background: var(--color-gray-700);
   color: var(--color-gray-300);
 }
+
+/* Full Page Dictionary View */
+.dict-fullpage {
+  animation: fadeIn var(--transition-normal) ease-out;
+}
+
+.dict-fullpage-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-md);
+}
+
+.dict-fullpage-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+
+.dict-fullpage-item-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-on-surface);
+}
+
+.dict-fullpage-item-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.dict-fullpage-item:hover .dict-fullpage-item-actions {
+  opacity: 1;
+}
