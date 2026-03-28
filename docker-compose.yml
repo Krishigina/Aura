@@ -142,7 +142,7 @@ services:
       weaviate:
         condition: service_started
 
-  # Admin API
+  # Admin API (FastAPI)
   admin-api:
     build: ./backend/api
     container_name: aura_admin_api
