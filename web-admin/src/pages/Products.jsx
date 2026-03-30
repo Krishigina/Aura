@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
-import { Search, Plus, Edit2, Trash2, X, Image, Tag, Check, Package, AlertTriangle } from 'lucide-react'
+import { Search, Plus, Edit2, Trash2, X, Image, Tag, Check, Package, AlertTriangle, Link as LinkIcon } from 'lucide-react'
 import { productsApi, dictionariesApi } from '../api'
 import Select from '../components/Select'
 import './Products.css'
@@ -11,6 +11,15 @@ const defaultEnums = {
   categories: ['Очищение', 'Увлажнение', 'Сыворотки', 'SPF', 'Уход', 'Маска', 'Тоник', 'Крем', 'Масло'],
   segments: ['Бюджетная', 'Люкс', 'Профессиональная', 'Космецевтика'],
   volumes: ['15мл', '30мл', '50мл', '75мл', '100мл', '150мл', '200мл', '250мл', '500мл', '1л']
+}
+
+const productEnums = {
+  product_types: ['Крем', 'Сыворотка', 'Лосьон', 'Тоник', 'Эмульсия', 'Масло', 'Гель', 'Пилинг', 'Маска', 'Бальзам', 'Спрей', 'Мист'],
+  for_whom: ['Универсальный', 'Мужчинам', 'Женщинам'],
+  purposes: ['Увлажнение', 'Очищение', 'Питание', 'Антивозрастной', 'Отбеливание', 'Защита от солнца', 'Проблемная кожа', 'Восстановление', 'Матирование', 'Тонирование'],
+  skin_types: ['Сухая', 'Жирная', 'Комбинированная', 'Нормальная', 'Чувствительная', 'Проблемная'],
+  application_times: ['Утро', 'Вечер', 'Утро/Вечер'],
+  areas: ['Лицо', 'Тело', 'Волосы', 'Губы', 'Руки', 'Веки', 'Зона вокруг глаз']
 }
 
 export default function Products() {
@@ -26,13 +35,28 @@ export default function Products() {
   const [deleteModal, setDeleteModal] = useState(null)
   const [formData, setFormData] = useState({
     name: '',
+    what_is_it: '',
     brand: '',
-    category: '',
+    product_type: '',
+    for_whom: '',
+    purpose: '',
+    skin_type: '',
+    application_time: '',
+    area: '',
+    active_ingredient: '',
     volume: '',
     segment: '',
+    composition: '',
+    application_info: '',
+    country: '',
+    manufacturer: '',
     description: '',
-    images: ''
+    photos: [],
+    has_video: false
   })
+  const [videoUrl, setVideoUrl] = useState('')
+  const [url, setUrl] = useState('')
+  const [parsing, setParsing] = useState(false)
 
   const canEdit = hasPermission('products')
 
@@ -91,48 +115,230 @@ export default function Products() {
     setEditingProduct(product)
     setFormData({
       name: product.name || '',
+      what_is_it: product.what_is_it || '',
       brand: product.brand || '',
-      category: product.category || '',
+      product_type: product.product_type || '',
+      for_whom: product.for_whom || '',
+      purpose: product.purpose || '',
+      skin_type: product.skin_type || '',
+      application_time: product.application_time || '',
+      area: product.area || '',
+      active_ingredient: product.active_ingredient || '',
       volume: product.volume || '',
       segment: product.segment || '',
+      composition: product.composition || '',
+      application_info: product.application_info || '',
+      country: product.country || '',
+      manufacturer: product.manufacturer || '',
       description: product.description || '',
-      images: product.images?.join('\n') || ''
+      photos: product.photos || [],
+      has_video: product.has_video || false
     })
+    setVideoUrl(product.has_video ? productsApi.getVideoUrl(product.id) : '')
     setShowModal(true) 
   }
   const openAddModal = () => { 
     setEditingProduct(null)
     setFormData({
       name: '',
+      what_is_it: '',
       brand: enums.brands[0] || '',
-      category: enums.categories[0] || '',
+      product_type: '',
+      for_whom: '',
+      purpose: '',
+      skin_type: '',
+      application_time: '',
+      area: '',
+      active_ingredient: '',
       volume: enums.volumes[0] || '',
-      segment: enums.segments[0] || '',
+      segment: '',
+      composition: '',
+      application_info: '',
+      country: '',
+      manufacturer: '',
       description: '',
-      images: ''
+      photos: [],
+      has_video: false
     })
+    setVideoUrl('')
     setShowModal(true) 
   }
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
+    const { name, value, type, checked } = e.target
+    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }))
   }
 
   const handleSelectChange = (name, value) => {
     setFormData(prev => ({ ...prev, [name]: value }))
   }
 
+  const handleParseUrl = async () => {
+    if (!url) return
+    setParsing(true)
+    try {
+      let data = null
+      
+      if (url.includes('wildberries.ru')) {
+        const wbMatch = url.match(/catalog\/(\d+)/)
+        if (wbMatch) {
+          const productId = wbMatch[1]
+          data = await parseWildberries(productId)
+        }
+      }
+      
+      if (!data || !data.name) {
+        data = await productsApi.parseUrl(url)
+      }
+      
+      if (data?.name) {
+        setFormData(prev => ({
+          ...prev,
+          name: data.name || prev.name,
+          brand: data.brand || prev.brand,
+          category: data.category || prev.category,
+          description: data.description || prev.description,
+          volume: data.volume || prev.volume,
+          images: data.images?.join('\n') || prev.images
+        }))
+        success('Данные успешно получены')
+      } else {
+        error('Не удалось автоматически получить данные. Пожалуйста, заполните поля вручную.')
+      }
+    } catch (err) {
+      error('Не удалось распарсить ссылку. Заполните поля вручную.')
+    } finally {
+      setParsing(false)
+    }
+  }
+  
+  const parseWildberries = async (productId) => {
+    try {
+      const response = await fetch(`https://www.wildberries.ru/catalog/${productId}/detail.aspx`)
+      const text = await response.text()
+      const parser = new DOMParser()
+      const doc = parser.parseFromString(text, 'text/html')
+      
+      const result = { name: null, brand: null, description: null, images: [], volume: null }
+      
+      const ogTitle = doc.querySelector('meta[property="og:title"]')
+      if (ogTitle) result.name = ogTitle.content
+      
+      if (!result.name) {
+        const title = doc.querySelector('title')
+        if (title) result.name = title.textContent.split(' — ')[0].split(' | ')[0].trim()
+      }
+      
+      const h1 = doc.querySelector('h1')
+      if (h1 && !result.name) result.name = h1.textContent.trim()
+      
+      const brandEl = doc.querySelector('[data-link="text__brandName"]') || doc.querySelector('.brand-name')
+      if (brandEl) result.brand = brandEl.textContent.trim()
+      
+      const descEl = doc.querySelector('meta[name="description"]')
+      if (descEl) result.description = descEl.content
+      
+      const images = doc.querySelectorAll('img')
+      images.forEach(img => {
+        const src = img.src || img.dataset?.src
+        if (src && src.includes('wb')) {
+          if (!result.images.includes(src) && result.images.length < 5) {
+            result.images.push(src)
+          }
+        }
+      })
+      
+      const priceEl = doc.querySelector('[class*="price"]') || doc.querySelector('.product-prices__price')
+      if (priceEl) {
+        const volMatch = priceEl.textContent.match(/(\d+\s*(?:мл|ml|г|g|л|l))/i)
+        if (volMatch) result.volume = volMatch[1]
+      }
+      
+      return result
+    } catch (e) {
+      console.error('Parse error:', e)
+      return null
+    }
+  }
+
+  const handlePhotoUpload = async (file) => {
+    if (!editingProduct) {
+      error('Сначала сохраните продукт')
+      return
+    }
+    try {
+      const result = await productsApi.uploadPhoto(editingProduct.id, file)
+      setFormData(prev => ({
+        ...prev,
+        photos: [...prev.photos, { id: result.id, filename: result.filename, data: '', content_type: file.type }]
+      }))
+      success('Фото загружено')
+    } catch (err) {
+      error('Ошибка загрузки')
+    }
+  }
+
+  const handlePhotoDelete = async (photoId) => {
+    try {
+      await productsApi.deletePhoto(editingProduct.id, photoId)
+      setFormData(prev => ({
+        ...prev,
+        photos: prev.photos.filter(p => p.id !== photoId)
+      }))
+      success('Фото удалено')
+    } catch (err) {
+      error('Ошибка удаления')
+    }
+  }
+
+  const handleVideoUpload = async (file) => {
+    if (!editingProduct) {
+      error('Сначала сохраните продукт')
+      return
+    }
+    try {
+      await productsApi.uploadVideo(editingProduct.id, file)
+      setFormData(prev => ({ ...prev, has_video: true }))
+      setVideoUrl(productsApi.getVideoUrl(editingProduct.id))
+      success('Видео загружено')
+    } catch (err) {
+      error('Ошибка загрузки')
+    }
+  }
+
+  const handleVideoDelete = async () => {
+    try {
+      await productsApi.deleteVideo(editingProduct.id)
+      setFormData(prev => ({ ...prev, has_video: false }))
+      setVideoUrl('')
+      success('Видео удалено')
+    } catch (err) {
+      error('Ошибка удаления')
+    }
+  }
+
   const handleSave = async (e) => {
     e.preventDefault()
     const product = {
       name: formData.name,
+      what_is_it: formData.what_is_it,
       brand: formData.brand,
-      category: formData.category,
-      description: formData.description || '',
-      images: formData.images?.split('\n').filter(url => url.trim()) || [],
+      product_type: formData.product_type,
+      for_whom: formData.for_whom,
+      purpose: formData.purpose,
+      skin_type: formData.skin_type,
+      application_time: formData.application_time,
+      area: formData.area,
+      active_ingredient: formData.active_ingredient,
       volume: formData.volume,
-      segment: formData.segment
+      segment: formData.segment,
+      composition: formData.composition,
+      application_info: formData.application_info,
+      country: formData.country,
+      manufacturer: formData.manufacturer,
+      description: formData.description,
+      photos: formData.photos,
+      has_video: formData.has_video
     }
     try {
       if (editingProduct) {
@@ -196,14 +402,14 @@ export default function Products() {
       <div className="table-card glass-card">
         <table className="table">
           <thead>
-            <tr><th>Название</th><th>Бренд</th><th>Категория</th><th>Объём</th><th>Сегмент</th>{canEdit && <th>Действия</th>}</tr>
+            <tr><th>Название</th><th>Бренд</th><th>Тип</th><th>Объём</th><th>Сегмент</th>{canEdit && <th>Действия</th>}</tr>
           </thead>
           <tbody>
             {filteredProducts.map((product, idx) => (
               <tr key={product?.id || idx} onClick={() => handleEdit(product)} style={{cursor: canEdit ? 'pointer' : 'default'}}>
                 <td><div className="product-name">{product.name}</div>{product.description && <div className="product-desc">{product.description?.substring(0, 50)}...</div>}</td>
                 <td><span className="brand-badge">{product.brand}</span></td>
-                <td><span className="category-badge">{product.category}</span></td>
+                <td><span className="category-badge">{product.product_type}</span></td>
                 <td>{product.volume}</td>
                 <td><span className={`segment-badge ${getSegmentClass(product.segment)}`}>{product.segment}</span></td>
                 {canEdit && (
@@ -232,12 +438,57 @@ export default function Products() {
             <form onSubmit={handleSave} className="product-form">
               <div className="form-grid">
                 <div className="form-group"><label>Название *</label><input name="name" value={formData.name} onChange={handleInputChange} className="input" required /></div>
+                <div className="form-group"><label>Что это?</label><input name="what_is_it" value={formData.what_is_it} onChange={handleInputChange} className="input" placeholder="Например: увлажняющий крем" /></div>
                 <Select label="Бренд *" name="brand" value={formData.brand} onChange={handleSelectChange} options={enums.brands} />
-                <Select label="Категория" name="category" value={formData.category} onChange={handleSelectChange} options={enums.categories} placeholder="Выберите категорию" />
+                <Select label="Тип продукта" name="product_type" value={formData.product_type} onChange={handleSelectChange} options={productEnums.product_types} placeholder="Выберите тип" />
+                <Select label="Для кого" name="for_whom" value={formData.for_whom} onChange={handleSelectChange} options={productEnums.for_whom} placeholder="Выберите" />
+                <Select label="Назначение" name="purpose" value={formData.purpose} onChange={handleSelectChange} options={productEnums.purposes} placeholder="Выберите назначение" />
+                <Select label="Тип кожи" name="skin_type" value={formData.skin_type} onChange={handleSelectChange} options={productEnums.skin_types} placeholder="Выберите тип кожи" />
+                <Select label="Время применения" name="application_time" value={formData.application_time} onChange={handleSelectChange} options={productEnums.application_times} placeholder="Выберите время" />
+                <Select label="Область применения" name="area" value={formData.area} onChange={handleSelectChange} options={productEnums.areas} placeholder="Выберите область" />
                 <Select label="Объём" name="volume" value={formData.volume} onChange={handleSelectChange} options={enums.volumes} placeholder="Выберите объём" />
                 <Select label="Сегмент" name="segment" value={formData.segment} onChange={handleSelectChange} options={enums.segments} placeholder="Выберите сегмент" />
+                <div className="form-group"><label>Активный ингредиент</label><input name="active_ingredient" value={formData.active_ingredient} onChange={handleInputChange} className="input" /></div>
+                <div className="form-group"><label>Страна</label><input name="country" value={formData.country} onChange={handleInputChange} className="input" /></div>
+                <div className="form-group"><label>Производитель</label><input name="manufacturer" value={formData.manufacturer} onChange={handleInputChange} className="input" /></div>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Состав</label><textarea name="composition" value={formData.composition} onChange={handleInputChange} className="input textarea" rows="3" /></div>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Информация о применении</label><textarea name="application_info" value={formData.application_info} onChange={handleInputChange} className="input textarea" rows="2" /></div>
                 <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Описание</label><textarea name="description" value={formData.description} onChange={handleInputChange} className="input textarea" rows="3" /></div>
-                <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Фотографии (URL)</label><textarea name="images" value={formData.images} onChange={handleInputChange} className="input textarea" rows="4" placeholder="URL на строку" /></div>
+                
+                {editingProduct && (
+                  <>
+                    <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                      <label>Фотографии</label>
+                      <div className="file-upload-area">
+                        {formData.photos?.length > 0 && (
+                          <div className="photo-gallery">
+                            {formData.photos.map((photo, idx) => (
+                              <div key={photo.id || idx} className="photo-item">
+                                <img src={photo.data || `/api/products/photos/${photo.id}`} alt="" />
+                                <button type="button" className="btn btn-ghost btn-sm" onClick={() => handlePhotoDelete(photo.id)}><X size={14} /></button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <input type="file" accept="image/*" onChange={e => e.target.files[0] && handlePhotoUpload(e.target.files[0])} className="input" />
+                      </div>
+                    </div>
+                    
+                    <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                      <label>Видео</label>
+                      <div className="file-upload-area">
+                        {formData.has_video && videoUrl ? (
+                          <div className="video-preview">
+                            <video src={videoUrl} controls />
+                            <button type="button" className="btn btn-ghost btn-sm" onClick={handleVideoDelete}><X size={14} /></button>
+                          </div>
+                        ) : (
+                          <input type="file" accept="video/*" onChange={e => e.target.files[0] && handleVideoUpload(e.target.files[0])} className="input" />
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
               <div className="modal-actions">
                 <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>Отмена</button>
