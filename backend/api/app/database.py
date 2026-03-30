@@ -28,12 +28,25 @@ async def init_db():
             CREATE TABLE IF NOT EXISTS products (
                 id SERIAL PRIMARY KEY,
                 name VARCHAR(255) NOT NULL,
+                what_is_it TEXT,
                 brand VARCHAR(255),
-                category VARCHAR(255),
-                description TEXT,
-                images TEXT[],
+                product_type VARCHAR(50),
+                for_whom VARCHAR(50),
+                purpose VARCHAR(255),
+                skin_type VARCHAR(50),
+                application_time VARCHAR(50),
+                area VARCHAR(50),
+                active_ingredient TEXT,
                 volume VARCHAR(50),
                 segment VARCHAR(50),
+                composition TEXT,
+                application_info TEXT,
+                country VARCHAR(100),
+                manufacturer VARCHAR(255),
+                description TEXT,
+                photos JSONB,
+                has_video BOOLEAN DEFAULT FALSE,
+                video BYTEA,
                 created_at TIMESTAMP DEFAULT NOW()
             );
 
