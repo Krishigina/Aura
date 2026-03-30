@@ -80,7 +80,7 @@ export default function DictionaryPanel({
             
             return (
               <div key={key} className="dict-item">
-                <button className="dict-item-header" onClick={() => toggleDict(key)} style={{ borderColor: isExpanded ? dictConfigItem.color : 'transparent' }}>
+                <div className="dict-item-header" onClick={() => toggleDict(key)} style={{ borderColor: isExpanded ? dictConfigItem.color : 'transparent', cursor: 'pointer' }}>
                   <div className="dict-header-left">
                     {Icon && <div className="dict-icon" style={{ background: `${dictConfigItem.color}20`, color: dictConfigItem.color }}><Icon size={18} /></div>}
                     <span className="dict-label">{dictConfigItem.label || key}</span>
@@ -94,7 +94,7 @@ export default function DictionaryPanel({
                     )}
                     <ChevronDown size={18} className={`dict-chevron ${isExpanded ? 'rotated' : ''}`} />
                   </div>
-                </button>
+                </div>
                 {isExpanded && (
                   <div className="dict-item-content">
                     <div className="dict-values-list">
