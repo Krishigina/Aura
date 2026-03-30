@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from app.models.product import ProductCreate
 from app.services import ProductService
 import io
@@ -8,6 +9,10 @@ import uuid
 import json
 
 router = APIRouter()
+
+
+class ParseRequest(BaseModel):
+    url: str
 
 
 @router.get("")
@@ -107,3 +112,8 @@ async def get_video(product_id: int):
         media_type="video/mp4",
         headers={"Content-Disposition": f"inline; filename=video.mp4"}
     )
+
+
+@router.post("/parse")
+async def parse_product_url(request: ParseRequest):
+    return await ProductService.parse_url(request.url)

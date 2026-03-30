@@ -147,6 +147,69 @@
   border-top-color: rgba(255, 255, 255, 0.1);
 }
 
+/* Scrollable Modal */
+.modal {
+  width: 100%;
+  max-width: 560px;
+  max-height: 90vh;
+  padding: var(--spacing-xl);
+  animation: slideIn var(--transition-normal) ease-out;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.modal::-webkit-scrollbar {
+  display: none;
+}
+
+.modal-wide {
+  max-width: 700px;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn var(--transition-fast) ease-out;
+}
+
+.modal h3 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: var(--spacing-lg);
+  color: var(--color-on-surface);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+.modal-header h3 {
+  margin-bottom: 0;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--color-gray-200);
+}
+
+.confirm-modal {
+  max-width: 400px;
+  text-align: center;
+}
+
 /* Dark Scrollbar */
 [data-theme="dark"] ::-webkit-scrollbar-track {
   background: var(--color-gray-200);
@@ -390,6 +453,16 @@ body {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   padding: var(--spacing-lg);
+}
+
+.scrollable-card {
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollable-card::-webkit-scrollbar {
+  display: none;
 }
 
 .card-header {
