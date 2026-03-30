@@ -26,10 +26,17 @@ class ProductService:
     async def create(data: ProductCreate) -> dict:
         async with get_pool().acquire() as conn:
             row = await conn.fetchrow(
-                """INSERT INTO products (name, brand, category, description, images, volume, segment) 
-                   VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *""",
-                data.name, data.brand, data.category, data.description,
-                data.images, data.volume, data.segment
+                """INSERT INTO products (
+                    name, what_is_it, brand, product_type, for_whom, purpose,
+                    skin_type, application_time, area, active_ingredient,
+                    volume, segment, composition, application_info,
+                    country, manufacturer, description, photos, has_video
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING *""",
+                data.name, data.what_is_it, data.brand, data.product_type, data.for_whom,
+                data.purpose, data.skin_type, data.application_time, data.area,
+                data.active_ingredient, data.volume, data.segment, data.composition,
+                data.application_info, data.country, data.manufacturer,
+                data.description, data.photos, data.has_video
             )
             return dict(row)
 
@@ -37,11 +44,25 @@ class ProductService:
     async def update(product_id: int, data: ProductCreate) -> Optional[dict]:
         async with get_pool().acquire() as conn:
             row = await conn.fetchrow(
-                """UPDATE products SET name=$1, brand=$2, category=$3, description=$4, images=$5, volume=$6, segment=$7 
-                   WHERE id=$8 RETURNING *""",
-                data.name, data.brand, data.category, data.description,
-                data.images, data.volume, data.segment, product_id
+                """UPDATE products SET 
+                    name=$1, what_is_it=$2, brand=$3, product_type=$4, for_whom=$5,
+                    purpose=$6, skin_type=$7, application_time=$8, area=$9,
+                    active_ingredient=$10, volume=$11, segment=$12, composition=$13,
+                    application_info=$14, country=$15, manufacturer=$16,
+                    description=$17, photos=$18, has_video=$19
+                WHERE id=$20 RETURNING *""",
+                data.name, data.what_is_it, data.brand, data.product_type, data.for_whom,
+                data.purpose, data.skin_type, data.application_time, data.area,
+                data.active_ingredient, data.volume, data.segment, data.composition,
+                data.application_info, data.country, data.manufacturer,
+                data.description, data.photos, data.has_video, product_id
             )
+            return dict(row) if row else None
+
+    @staticmethod
+    async def get_by_id(product_id: int) -> Optional[dict]:
+        async with get_pool().acquire() as conn:
+            row = await conn.fetchrow("SELECT * FROM products WHERE id=$1", product_id)
             return dict(row) if row else None
 
     @staticmethod
