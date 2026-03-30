@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
-import { Search, Plus, Edit2, Trash2, X, Image, Tag, Check, Package, AlertTriangle, Link as LinkIcon } from 'lucide-react'
+import { Search, Plus, Edit2, Trash2, X, Image, Tag, Check, Package, AlertTriangle, Link as LinkIcon, FlaskConical, FileText, Settings, Palette, MapPin, Factory, Clock, Droplets } from 'lucide-react'
 import { productsApi, dictionariesApi } from '../api'
 import Select from '../components/Select'
 import './Products.css'
@@ -436,28 +436,94 @@ export default function Products() {
               <button className="btn btn-ghost btn-sm" onClick={() => setShowModal(false)}><X size={20} /></button>
             </div>
             <form onSubmit={handleSave} className="product-form">
-              <div className="form-grid">
-                <div className="form-group"><label>Название *</label><input name="name" value={formData.name} onChange={handleInputChange} className="input" required /></div>
-                <div className="form-group"><label>Что это?</label><input name="what_is_it" value={formData.what_is_it} onChange={handleInputChange} className="input" placeholder="Например: увлажняющий крем" /></div>
-                <Select label="Бренд *" name="brand" value={formData.brand} onChange={handleSelectChange} options={enums.brands} />
-                <Select label="Тип продукта" name="product_type" value={formData.product_type} onChange={handleSelectChange} options={productEnums.product_types} placeholder="Выберите тип" />
-                <Select label="Для кого" name="for_whom" value={formData.for_whom} onChange={handleSelectChange} options={productEnums.for_whom} placeholder="Выберите" />
-                <Select label="Назначение" name="purpose" value={formData.purpose} onChange={handleSelectChange} options={productEnums.purposes} placeholder="Выберите назначение" />
-                <Select label="Тип кожи" name="skin_type" value={formData.skin_type} onChange={handleSelectChange} options={productEnums.skin_types} placeholder="Выберите тип кожи" />
-                <Select label="Время применения" name="application_time" value={formData.application_time} onChange={handleSelectChange} options={productEnums.application_times} placeholder="Выберите время" />
-                <Select label="Область применения" name="area" value={formData.area} onChange={handleSelectChange} options={productEnums.areas} placeholder="Выберите область" />
-                <Select label="Объём" name="volume" value={formData.volume} onChange={handleSelectChange} options={enums.volumes} placeholder="Выберите объём" />
-                <Select label="Сегмент" name="segment" value={formData.segment} onChange={handleSelectChange} options={enums.segments} placeholder="Выберите сегмент" />
-                <div className="form-group"><label>Активный ингредиент</label><input name="active_ingredient" value={formData.active_ingredient} onChange={handleInputChange} className="input" /></div>
-                <div className="form-group"><label>Страна</label><input name="country" value={formData.country} onChange={handleInputChange} className="input" /></div>
-                <div className="form-group"><label>Производитель</label><input name="manufacturer" value={formData.manufacturer} onChange={handleInputChange} className="input" /></div>
-                <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Состав</label><textarea name="composition" value={formData.composition} onChange={handleInputChange} className="input textarea" rows="3" /></div>
-                <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Информация о применении</label><textarea name="application_info" value={formData.application_info} onChange={handleInputChange} className="input textarea" rows="2" /></div>
-                <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Описание</label><textarea name="description" value={formData.description} onChange={handleInputChange} className="input textarea" rows="3" /></div>
+              <div className="form-grid" style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+                {/* Секция 1: О продукте */}
+                <div className="form-section" style={{ gridColumn: 'span 2' }}>
+                  <div className="form-section-header">
+                    <div className="form-section-icon" style={{ background: 'rgba(139, 92, 246, 0.1)', color: '#8B5CF6' }}><FlaskConical size={16} /></div>
+                    <span>О продукте</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--spacing-md)' }}>
+                    <div className="form-group"><label>Название *</label><input name="name" value={formData.name} onChange={handleInputChange} className="input" required /></div>
+                    <div className="form-group"><label>Что это?</label><input name="what_is_it" value={formData.what_is_it} onChange={handleInputChange} className="input" placeholder="Например: увлажняющий крем" /></div>
+                    <div className="form-group" style={{ gridColumn: 'span 2' }}><Select label="Бренд *" name="brand" value={formData.brand} onChange={handleSelectChange} options={enums.brands} /></div>
+                  </div>
+                </div>
 
+                {/* Секция 2: Описание */}
+                <div className="form-section" style={{ gridColumn: 'span 2' }}>
+                  <div className="form-section-header">
+                    <div className="form-section-icon" style={{ background: 'rgba(107, 114, 128, 0.1)', color: '#6B7280' }}><FileText size={16} /></div>
+                    <span>Описание</span>
+                  </div>
+                  <div className="form-group"><label>Описание</label><textarea name="description" value={formData.description} onChange={handleInputChange} className="input textarea" rows="3" /></div>
+                </div>
+
+                {/* Секция 3: Характеристики */}
+                <div className="form-section" style={{ gridColumn: 'span 2' }}>
+                  <div className="form-section-header">
+                    <div className="form-section-icon" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10B981' }}><Settings size={16} /></div>
+                    <span>Характеристики</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--spacing-md)' }}>
+                    <Select label="Тип продукта" name="product_type" value={formData.product_type} onChange={handleSelectChange} options={productEnums.product_types} placeholder="Выберите тип" />
+                    <Select label="Для кого" name="for_whom" value={formData.for_whom} onChange={handleSelectChange} options={productEnums.for_whom} placeholder="Выберите" />
+                    <Select label="Назначение" name="purpose" value={formData.purpose} onChange={handleSelectChange} options={productEnums.purposes} placeholder="Выберите назначение" />
+                    <Select label="Тип кожи" name="skin_type" value={formData.skin_type} onChange={handleSelectChange} options={productEnums.skin_types} placeholder="Выберите тип кожи" />
+                    <Select label="Время применения" name="application_time" value={formData.application_time} onChange={handleSelectChange} options={productEnums.application_times} placeholder="Выберите время" />
+                    <Select label="Область применения" name="area" value={formData.area} onChange={handleSelectChange} options={productEnums.areas} placeholder="Выберите область" />
+                    <div className="form-group"><label>Активный компонент</label><input name="active_ingredient" value={formData.active_ingredient} onChange={handleInputChange} className="input" placeholder="Например: гиалуроновая кислота" /></div>
+                    <Select label="Объём" name="volume" value={formData.volume} onChange={handleSelectChange} options={enums.volumes} placeholder="Выберите объём" />
+                  </div>
+                </div>
+
+                {/* Секция 4: Применение */}
+                <div className="form-section" style={{ gridColumn: 'span 2' }}>
+                  <div className="form-section-header">
+                    <div className="form-section-icon" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3B82F6' }}><Droplets size={16} /></div>
+                    <span>Применение</span>
+                  </div>
+                  <div className="form-group"><label>Информация о применении</label><textarea name="application_info" value={formData.application_info} onChange={handleInputChange} className="input textarea" rows="2" placeholder="Как наносить, частота использования..." /></div>
+                </div>
+
+                {/* Секция 5: Состав */}
+                <div className="form-section" style={{ gridColumn: 'span 2' }}>
+                  <div className="form-section-header">
+                    <div className="form-section-icon" style={{ background: 'rgba(107, 114, 128, 0.1)', color: '#6B7280' }}><FileText size={16} /></div>
+                    <span>Состав</span>
+                  </div>
+                  <div className="form-group"><label>Состав</label><textarea name="composition" value={formData.composition} onChange={handleInputChange} className="input textarea" rows="3" placeholder="Список ингредиентов..." /></div>
+                </div>
+
+                {/* Секция 6: Бренд */}
+                <div className="form-section" style={{ gridColumn: 'span 2' }}>
+                  <div className="form-section-header">
+                    <div className="form-section-icon" style={{ background: 'rgba(236, 72, 153, 0.1)', color: '#EC4899' }}><Palette size={16} /></div>
+                    <span>Бренд</span>
+                  </div>
+                  <div className="form-group"><label>Страна бренда</label><input name="country" value={formData.country} onChange={handleInputChange} className="input" placeholder="Например: Франция" /></div>
+                </div>
+
+                {/* Секция 7: Дополнительно */}
+                <div className="form-section" style={{ gridColumn: 'span 2' }}>
+                  <div className="form-section-header">
+                    <div className="form-section-icon" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3B82F6' }}><Factory size={16} /></div>
+                    <span>Дополнительная информация</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--spacing-md)' }}>
+                    <div className="form-group"><label>Страна происхождения</label><input name="country_origin" value={formData.country_origin || ''} onChange={handleInputChange} className="input" placeholder="Например: Франция" /></div>
+                    <div className="form-group"><label>Производитель</label><input name="manufacturer" value={formData.manufacturer} onChange={handleInputChange} className="input" /></div>
+                  </div>
+                </div>
+
+                {/* Секция 8: Медиа (только при редактировании) */}
                 {editingProduct && (
-                  <>
-                    <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <div className="form-section" style={{ gridColumn: 'span 2' }}>
+                    <div className="form-section-header">
+                      <div className="form-section-icon" style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#F59E0B' }}><Image size={16} /></div>
+                      <span>Медиа</span>
+                    </div>
+                    <div className="form-group">
                       <label>Фотографии</label>
                       <div className="file-upload-area">
                         {formData.photos?.length > 0 && (
@@ -473,8 +539,7 @@ export default function Products() {
                         <input type="file" accept="image/*" onChange={e => e.target.files[0] && handlePhotoUpload(e.target.files[0])} className="input" />
                       </div>
                     </div>
-                    
-                    <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                    <div className="form-group" style={{ marginTop: 'var(--spacing-md)' }}>
                       <label>Видео</label>
                       <div className="file-upload-area">
                         {formData.has_video && videoUrl ? (
@@ -487,36 +552,39 @@ export default function Products() {
                         )}
                       </div>
                     </div>
-                  </>
+                  </div>
                 )}
 
-                <div className="url-parser-section" style={{ gridColumn: 'span 2' }}>
-                  <div className="url-parser-header">
-                    <span className="url-parser-icon"><LinkIcon size={18} /></span>
+                {/* Секция 9: Импорт */}
+                <div className="form-section" style={{ gridColumn: 'span 2' }}>
+                  <div className="form-section-header">
+                    <div className="form-section-icon" style={{ background: 'rgba(5, 150, 105, 0.1)', color: '#059669' }}><LinkIcon size={16} /></div>
                     <span>Импорт ссылки</span>
                   </div>
-                  <div className="url-parser-input-group">
-                    <input 
-                      name="url" 
-                      value={url} 
-                      onChange={e => setUrl(e.target.value)} 
-                      className="input" 
-                      placeholder="Вставьте ссылку на продукт (Wildberries, Ozon...)" 
-                    />
-                    <button 
-                      type="button" 
-                      className="btn btn-primary" 
-                      onClick={handleParseUrl} 
-                      disabled={!url || parsing}
-                    >
-                      {parsing ? (
-                        <><span className="spinner"></span>Загрузка...</>
-                      ) : (
-                        <>Импорт</>
-                      )}
-                    </button>
+                  <div className="url-parser-section" style={{ border: 'none', padding: 0, margin: 0, background: 'transparent' }}>
+                    <div className="url-parser-input-group">
+                      <input 
+                        name="url" 
+                        value={url} 
+                        onChange={e => setUrl(e.target.value)} 
+                        className="input" 
+                        placeholder="Вставьте ссылку на продукт (Wildberries, Ozon...)" 
+                      />
+                      <button 
+                        type="button" 
+                        className="btn btn-primary" 
+                        onClick={handleParseUrl} 
+                        disabled={!url || parsing}
+                      >
+                        {parsing ? (
+                          <><span className="spinner"></span>Загрузка...</>
+                        ) : (
+                          <>Импорт</>
+                        )}
+                      </button>
+                    </div>
+                    <p className="url-parser-hint">Автоматический импорт недоступен из-за защиты маркетплейсов. Скопируйте название и бренд с сайта вручную</p>
                   </div>
-                  <p className="url-parser-hint">Автоматический импорт недоступен из-за защиты маркетплейсов. Скопируйте название и бренд с сайта вручную</p>
                 </div>
               </div>
               <div className="modal-actions">
