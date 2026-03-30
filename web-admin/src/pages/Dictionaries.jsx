@@ -29,6 +29,7 @@ const defaultEnums = {
   purposes: ['Увлажнение', 'Очищение', 'Питание', 'Антивозрастной', 'Отбеливание', 'Защита от солнца', 'Проблемная кожа', 'Восстановление', 'Матирование', 'Тонирование'],
   application_times: ['Утро', 'Вечер', 'Утро/Вечер'],
   areas: ['Лицо', 'Тело', 'Волосы', 'Губы', 'Руки', 'Веки', 'Зона вокруг глаз'],
+  countries: ['Франция', 'Германия', 'Италия', 'Испания', 'Япония', 'Корея', 'США', 'Великобритания', 'Швейцария', 'Швеция', 'Россия', 'Китай', 'Израиль', 'Таиланд', 'Индия', 'Бразилия', 'Австралия', 'Канада'],
 }
 
 const dictGroups = [
@@ -37,7 +38,7 @@ const dictGroups = [
     label: 'Продукты',
     icon: FlaskConical,
     color: '#8B5CF6',
-    dictionaries: ['brands', 'product_types', 'for_whom', 'purposes', 'skinTypes', 'application_times', 'areas', 'segments', 'volumes']
+    dictionaries: ['brands', 'product_types', 'for_whom', 'purposes', 'skinTypes', 'application_times', 'areas', 'segments', 'volumes', 'countries']
   },
   {
     id: 'procedures',
@@ -73,6 +74,7 @@ const dictConfig = {
   skinTypes: { label: 'Типы кожи', icon: UserCog, color: '#EF4444' },
   application_times: { label: 'Время применения', icon: FlaskConical, color: '#F59E0B' },
   areas: { label: 'Области применения', icon: FlaskConical, color: '#3B82F6' },
+  countries: { label: 'Страны', icon: FlaskConical, color: '#6366F1' },
   procedureCategories: { label: 'Категории процедур', icon: Sparkles, color: '#EC4899' },
   contentCategories: { label: 'Категории контента', icon: BookOpen, color: '#10B981' },
   userRoles: { label: 'Роли', icon: UserCog, color: '#3B82F6' },
@@ -96,7 +98,7 @@ export default function Dictionaries() {
   const loadData = async () => {
     try {
       setLoading(true)
-      const [brands, categories, segments, volumes, procedureCategories, contentCategories, userRoles, skinTypes, productTypes, forWhom, purposes, applicationTimes, areas] = await Promise.all([
+      const [brands, categories, segments, volumes, procedureCategories, contentCategories, userRoles, skinTypes, productTypes, forWhom, purposes, applicationTimes, areas, countries] = await Promise.all([
         dictionariesApi.get('brands').catch(() => defaultEnums.brands),
         dictionariesApi.get('categories').catch(() => defaultEnums.categories),
         dictionariesApi.get('segments').catch(() => defaultEnums.segments),
@@ -110,6 +112,7 @@ export default function Dictionaries() {
         dictionariesApi.get('purposes').catch(() => defaultEnums.purposes),
         dictionariesApi.get('application_times').catch(() => defaultEnums.application_times),
         dictionariesApi.get('areas').catch(() => defaultEnums.areas),
+        dictionariesApi.get('countries').catch(() => defaultEnums.countries),
       ])
       setDictionaries({
         brands,
@@ -124,7 +127,8 @@ export default function Dictionaries() {
         for_whom: forWhom,
         purposes: purposes,
         application_times: applicationTimes,
-        areas: areas
+        areas: areas,
+        countries: countries
       })
     } catch (err) {
       console.error('Error loading dictionaries:', err)

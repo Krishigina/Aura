@@ -10,7 +10,8 @@ const defaultEnums = {
   brands: ['Aura', 'La Roche-Posay', 'Vichy', 'Bioderma', 'CeraVe', 'The Ordinary', "Paula's Choice", 'Cosrx', 'Eucerin', 'Nivea'],
   categories: ['Очищение', 'Увлажнение', 'Сыворотки', 'SPF', 'Уход', 'Маска', 'Тоник', 'Крем', 'Масло'],
   segments: ['Бюджетная', 'Люкс', 'Профессиональная', 'Космецевтика'],
-  volumes: ['15мл', '30мл', '50мл', '75мл', '100мл', '150мл', '200мл', '250мл', '500мл', '1л']
+  volumes: ['15мл', '30мл', '50мл', '75мл', '100мл', '150мл', '200мл', '250мл', '500мл', '1л'],
+  countries: ['Франция', 'Германия', 'Италия', 'Испания', 'Япония', 'Корея', 'США', 'Великобритания', 'Швейцария', 'Швеция', 'Россия', 'Китай', 'Израиль', 'Таиланд', 'Индия', 'Бразилия', 'Австралия', 'Канада']
 }
 
 const productEnums = {
@@ -67,19 +68,21 @@ export default function Products() {
   const loadData = async () => {
     try {
       setLoading(true)
-      const [productsData, brandsData, categoriesData, segmentsData, volumesData] = await Promise.all([
+      const [productsData, brandsData, categoriesData, segmentsData, volumesData, countriesData] = await Promise.all([
         productsApi.getAll().catch(() => []),
         dictionariesApi.get('brands').catch(() => defaultEnums.brands),
         dictionariesApi.get('categories').catch(() => defaultEnums.categories),
         dictionariesApi.get('segments').catch(() => defaultEnums.segments),
         dictionariesApi.get('volumes').catch(() => defaultEnums.volumes),
+        dictionariesApi.get('countries').catch(() => ['Франция', 'Германия', 'Италия', 'Япония', 'Корея', 'США']),
       ])
       setProducts(productsData)
       setEnums({
         brands: brandsData,
         categories: categoriesData,
         segments: segmentsData,
-        volumes: volumesData
+        volumes: volumesData,
+        countries: countriesData
       })
     } catch (err) {
       error('Ошибка загрузки данных')
@@ -501,7 +504,7 @@ export default function Products() {
                     <div className="form-section-icon" style={{ background: 'rgba(236, 72, 153, 0.1)', color: '#EC4899' }}><Palette size={16} /></div>
                     <span>Бренд</span>
                   </div>
-                  <div className="form-group"><label>Страна бренда</label><input name="country" value={formData.country} onChange={handleInputChange} className="input" placeholder="Например: Франция" /></div>
+                  <Select label="Страна бренда" name="country" value={formData.country} onChange={handleSelectChange} options={enums.countries || []} placeholder="Выберите страну" />
                 </div>
 
                 {/* Секция 7: Дополнительно */}
@@ -511,7 +514,7 @@ export default function Products() {
                     <span>Дополнительная информация</span>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--spacing-md)' }}>
-                    <div className="form-group"><label>Страна происхождения</label><input name="country_origin" value={formData.country_origin || ''} onChange={handleInputChange} className="input" placeholder="Например: Франция" /></div>
+                    <Select label="Страна происхождения" name="country_origin" value={formData.country_origin || ''} onChange={handleSelectChange} options={enums.countries || []} placeholder="Выберите страну" />
                     <div className="form-group"><label>Производитель</label><input name="manufacturer" value={formData.manufacturer} onChange={handleInputChange} className="input" /></div>
                   </div>
                 </div>
