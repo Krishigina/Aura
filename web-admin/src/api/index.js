@@ -20,6 +20,58 @@ export const productsApi = {
   create: (data) => request('/products', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id) => request(`/products/${id}`, { method: 'DELETE' }),
+  
+  uploadPhoto: async (productId, file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await fetch(`${API_URL}/products/${productId}/photos`, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json' },
+      body: formData
+    })
+    if (!response.ok) {
+      throw new Error('Upload failed')
+    }
+    return response.json()
+  },
+  
+  deletePhoto: async (productId, photoId) => {
+    const response = await fetch(`${API_URL}/products/${productId}/photos/${photoId}`, {
+      method: 'DELETE',
+      headers: { 'Accept': 'application/json' }
+    })
+    if (!response.ok) {
+      throw new Error('Delete failed')
+    }
+    return response.json()
+  },
+  
+  uploadVideo: async (productId, file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await fetch(`${API_URL}/products/${productId}/video`, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json' },
+      body: formData
+    })
+    if (!response.ok) {
+      throw new Error('Upload failed')
+    }
+    return response.json()
+  },
+  
+  deleteVideo: async (productId) => {
+    const response = await fetch(`${API_URL}/products/${productId}/video`, {
+      method: 'DELETE',
+      headers: { 'Accept': 'application/json' }
+    })
+    if (!response.ok) {
+      throw new Error('Delete failed')
+    }
+    return response.json()
+  },
+  
+  getVideoUrl: (productId) => `${API_URL}/products/${productId}/video`
 }
 
 export const dictionariesApi = {
