@@ -24,6 +24,11 @@ const defaultEnums = {
   contentCategories: ['Уход за кожей', 'Ингредиенты', 'Защита', 'Процедуры', 'Питание', 'Образ жизни'],
   userRoles: ['Пользователь', 'Косметолог', 'Менеджер', 'Администратор'],
   skinTypes: ['Нормальная', 'Сухая', 'Жирная', 'Комбинированная', 'Чувствительная'],
+  product_types: ['Крем', 'Сыворотка', 'Лосьон', 'Тоник', 'Эмульсия', 'Масло', 'Гель', 'Пилинг', 'Маска', 'Бальзам', 'Спрей', 'Мист'],
+  for_whom: ['Универсальный', 'Мужчинам', 'Женщинам'],
+  purposes: ['Увлажнение', 'Очищение', 'Питание', 'Антивозрастной', 'Отбеливание', 'Защита от солнца', 'Проблемная кожа', 'Восстановление', 'Матирование', 'Тонирование'],
+  application_times: ['Утро', 'Вечер', 'Утро/Вечер'],
+  areas: ['Лицо', 'Тело', 'Волосы', 'Губы', 'Руки', 'Веки', 'Зона вокруг глаз'],
 }
 
 const dictGroups = [
@@ -32,7 +37,7 @@ const dictGroups = [
     label: 'Продукты',
     icon: FlaskConical,
     color: '#8B5CF6',
-    dictionaries: ['brands', 'categories', 'segments', 'volumes']
+    dictionaries: ['brands', 'product_types', 'for_whom', 'purposes', 'skinTypes', 'application_times', 'areas', 'segments', 'volumes']
   },
   {
     id: 'procedures',
@@ -62,10 +67,15 @@ const dictConfig = {
   categories: { label: 'Категории', icon: FlaskConical, color: '#059669' },
   segments: { label: 'Сегменты', icon: FlaskConical, color: '#D97706' },
   volumes: { label: 'Объёмы', icon: FlaskConical, color: '#2563EB' },
+  product_types: { label: 'Типы продуктов', icon: FlaskConical, color: '#8B5CF6' },
+  for_whom: { label: 'Для кого', icon: FlaskConical, color: '#EC4899' },
+  purposes: { label: 'Назначение', icon: FlaskConical, color: '#10B981' },
+  skinTypes: { label: 'Типы кожи', icon: UserCog, color: '#EF4444' },
+  application_times: { label: 'Время применения', icon: FlaskConical, color: '#F59E0B' },
+  areas: { label: 'Области применения', icon: FlaskConical, color: '#3B82F6' },
   procedureCategories: { label: 'Категории процедур', icon: Sparkles, color: '#EC4899' },
   contentCategories: { label: 'Категории контента', icon: BookOpen, color: '#10B981' },
   userRoles: { label: 'Роли', icon: UserCog, color: '#3B82F6' },
-  skinTypes: { label: 'Типы кожи', icon: UserCog, color: '#EF4444' },
 }
 
 export default function Dictionaries() {
@@ -86,7 +96,7 @@ export default function Dictionaries() {
   const loadData = async () => {
     try {
       setLoading(true)
-      const [brands, categories, segments, volumes, procedureCategories, contentCategories, userRoles, skinTypes] = await Promise.all([
+      const [brands, categories, segments, volumes, procedureCategories, contentCategories, userRoles, skinTypes, productTypes, forWhom, purposes, applicationTimes, areas] = await Promise.all([
         dictionariesApi.get('brands').catch(() => defaultEnums.brands),
         dictionariesApi.get('categories').catch(() => defaultEnums.categories),
         dictionariesApi.get('segments').catch(() => defaultEnums.segments),
@@ -95,6 +105,11 @@ export default function Dictionaries() {
         dictionariesApi.get('contentCategories').catch(() => defaultEnums.contentCategories),
         dictionariesApi.get('userRoles').catch(() => defaultEnums.userRoles),
         dictionariesApi.get('skinTypes').catch(() => defaultEnums.skinTypes),
+        dictionariesApi.get('product_types').catch(() => defaultEnums.product_types),
+        dictionariesApi.get('for_whom').catch(() => defaultEnums.for_whom),
+        dictionariesApi.get('purposes').catch(() => defaultEnums.purposes),
+        dictionariesApi.get('application_times').catch(() => defaultEnums.application_times),
+        dictionariesApi.get('areas').catch(() => defaultEnums.areas),
       ])
       setDictionaries({
         brands,
@@ -104,7 +119,12 @@ export default function Dictionaries() {
         procedureCategories,
         contentCategories,
         userRoles,
-        skinTypes
+        skinTypes,
+        product_types: productTypes,
+        for_whom: forWhom,
+        purposes: purposes,
+        application_times: applicationTimes,
+        areas: areas
       })
     } catch (err) {
       console.error('Error loading dictionaries:', err)
