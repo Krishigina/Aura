@@ -71,7 +71,8 @@ export const productsApi = {
     return response.json()
   },
   
-  getVideoUrl: (productId) => `${API_URL}/products/${productId}/video`
+  getVideoUrl: (productId) => `${API_URL}/products/${productId}/video`,
+  parseUrl: (url) => request('/products/parse', { method: 'POST', body: JSON.stringify({ url }) }),
 }
 
 export const dictionariesApi = {

@@ -16,6 +16,14 @@
 
 .procedure-card {
   padding: var(--spacing-lg);
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  max-height: 150px;
+}
+
+.procedure-card::-webkit-scrollbar {
+  display: none;
 }
 
 .procedure-header {

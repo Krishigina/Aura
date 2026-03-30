@@ -454,7 +454,7 @@ export default function Products() {
                 <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Состав</label><textarea name="composition" value={formData.composition} onChange={handleInputChange} className="input textarea" rows="3" /></div>
                 <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Информация о применении</label><textarea name="application_info" value={formData.application_info} onChange={handleInputChange} className="input textarea" rows="2" /></div>
                 <div className="form-group" style={{ gridColumn: 'span 2' }}><label>Описание</label><textarea name="description" value={formData.description} onChange={handleInputChange} className="input textarea" rows="3" /></div>
-                
+
                 {editingProduct && (
                   <>
                     <div className="form-group" style={{ gridColumn: 'span 2' }}>
@@ -464,7 +464,7 @@ export default function Products() {
                           <div className="photo-gallery">
                             {formData.photos.map((photo, idx) => (
                               <div key={photo.id || idx} className="photo-item">
-                                <img src={photo.data || `/api/products/photos/${photo.id}`} alt="" />
+                                <img src={photo.data ? `data:${photo.content_type};base64,${photo.data}` : `/api/products/${editingProduct.id}/photos/${photo.id}`} alt="" />
                                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => handlePhotoDelete(photo.id)}><X size={14} /></button>
                               </div>
                             ))}
@@ -483,12 +483,41 @@ export default function Products() {
                             <button type="button" className="btn btn-ghost btn-sm" onClick={handleVideoDelete}><X size={14} /></button>
                           </div>
                         ) : (
-                          <input type="file" accept="video/*" onChange={e => e.target.files[0] && handleVideoUpload(e.target.files[0])} className="input" />
+                          <input type="file" accept="video/mp4" onChange={e => e.target.files[0] && handleVideoUpload(e.target.files[0])} className="input" />
                         )}
                       </div>
                     </div>
                   </>
                 )}
+
+                <div className="url-parser-section" style={{ gridColumn: 'span 2' }}>
+                  <div className="url-parser-header">
+                    <span className="url-parser-icon"><LinkIcon size={18} /></span>
+                    <span>Импорт ссылки</span>
+                  </div>
+                  <div className="url-parser-input-group">
+                    <input 
+                      name="url" 
+                      value={url} 
+                      onChange={e => setUrl(e.target.value)} 
+                      className="input" 
+                      placeholder="Вставьте ссылку на продукт (Wildberries, Ozon...)" 
+                    />
+                    <button 
+                      type="button" 
+                      className="btn btn-primary" 
+                      onClick={handleParseUrl} 
+                      disabled={!url || parsing}
+                    >
+                      {parsing ? (
+                        <><span className="spinner"></span>Загрузка...</>
+                      ) : (
+                        <>Импорт</>
+                      )}
+                    </button>
+                  </div>
+                  <p className="url-parser-hint">Автоматический импорт недоступен из-за защиты маркетплейсов. Скопируйте название и бренд с сайта вручную</p>
+                </div>
               </div>
               <div className="modal-actions">
                 <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>Отмена</button>

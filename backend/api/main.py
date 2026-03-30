@@ -1,10 +1,13 @@
 import os
+import re
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import asyncpg
+import aiohttp
+from bs4 import BeautifulSoup
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
@@ -442,6 +445,190 @@ async def delete_user(user_id: int):
     async with pool.acquire() as conn:
         await conn.execute("DELETE FROM users WHERE id=$1", user_id)
         return {"success": True}
+
+
+class ProductParseRequest(BaseModel):
+    url: str
+
+
+class ProductParseResponse(BaseModel):
+    name: Optional[str] = None
+    brand: Optional[str] = None
+    category: Optional[str] = None
+    description: Optional[str] = None
+    images: Optional[List[str]] = None
+    volume: Optional[str] = None
+
+
+@app.post("/api/products/parse")
+async def parse_product_url(request: ProductParseRequest):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(request.url, headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as response:
+                if response.status != 200:
+                    raise HTTPException(status_code=400, detail=f"Failed to fetch URL: status {response.status}")
+                html = await response.text()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error fetching URL: {str(e)}")
+    
+    soup = BeautifulSoup(html, 'html.parser')
+    
+    result = {
+        "name": None,
+        "brand": None,
+        "category": None,
+        "description": None,
+        "images": [],
+        "volume": None
+    }
+    
+    og_title = soup.find("meta", property="og:title")
+    if og_title:
+        result["name"] = og_title.get("content", "").strip()
+    
+    if not result["name"]:
+        title_tag = soup.find("title")
+        if title_tag:
+            result["name"] = title_tag.string.strip() if title_tag.string else None
+    
+    h1_tag = soup.find("h1")
+    if h1_tag and h1_tag.string and not result["name"]:
+        result["name"] = h1_tag.string.strip()
+    
+    brand_meta = soup.find("meta", property="product:brand")
+    if brand_meta:
+        result["brand"] = brand_meta.get("content", "").strip()
+    
+    if not result["brand"]:
+        brand_patterns = [
+            (r'(?:Brand|Marque|Marca):\s*([^<\n]+)', 1),
+            (r'"brand"\s*:\s*"([^"]+)"', 1),
+            (r'<span[^>]*class="[^"]*brand[^"]*"[^>]*>([^<]+)</span>', 1),
+            (r'"name"\s*:\s*"([^"]+)"', 1),
+        ]
+        for pattern, group in brand_patterns:
+            match = re.search(pattern, html, re.IGNORECASE)
+            if match:
+                result["brand"] = match.group(group).strip()
+                break
+    
+    known_brands = ['La Roche-Posay', 'Vichy', 'Bioderma', 'CeraVe', 'The Ordinary', 
+                   "Paula's Choice", 'Cosrx', 'Eucerin', 'Nivea', 'Aura', 'A-Derma',
+                   'Uriage', 'Filorga', 'Nuxe', 'Darphin', 'Clarins', 'Estee Lauder',
+                   'Lancome', 'Shiseido', 'Clinique', 'Origins', 'Decathlon']
+    if not result["brand"]:
+        for brand in known_brands:
+            if brand.lower() in html.lower():
+                result["brand"] = brand
+                break
+    
+    desc_meta = soup.find("meta", property="og:description")
+    if desc_meta:
+        result["description"] = desc_meta.get("content", "").strip()
+    
+    if not result["description"]:
+        desc_tag = soup.find("meta", attrs={"name": "description"})
+        if desc_tag:
+            result["description"] = desc_tag.get("content", "").strip()
+    
+    if not result["description"]:
+        desc_div = soup.find("div", class_=re.compile(r'description', re.I))
+        if desc_div:
+            result["description"] = desc_div.get_text(strip=True)[:500]
+    
+    img_tags = soup.find_all("img")
+    for img in img_tags[:5]:
+        src = img.get("src") or img.get("data-src") or img.get("data-lazy") or img.get("data-srcset", "").split()[0]
+        if src and src.startswith("http"):
+            if src not in result["images"]:
+                result["images"].append(src)
+    
+    og_image = soup.find("meta", property="og:image")
+    if og_image:
+        img_url = og_image.get("content", "")
+        if img_url and img_url not in result["images"]:
+            result["images"].insert(0, img_url)
+    
+    json_ld = soup.find("script", type="application/ld+json")
+    if json_ld and json_ld.string:
+        try:
+            import json
+            data = json.loads(json_ld.string)
+            if isinstance(data, dict):
+                if not result["name"] and data.get("name"):
+                    result["name"] = data["name"]
+                if not result["brand"] and data.get("brand"):
+                    brand_val = data["brand"]
+                    result["brand"] = brand_val if isinstance(brand_val, str) else brand_val.get("name")
+                if not result["description"] and data.get("description"):
+                    result["description"] = data["description"][:500] if len(data.get("description", "")) > 500 else data.get("description")
+                if not result["images"] and data.get("image"):
+                    img_data = data["image"]
+                    if isinstance(img_data, list):
+                        result["images"] = [i for i in img_data if isinstance(i, str)][:5]
+                    elif isinstance(img_data, str):
+                        result["images"] = [img_data]
+                    elif isinstance(img_data, dict) and img_data.get("url"):
+                        result["images"] = [img_data["url"]]
+                if not result["volume"] and data.get("offers"):
+                    offers = data["offers"]
+                    if isinstance(offers, dict) and offers.get("sku"):
+                        sku = offers.get("sku", "")
+                        vol_match = re.search(r'(\d+\s*ml|\d+\s*мл|\d+\s*г|\d+\s*ml)', sku, re.I)
+                        if vol_match:
+                            result["volume"] = vol_match.group(1)
+        except:
+            pass
+    
+    volume_patterns = [
+        r'(\d+\s*ml)',
+        r'(\d+\s*мл)',
+        r'(\d+\s*г)',
+        r'(\d+\s*ml)',
+        r'(\d+\s*l)',
+    ]
+    for pattern in volume_patterns:
+        if not result["volume"]:
+            match = re.search(pattern, html, re.IGNORECASE)
+            if match:
+                result["volume"] = match.group(1).lower()
+    
+    text_content = soup.get_text()
+    category_keywords = {
+        'Очищение': ['очищающий', 'гель для умывания', 'мицеллярная вода', 'пенка', 'mousse', 'cleanser', 'wash'],
+        'Увлажнение': ['увлажняющий', 'крем для лица', 'hydration', 'moisturizer', 'cream'],
+        'Сыворотка': ['сыворотка', 'serum', 'эссенция', 'essence'],
+        'SPF': ['spf', 'sun protection', 'защита от солнца', 'sunscreen', 'uv'],
+        'Маска': ['маска для лица', 'mask', 'sheet mask'],
+        'Тоник': ['тоник', 'toner'],
+        'Масло': ['масло для лица', 'oil', 'huile'],
+    }
+    
+    for cat, keywords in category_keywords.items():
+        for kw in keywords:
+            if kw.lower() in text_content.lower():
+                result["category"] = cat
+                break
+        if result["category"]:
+            break
+    
+    if not result["category"]:
+        category_tag = soup.find("span", class_=re.compile(r'category|cat', re.I))
+        if category_tag:
+            cat_text = category_tag.get_text(strip=True)
+            for cat, keywords in category_keywords.items():
+                for kw in keywords:
+                    if kw.lower() in cat_text.lower():
+                        result["category"] = cat
+                        break
+                if result["category"]:
+                    break
+    
+    return result
 
 
 if __name__ == "__main__":

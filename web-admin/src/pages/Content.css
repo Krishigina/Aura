@@ -34,6 +34,14 @@
   align-items: flex-start;
   gap: var(--spacing-md);
   padding: var(--spacing-lg);
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  max-height: 150px;
+}
+
+.article-card::-webkit-scrollbar {
+  display: none;
 }
 
 .article-icon {

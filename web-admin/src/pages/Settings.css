@@ -162,6 +162,14 @@
   border-radius: var(--radius-md);
   padding: var(--spacing-md);
   margin-bottom: var(--spacing-md);
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  max-height: 100px;
+}
+
+.dictionary-card::-webkit-scrollbar {
+  display: none;
 }
 
 .dictionary-header {
