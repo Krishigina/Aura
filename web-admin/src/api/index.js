@@ -1,7 +1,6 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
 async function request(endpoint, options = {}) {
-  console.log('API Request:', endpoint, options)
   const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
     headers: {
@@ -9,10 +8,8 @@ async function request(endpoint, options = {}) {
       ...options.headers,
     },
   })
-  console.log('API Response:', response.status, response.statusText)
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Request failed', detail: response.statusText }))
-    console.log('API Error:', error)
     throw new Error(error.detail || error.error || 'Request failed')
   }
   return response.json()
@@ -20,6 +17,7 @@ async function request(endpoint, options = {}) {
 
 export const productsApi = {
   getAll: () => request('/products'),
+  getById: (id) => request(`/products/${id}`),
   create: (data) => request('/products', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id) => request(`/products/${id}`, { method: 'DELETE' }),
@@ -54,11 +52,11 @@ export const productsApi = {
     formData.append('file', file)
     const response = await fetch(`${API_URL}/products/${productId}/video`, {
       method: 'POST',
-      headers: { 'Accept': 'application/json' },
       body: formData
     })
     if (!response.ok) {
-      throw new Error('Upload failed')
+      const errorText = await response.text()
+      throw new Error(errorText || 'Upload failed')
     }
     return response.json()
   },

@@ -9,16 +9,16 @@ from app.database import init_db, get_db_pool
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_db()
+    init_db()
     yield
     pool = get_db_pool()
     if pool:
-        await pool.close()
+        pool.close()
 
 
 app = FastAPI(
     title="Aura Admin API",
-    description="API for Aura Cosmetics Admin Panel",
+    description="Aura Cosmetics Admin Panel",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -26,9 +26,10 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    max_age=86400,
 )
 
 app.include_router(products.router, prefix="/api/products", tags=["Products"])

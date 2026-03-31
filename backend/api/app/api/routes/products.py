@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Response
 from fastapi.responses import StreamingResponse, RedirectResponse
 from pydantic import BaseModel
 from app.models.product import ProductCreate
@@ -31,25 +31,30 @@ def get_product(product_id: int):
 
 @router.post("")
 def create_product(product: ProductCreate):
-    print(f"Create product:", product.model_dump())
-    try:
-        return ProductService.create(product)
-    except Exception as e:
-        print(f"Error creating product: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    result = ProductService.create(product)
+    if not result:
+        raise HTTPException(status_code=500, detail="Failed to create product")
+    # Deserialize for consistent API response
+    if result.get('purpose') and isinstance(result['purpose'], str):
+        from app.services.product_service import deserialize_purpose
+        result['purpose'] = deserialize_purpose(result['purpose'])
+    if result.get('photos') and isinstance(result['photos'], str):
+        result['photos'] = json.loads(result['photos'])
+    return result
 
 
 @router.put("/{product_id}")
 def update_product(product_id: int, product: ProductCreate):
-    print(f"Update product {product_id}:", product.model_dump())
-    try:
-        result = ProductService.update(product_id, product)
-        if not result:
-            raise HTTPException(status_code=404, detail="Product not found")
-        return result
-    except Exception as e:
-        print(f"Error updating product: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    result = ProductService.update(product_id, product)
+    if not result:
+        raise HTTPException(status_code=404, detail="Product not found")
+    # Deserialize for consistent API response
+    if result.get('purpose') and isinstance(result['purpose'], str):
+        from app.services.product_service import deserialize_purpose
+        result['purpose'] = deserialize_purpose(result['purpose'])
+    if result.get('photos') and isinstance(result['photos'], str):
+        result['photos'] = json.loads(result['photos'])
+    return result
 
 
 @router.delete("/{product_id}")
@@ -80,7 +85,7 @@ async def upload_photo(product_id: int, file: UploadFile = File(...)):
     photos.append(photo_item)
     
     ProductService.update(product_id, ProductCreate(**{**product, "photos": photos, "has_video": product.get('has_video', False)}))
-    return {"id": photo_item["id"], "filename": file.filename}
+    return photo_item
 
 
 @router.delete("/{product_id}/photos/{photo_id}")
@@ -128,22 +133,43 @@ async def get_photo(product_id: int, photo_id: str):
         pool.putconn(conn)
 
 
+import os
+import shutil
+from pathlib import Path
+
+VIDEO_DIR = Path("C:/Users/krish/OneDrive/Desktop/Aura/backend/api/videos")
+VIDEO_DIR.mkdir(exist_ok=True)
+
 @router.post("/{product_id}/video")
 async def upload_video(product_id: int, file: UploadFile = File(...)):
-    if file.content_type not in ["video/mp4", "video/webm"]:
-        raise HTTPException(400, "Only MP4 and WebM videos allowed")
-    
-    contents = await file.read()
-    
-    product = ProductService.get_by_id(product_id)
-    if not product:
-        raise HTTPException(404, "Product not found")
-    
-    import base64
-    video_data = base64.b64encode(contents).decode()
-    
-    ProductService.update(product_id, ProductCreate(**{**product, "video": video_data, "has_video": True}))
-    return {"success": True, "filename": file.filename}
+    try:
+        print(f"Upload video request for product {product_id}, file: {file.filename}, content_type: {file.content_type}")
+        
+        if file.content_type != "video/mp4":
+            raise HTTPException(400, "Only MP4 videos allowed")
+        
+        contents = await file.read()
+        print(f"Read {len(contents)} bytes")
+        
+        product = ProductService.get_by_id(product_id)
+        if not product:
+            raise HTTPException(404, "Product not found")
+        print(f"Product found: {product.get('name')}")
+        
+        # Save to disk
+        video_path = VIDEO_DIR / f"{product_id}.mp4"
+        print(f"Saving to: {video_path}")
+        with open(video_path, "wb") as f:
+            f.write(contents)
+        print(f"Saved, file exists: {video_path.exists()}")
+        
+        result = ProductService.update(product_id, ProductCreate(**{**product, "video": str(video_path), "has_video": True}))
+        print(f"Updated product, new video path in DB: {result.get('video') if result else 'None'}")
+        
+        return {"success": True, "filename": file.filename}
+    except Exception as e:
+        print(f"Upload error: {type(e).__name__}: {e}")
+        raise HTTPException(500, f"Upload failed: {str(e)}")
 
 
 @router.delete("/{product_id}/video")
@@ -152,6 +178,10 @@ async def delete_video(product_id: int):
     if not product:
         raise HTTPException(404, "Product not found")
     
+    video_path = VIDEO_DIR / f"{product_id}.mp4"
+    if video_path.exists():
+        video_path.unlink()
+    
     ProductService.update(product_id, ProductCreate(**{**product, "video": None, "has_video": False}))
     return {"success": True}
 
@@ -159,16 +189,34 @@ async def delete_video(product_id: int):
 @router.get("/{product_id}/video")
 async def get_video(product_id: int):
     product = ProductService.get_by_id(product_id)
-    if not product or not product.get('video'):
+    if not product:
+        raise HTTPException(404, "Product not found")
+    
+    video_path = product.get('video')
+    print(f"Product {product_id} video path from DB: {video_path}")
+    
+    if not video_path:
         raise HTTPException(404, "Video not found")
     
-    video_data = product['video']
+    # Handle both disk path and legacy base64
+    if os.path.exists(video_path):
+        print(f"Serving video from disk: {video_path}")
+        return StreamingResponse(
+            open(video_path, "rb"),
+            media_type="video/mp4",
+            headers={"Content-Disposition": f"attachment; filename=video_{product_id}.mp4"}
+        )
+    
+    # Legacy base64
+    print("Serving video from legacy base64")
+    video_data = product.get('video')
     if isinstance(video_data, str):
         video_data = base64.b64decode(video_data)
-    return StreamingResponse(
-        io.BytesIO(video_data),
+    
+    return Response(
+        content=video_data,
         media_type="video/mp4",
-        headers={"Content-Disposition": f"inline; filename=video.mp4"}
+        headers={"Content-Disposition": f"attachment; filename=video_{product_id}.mp4"}
     )
 
 

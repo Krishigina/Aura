@@ -1,5 +1,6 @@
 import os
 import re
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +9,9 @@ from typing import List, Optional
 import asyncpg
 import aiohttp
 from bs4 import BeautifulSoup
+
+if os.name == 'nt':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
@@ -24,14 +28,30 @@ async def get_db():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global pool
-    pool = await asyncpg.create_pool(
-        host=os.getenv("DB_HOST", "localhost"),
-        port=int(os.getenv("DB_PORT", "5432")),
-        database=os.getenv("DB_NAME", "aura"),
-        user=os.getenv("DB_USER", "aura_user"),
-        password=os.getenv("DB_PASSWORD", "aura_password"),
-        command_timeout=60
-    )
+    import asyncio
+    
+    for attempt in range(10):
+        try:
+            pool = await asyncpg.create_pool(
+                host=os.getenv("DB_HOST", "localhost"),
+                port=int(os.getenv("DB_PORT", "5432")),
+                database=os.getenv("DB_NAME", "aura"),
+                user=os.getenv("DB_USER", "aura_user"),
+                password=os.getenv("DB_PASSWORD", "aura_password"),
+                command_timeout=60,
+                min_size=1,
+                max_size=3,
+                server_settings={'application_name': 'aura_standalone'}
+            )
+            print("Pool created successfully!")
+            break
+        except Exception as e:
+            print(f"Attempt {attempt+1} failed: {e}")
+            if attempt < 9:
+                await asyncio.sleep(2)
+            else:
+                raise e
+    
     await init_db()
     yield
     await pool.close()
@@ -132,6 +152,36 @@ async def init_db():
                 id SERIAL PRIMARY KEY,
                 value VARCHAR(255) NOT NULL UNIQUE
             );
+
+            CREATE TABLE IF NOT EXISTS product_types (
+                id SERIAL PRIMARY KEY,
+                value VARCHAR(255) NOT NULL UNIQUE
+            );
+
+            CREATE TABLE IF NOT EXISTS for_whom (
+                id SERIAL PRIMARY KEY,
+                value VARCHAR(255) NOT NULL UNIQUE
+            );
+
+            CREATE TABLE IF NOT EXISTS purposes (
+                id SERIAL PRIMARY KEY,
+                value VARCHAR(255) NOT NULL UNIQUE
+            );
+
+            CREATE TABLE IF NOT EXISTS application_times (
+                id SERIAL PRIMARY KEY,
+                value VARCHAR(255) NOT NULL UNIQUE
+            );
+
+            CREATE TABLE IF NOT EXISTS areas (
+                id SERIAL PRIMARY KEY,
+                value VARCHAR(255) NOT NULL UNIQUE
+            );
+
+            CREATE TABLE IF NOT EXISTS countries (
+                id SERIAL PRIMARY KEY,
+                value VARCHAR(255) NOT NULL UNIQUE
+            );
         """)
 
         brands_count = await conn.fetchval("SELECT COUNT(*) FROM brands")
@@ -182,6 +232,42 @@ async def init_db():
             for value in default_skin_types:
                 await conn.execute("INSERT INTO skin_types (value) VALUES ($1)", value)
 
+        product_types_count = await conn.fetchval("SELECT COUNT(*) FROM product_types")
+        if product_types_count == 0:
+            default_product_types = ['Крем', 'Сыворотка', 'Лосьон', 'Тоник', 'Маска', 'Масло', 'Спрей', 'Гель', 'Эмульсия', 'Бальзам']
+            for value in default_product_types:
+                await conn.execute("INSERT INTO product_types (value) VALUES ($1)", value)
+
+        for_whom_count = await conn.fetchval("SELECT COUNT(*) FROM for_whom")
+        if for_whom_count == 0:
+            default_for_whom = ['Универсальный', 'Мужчинам', 'Женщинам', 'Детям', 'Беременным']
+            for value in default_for_whom:
+                await conn.execute("INSERT INTO for_whom (value) VALUES ($1)", value)
+
+        purposes_count = await conn.fetchval("SELECT COUNT(*) FROM purposes")
+        if purposes_count == 0:
+            default_purposes = ['Увлажнение', 'Питание', 'Очищение', 'Омоложение', 'Отбеливание', 'Защита от солнца', 'Против акне', 'Восстановление']
+            for value in default_purposes:
+                await conn.execute("INSERT INTO purposes (value) VALUES ($1)", value)
+
+        application_times_count = await conn.fetchval("SELECT COUNT(*) FROM application_times")
+        if application_times_count == 0:
+            default_application_times = ['Утро', 'Вечер', 'Утро и вечер', 'По необходимости']
+            for value in default_application_times:
+                await conn.execute("INSERT INTO application_times (value) VALUES ($1)", value)
+
+        areas_count = await conn.fetchval("SELECT COUNT(*) FROM areas")
+        if areas_count == 0:
+            default_areas = ['Лицо', 'Тело', 'Волосы', 'Губы', 'Глаза', 'Шея', 'Руки', 'Ноги']
+            for value in default_areas:
+                await conn.execute("INSERT INTO areas (value) VALUES ($1)", value)
+
+        countries_count = await conn.fetchval("SELECT COUNT(*) FROM countries")
+        if countries_count == 0:
+            default_countries = ['Франция', 'Корея', 'Япония', 'США', 'Германия', 'Швейцария', 'Россия', 'Италия', 'Испания', 'Израиль']
+            for value in default_countries:
+                await conn.execute("INSERT INTO countries (value) VALUES ($1)", value)
+
         print("Database initialized successfully")
 
 
@@ -193,7 +279,13 @@ DICT_TABLE_MAP = {
     "procedureCategories": "procedure_categories",
     "contentCategories": "content_categories",
     "userRoles": "user_roles",
-    "skinTypes": "skin_types"
+    "skin_types": "skin_types",
+    "product_types": "product_types",
+    "for_whom": "for_whom",
+    "purposes": "purposes",
+    "application_times": "application_times",
+    "areas": "areas",
+    "countries": "countries"
 }
 
 

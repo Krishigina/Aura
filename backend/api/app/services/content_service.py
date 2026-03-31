@@ -5,32 +5,63 @@ from app.models.content import Content, ContentCreate
 
 class ContentService:
     @staticmethod
-    async def get_all() -> List[dict]:
-        async with get_pool().acquire() as conn:
-            rows = await conn.fetch("SELECT * FROM content ORDER BY id DESC")
-            return [dict(row) for row in rows]
+    def get_all() -> List[dict]:
+        pool = get_pool()
+        conn = pool.getconn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM content ORDER BY id DESC")
+            rows = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+            return [dict(zip(columns, row)) for row in rows]
+        finally:
+            pool.putconn(conn)
 
     @staticmethod
-    async def create(data: ContentCreate) -> dict:
-        async with get_pool().acquire() as conn:
-            row = await conn.fetchrow(
+    def create(data: ContentCreate) -> dict:
+        pool = get_pool()
+        conn = pool.getconn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
                 """INSERT INTO content (title, type, body, image_url, published) 
-                   VALUES ($1, $2, $3, $4, $5) RETURNING *""",
-                data.title, data.type, data.body, data.image_url, data.published
+                   VALUES (%s, %s, %s, %s, %s) RETURNING *""",
+                (data.title, data.type, data.body, data.image_url, data.published)
             )
-            return dict(row)
+            row = cursor.fetchone()
+            conn.commit()
+            columns = [desc[0] for desc in cursor.description]
+            return dict(zip(columns, row))
+        finally:
+            pool.putconn(conn)
 
     @staticmethod
-    async def update(content_id: int, data: ContentCreate) -> Optional[dict]:
-        async with get_pool().acquire() as conn:
-            row = await conn.fetchrow(
-                """UPDATE content SET title=$1, type=$2, body=$3, image_url=$4, published=$5 
-                   WHERE id=$6 RETURNING *""",
-                data.title, data.type, data.body, data.image_url, data.published, content_id
+    def update(content_id: int, data: ContentCreate) -> Optional[dict]:
+        pool = get_pool()
+        conn = pool.getconn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                """UPDATE content SET title=%s, type=%s, body=%s, image_url=%s, published=%s 
+                   WHERE id=%s RETURNING *""",
+                (data.title, data.type, data.body, data.image_url, data.published, content_id)
             )
-            return dict(row) if row else None
+            row = cursor.fetchone()
+            conn.commit()
+            if row:
+                columns = [desc[0] for desc in cursor.description]
+                return dict(zip(columns, row))
+            return None
+        finally:
+            pool.putconn(conn)
 
     @staticmethod
-    async def delete(content_id: int) -> None:
-        async with get_pool().acquire() as conn:
-            await conn.execute("DELETE FROM content WHERE id=$1", content_id)
+    def delete(content_id: int) -> None:
+        pool = get_pool()
+        conn = pool.getconn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM content WHERE id=%s", (content_id,))
+            conn.commit()
+        finally:
+            pool.putconn(conn)
