@@ -1,6 +1,7 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
 async function request(endpoint, options = {}) {
+  console.log('API Request:', endpoint, options)
   const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
     headers: {
@@ -8,9 +9,11 @@ async function request(endpoint, options = {}) {
       ...options.headers,
     },
   })
+  console.log('API Response:', response.status, response.statusText)
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Request failed' }))
-    throw new Error(error.error || 'Request failed')
+    const error = await response.json().catch(() => ({ error: 'Request failed', detail: response.statusText }))
+    console.log('API Error:', error)
+    throw new Error(error.detail || error.error || 'Request failed')
   }
   return response.json()
 }
@@ -72,6 +75,7 @@ export const productsApi = {
   },
   
   getVideoUrl: (productId) => `${API_URL}/products/${productId}/video`,
+  getPhotoUrl: (productId, photoId) => `${API_URL}/products/${productId}/photos/${photoId}`,
   parseUrl: (url) => request('/products/parse', { method: 'POST', body: JSON.stringify({ url }) }),
 }
 

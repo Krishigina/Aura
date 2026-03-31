@@ -14,8 +14,12 @@ const defaultUsers = [
   { id: 6, name: 'Мария Соколова', email: 'maria.cosmetologist@aura.com', phone: '+7 999 678-90-12', skinType: 'Нормальная', role: 'cosmetologist', nickname: '@derma_pro' },
 ]
 
-const skinTypes = ['Нормальная', 'Сухая', 'Жирная', 'Комбинированная', 'Чувствительная']
-const userRoles = [
+const defaultEnums = {
+  userRoles: ['Пользователь', 'Косметолог', 'Менеджер', 'Администратор'],
+  skin_types: ['Нормальная', 'Сухая', 'Жирная', 'Комбинированная', 'Чувствительная', 'Проблемная'],
+}
+
+const sampleUsers = [
   { value: 'user', label: 'Пользователь' },
   { value: 'cosmetologist', label: 'Косметолог' },
   { value: 'manager', label: 'Менеджер' },
@@ -70,7 +74,7 @@ export default function Users() {
 
   const openAddModal = () => {
     setEditingUser(null)
-    setForm({ name: '', email: '', phone: '', skinType: skinTypes[0], role: 'user', nickname: '' })
+    setForm({ name: '', email: '', phone: '', skinType: defaultEnums.skin_types[0], role: 'user', nickname: '' })
     setModalOpen(true)
   }
 
@@ -260,7 +264,7 @@ export default function Users() {
                 <label>Телефон</label>
                 <input className="input" name="phone" value={form.phone} onChange={handleInputChange} placeholder="+7 999 123-45-67" />
               </div>
-              <Select label="Тип кожи" name="skinType" value={form.skinType} onChange={handleSelectChange} options={skinTypes} placeholder="Выберите тип кожи" />
+              <Select label="Тип кожи" name="skinType" value={form.skinType} onChange={handleSelectChange} options={defaultEnums.skin_types} placeholder="Выберите тип кожи" />
             </div>
             <div className="modal-actions">
               <button className="btn btn-ghost" onClick={() => setModalOpen(false)}>Отмена</button>

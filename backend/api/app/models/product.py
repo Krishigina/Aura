@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Union, Any
 from enum import Enum
 
 class ProductTypeEnum(str, Enum):
@@ -68,24 +68,25 @@ class PhotoItem(BaseModel):
     content_type: str
 
 class ProductBase(BaseModel):
-    name: str
+    name: Optional[str] = None
     what_is_it: Optional[str] = None
     brand: Optional[str] = None
-    product_type: Optional[ProductTypeEnum] = None
-    for_whom: Optional[ForWhomEnum] = None
-    purpose: Optional[PurposeEnum] = None
-    skin_type: Optional[SkinTypeEnum] = None
-    application_time: Optional[ApplicationTimeEnum] = None
-    area: Optional[AreaEnum] = None
+    product_type: Optional[str] = None
+    for_whom: Optional[str] = None
+    purpose: Optional[Union[str, List[str]]] = None
+    skin_type: Optional[str] = None
+    application_time: Optional[str] = None
+    area: Optional[str] = None
     active_ingredient: Optional[str] = None
     volume: Optional[str] = None
-    segment: Optional[SegmentEnum] = None
+    segment: Optional[str] = None
     composition: Optional[str] = None
     application_info: Optional[str] = None
     country: Optional[str] = None
+    country_origin: Optional[str] = None
     manufacturer: Optional[str] = None
     description: Optional[str] = None
-    photos: Optional[List[PhotoItem]] = None
+    photos: Optional[Any] = None
     has_video: Optional[bool] = False
 
 class ProductCreate(ProductBase):

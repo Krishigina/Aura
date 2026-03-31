@@ -23,7 +23,7 @@ const defaultEnums = {
   procedureCategories: ['Чистка', 'Увлажнение', 'Инъекции', 'Эпиляция', 'Массаж', 'Пилинг', 'Уход'],
   contentCategories: ['Уход за кожей', 'Ингредиенты', 'Защита', 'Процедуры', 'Питание', 'Образ жизни'],
   userRoles: ['Пользователь', 'Косметолог', 'Менеджер', 'Администратор'],
-  skinTypes: ['Нормальная', 'Сухая', 'Жирная', 'Комбинированная', 'Чувствительная'],
+  skin_types: ['Нормальная', 'Сухая', 'Жирная', 'Комбинированная', 'Чувствительная', 'Проблемная'],
   product_types: ['Крем', 'Сыворотка', 'Лосьон', 'Тоник', 'Эмульсия', 'Масло', 'Гель', 'Пилинг', 'Маска', 'Бальзам', 'Спрей', 'Мист'],
   for_whom: ['Универсальный', 'Мужчинам', 'Женщинам'],
   purposes: ['Увлажнение', 'Очищение', 'Питание', 'Антивозрастной', 'Отбеливание', 'Защита от солнца', 'Проблемная кожа', 'Восстановление', 'Матирование', 'Тонирование'],
@@ -38,7 +38,7 @@ const dictGroups = [
     label: 'Продукты',
     icon: FlaskConical,
     color: '#8B5CF6',
-    dictionaries: ['brands', 'product_types', 'for_whom', 'purposes', 'skinTypes', 'application_times', 'areas', 'segments', 'volumes', 'countries']
+    dictionaries: ['brands', 'product_types', 'for_whom', 'purposes', 'skin_types', 'application_times', 'areas', 'segments', 'volumes', 'countries']
   },
   {
     id: 'procedures',
@@ -59,7 +59,7 @@ const dictGroups = [
     label: 'Пользователи',
     icon: UserCog,
     color: '#3B82F6',
-    dictionaries: ['userRoles', 'skinTypes']
+    dictionaries: ['userRoles']
   },
 ]
 
@@ -71,7 +71,7 @@ const dictConfig = {
   product_types: { label: 'Типы продуктов', icon: FlaskConical, color: '#8B5CF6' },
   for_whom: { label: 'Для кого', icon: FlaskConical, color: '#EC4899' },
   purposes: { label: 'Назначение', icon: FlaskConical, color: '#10B981' },
-  skinTypes: { label: 'Типы кожи', icon: UserCog, color: '#EF4444' },
+  skin_types: { label: 'Типы кожи', icon: UserCog, color: '#EF4444' },
   application_times: { label: 'Время применения', icon: FlaskConical, color: '#F59E0B' },
   areas: { label: 'Области применения', icon: FlaskConical, color: '#3B82F6' },
   countries: { label: 'Страны', icon: FlaskConical, color: '#6366F1' },
@@ -98,7 +98,7 @@ export default function Dictionaries() {
   const loadData = async () => {
     try {
       setLoading(true)
-      const [brands, categories, segments, volumes, procedureCategories, contentCategories, userRoles, skinTypes, productTypes, forWhom, purposes, applicationTimes, areas, countries] = await Promise.all([
+      const [brands, categories, segments, volumes, procedureCategories, contentCategories, userRoles, skin_types, productTypes, forWhom, purposes, applicationTimes, areas, countries] = await Promise.all([
         dictionariesApi.get('brands').catch(() => defaultEnums.brands),
         dictionariesApi.get('categories').catch(() => defaultEnums.categories),
         dictionariesApi.get('segments').catch(() => defaultEnums.segments),
@@ -106,7 +106,7 @@ export default function Dictionaries() {
         dictionariesApi.get('procedureCategories').catch(() => defaultEnums.procedureCategories),
         dictionariesApi.get('contentCategories').catch(() => defaultEnums.contentCategories),
         dictionariesApi.get('userRoles').catch(() => defaultEnums.userRoles),
-        dictionariesApi.get('skinTypes').catch(() => defaultEnums.skinTypes),
+        dictionariesApi.get('skin_types').catch(() => defaultEnums.skin_types),
         dictionariesApi.get('product_types').catch(() => defaultEnums.product_types),
         dictionariesApi.get('for_whom').catch(() => defaultEnums.for_whom),
         dictionariesApi.get('purposes').catch(() => defaultEnums.purposes),
@@ -122,7 +122,7 @@ export default function Dictionaries() {
         procedureCategories,
         contentCategories,
         userRoles,
-        skinTypes,
+        skin_types,
         product_types: productTypes,
         for_whom: forWhom,
         purposes: purposes,
