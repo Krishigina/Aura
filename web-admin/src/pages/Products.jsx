@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
-import { Search, Plus, Edit2, Trash2, X, Image, Tag, Check, Package, AlertTriangle, Link as LinkIcon, FlaskConical, FileText, Settings, Palette, MapPin, Factory, Clock, Droplets } from 'lucide-react'
+import { Search, Plus, Edit2, Trash2, X, Image, Tag, Check, Package, AlertTriangle, Link as LinkIcon, FlaskConical, FileText, Settings, Palette, MapPin, Factory, Clock, Droplets, Play } from 'lucide-react'
 import { productsApi, dictionariesApi } from '../api'
 import Select from '../components/Select'
+import VideoPlayer from '../components/VideoPlayer'
 import './Products.css'
 
 const defaultEnums = {
@@ -54,15 +55,15 @@ export default function Products() {
     manufacturer: '',
     description: '',
     photos: [],
-    has_video: false
+    has_video: false,
+    video: null
   })
-  const [videoUrl, setVideoUrl] = useState('')
-  const [url, setUrl] = useState('')
-  const [parsing, setParsing] = useState(false)
-  const [uploadingPhoto, setUploadingPhoto] = useState(false)
-  const [uploadingVideo, setUploadingVideo] = useState(false)
   const [mediaModal, setMediaModal] = useState(null)
   const [draggedPhotoIndex, setDraggedPhotoIndex] = useState(null)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [uploadingVideo, setUploadingVideo] = useState(false)
+  const [url, setUrl] = useState('')
+  const [parsing, setParsing] = useState(false)
 
   const canEdit = hasPermission('products')
 
@@ -152,36 +153,24 @@ export default function Products() {
       manufacturer: product.manufacturer || '',
       description: product.description || '',
       photos: product.photos || [],
-      has_video: product.has_video || false
+      has_video: product.has_video || false,
+      video: product.video || null
     })
-    setVideoUrl(product.has_video ? productsApi.getVideoUrl(product.id) : '')
     setShowModal(true) 
   }
-  const openAddModal = () => { 
-    setEditingProduct(null)
-    setFormData({
-      name: '',
-      what_is_it: '',
-      brand: enums.brands[0] || '',
-      product_type: '',
-      for_whom: '',
-    purpose: [],
-      skin_type: '',
-      application_time: '',
-      area: '',
-      active_ingredient: '',
-      volume: enums.volumes[0] || '',
-      segment: '',
-      composition: '',
-      application_info: '',
-      country: '',
-      manufacturer: '',
-      description: '',
-      photos: [],
-      has_video: false
-    })
-    setVideoUrl('')
-    setShowModal(true) 
+  const openAddModal = async () => {
+    try {
+      // Create empty product first to get ID for photo/video uploads
+      const created = await productsApi.create({
+        name: 'Новый продукт',
+        brand: enums.brands[0] || '',
+        volume: enums.volumes[0] || ''
+      })
+      setProducts(prev => [created, ...prev])
+      handleEdit(created)
+    } catch (err) {
+      error('Ошибка создания продукта')
+    }
   }
 
   const handleInputChange = (e) => {
@@ -300,7 +289,7 @@ export default function Products() {
       const result = await productsApi.uploadPhoto(editingProduct.id, file)
       setFormData(prev => ({
         ...prev,
-        photos: [...prev.photos, { id: result.id, filename: result.filename, data: '', content_type: file.type }]
+        photos: [...prev.photos, result]
       }))
       success('Фото загружено')
     } catch (err) {
@@ -343,11 +332,14 @@ export default function Products() {
     try {
       setUploadingVideo(true)
       await productsApi.uploadVideo(editingProduct.id, file)
-      setFormData(prev => ({ ...prev, has_video: true }))
-      setVideoUrl(productsApi.getVideoUrl(editingProduct.id))
+      // Refresh product to get actual video path from backend
+      const freshProduct = await productsApi.getById(editingProduct.id)
+      setEditingProduct(freshProduct)
+      setFormData(prev => ({ ...prev, has_video: true, video: freshProduct.video }))
       success('Видео загружено')
     } catch (err) {
-      error('Ошибка загрузки видео')
+      console.error('Video upload error:', err)
+      error('Ошибка загрузки видео: ' + err.message)
     } finally {
       setUploadingVideo(false)
     }
@@ -357,8 +349,7 @@ export default function Products() {
     try {
       setUploadingVideo(true)
       await productsApi.deleteVideo(editingProduct.id)
-      setFormData(prev => ({ ...prev, has_video: false }))
-      setVideoUrl('')
+      setFormData(prev => ({ ...prev, has_video: false, video: null }))
       success('Видео удалено')
     } catch (err) {
       error('Ошибка удаления')
@@ -417,18 +408,13 @@ export default function Products() {
       manufacturer: formData.manufacturer,
       description: formData.description,
       photos: formData.photos,
-      has_video: formData.has_video
+      has_video: formData.has_video,
+      video: formData.video
     }
     try {
-      if (editingProduct) {
-        const updated = await productsApi.update(editingProduct.id, product)
-        setProducts(prev => prev.map(p => p.id === editingProduct.id ? updated : p))
-        success('Продукт обновлён')
-      } else {
-        const created = await productsApi.create(product)
-        setProducts(prev => [created, ...prev])
-        success('Продукт добавлен')
-      }
+      const updated = await productsApi.update(editingProduct.id, product)
+      setProducts(prev => prev.map(p => p.id === editingProduct.id ? updated : p))
+      success('Продукт сохранён')
       setShowModal(false)
       setEditingProduct(null)
     } catch (err) {
@@ -511,7 +497,7 @@ export default function Products() {
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal glass-card modal-wide" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>{editingProduct ? 'Редактировать' : 'Добавить продукт'}</h3>
+              <h3>Продукт</h3>
               <button className="btn btn-ghost btn-sm" onClick={() => setShowModal(false)}><X size={20} /></button>
             </div>
             <form onSubmit={handleSave} className="product-form">
@@ -616,7 +602,7 @@ export default function Products() {
                                   onDragStart={() => handlePhotoDragStart(idx)}
                                   onDragOver={handlePhotoDragOver}
                                   onDrop={() => handlePhotoDrop(idx)}
-                                  onClick={() => setMediaModal({ type: 'image', src: productsApi.getPhotoUrl(editingProduct.id, photo.id) })}
+                                  onClick={() => setMediaModal({ type: 'image', src: photo.data && photo.data.length > 0 ? `data:${photo.content_type};base64,${photo.data}` : null })}
                                 >
                                   <div className="photo-preview">
                                     {photo.data && photo.data.length > 0 ? (
@@ -625,20 +611,20 @@ export default function Products() {
                                         alt="" 
                                       />
                                     ) : (
-                                      <img 
-                                        src={productsApi.getPhotoUrl(editingProduct.id, photo.id)}
-                                        alt="" 
-                                        className="photo-from-endpoint"
-                                      />
+                                      <div className="photo-placeholder" title="Нажмите для просмотра">
+                                        <Image size={32} />
+                                        <span className="photo-filename">{photo.filename?.split('.')[0] || 'Фото'}</span>
+                                        <span className="photo-type">{photo.content_type?.split('/')[1]?.toUpperCase() || ''}</span>
+                                      </div>
                                     )}
                                   </div>
                                   <button type="button" className="photo-delete-btn" onClick={(e) => { e.stopPropagation(); handlePhotoDelete(photo.id) }}>
-                                  <X size={14} />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         <label className={`upload-zone ${uploadingPhoto ? 'uploading' : ''}`}>
                           {uploadingPhoto ? (
                             <div className="upload-content">
@@ -666,13 +652,8 @@ export default function Products() {
                     <div className="form-group" style={{ marginTop: 'var(--spacing-md)' }}>
                       <label>Видео</label>
                       <div className="media-upload-section">
-                        {formData.has_video && videoUrl ? (
-                          <div className="video-card" onClick={() => setMediaModal({ type: 'video', src: videoUrl })}>
-                            <video src={videoUrl} controls className="video-preview" onClick={(e) => e.stopPropagation()} />
-                            <button type="button" className="video-delete-btn" onClick={(e) => { e.stopPropagation(); handleVideoDelete() }}>
-                              <X size={16} /> Удалить
-                            </button>
-                          </div>
+                        {formData.has_video ? (
+                          <VideoPlayer productId={editingProduct.id} onDelete={handleVideoDelete} />
                         ) : (
                           <label className={`upload-zone ${uploadingVideo ? 'uploading' : ''}`}>
                             {uploadingVideo ? (
@@ -684,7 +665,7 @@ export default function Products() {
                               <>
                                 <input 
                                   type="file" 
-                                  accept="video/mp4,video/webm" 
+                                  accept="video/mp4" 
                                   onChange={e => e.target.files[0] && handleVideoUpload(e.target.files[0])} 
                                   className="hidden-input"
                                 />

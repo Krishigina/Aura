@@ -5,34 +5,65 @@ from app.models.procedure import Procedure, ProcedureCreate
 
 class ProcedureService:
     @staticmethod
-    async def get_all() -> List[dict]:
-        async with get_pool().acquire() as conn:
-            rows = await conn.fetch("SELECT * FROM procedures ORDER BY id DESC")
-            return [dict(row) for row in rows]
+    def get_all() -> List[dict]:
+        pool = get_pool()
+        conn = pool.getconn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM procedures ORDER BY id DESC")
+            rows = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+            return [dict(zip(columns, row)) for row in rows]
+        finally:
+            pool.putconn(conn)
 
     @staticmethod
-    async def create(data: ProcedureCreate) -> dict:
-        async with get_pool().acquire() as conn:
-            row = await conn.fetchrow(
+    def create(data: ProcedureCreate) -> dict:
+        pool = get_pool()
+        conn = pool.getconn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
                 """INSERT INTO procedures (name, category, duration, price, description, contraindications) 
-                   VALUES ($1, $2, $3, $4, $5, $6) RETURNING *""",
-                data.name, data.category, data.duration, data.price,
-                data.description, data.contraindications
+                   VALUES (%s, %s, %s, %s, %s, %s) RETURNING *""",
+                (data.name, data.category, data.duration, data.price,
+                 data.description, data.contraindications)
             )
-            return dict(row)
+            row = cursor.fetchone()
+            conn.commit()
+            columns = [desc[0] for desc in cursor.description]
+            return dict(zip(columns, row))
+        finally:
+            pool.putconn(conn)
 
     @staticmethod
-    async def update(procedure_id: int, data: ProcedureCreate) -> Optional[dict]:
-        async with get_pool().acquire() as conn:
-            row = await conn.fetchrow(
-                """UPDATE procedures SET name=$1, category=$2, duration=$3, price=$4, description=$5, contraindications=$6 
-                   WHERE id=$7 RETURNING *""",
-                data.name, data.category, data.duration, data.price,
-                data.description, data.contraindications, procedure_id
+    def update(procedure_id: int, data: ProcedureCreate) -> Optional[dict]:
+        pool = get_pool()
+        conn = pool.getconn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                """UPDATE procedures SET name=%s, category=%s, duration=%s, price=%s, description=%s, contraindications=%s 
+                   WHERE id=%s RETURNING *""",
+                (data.name, data.category, data.duration, data.price,
+                 data.description, data.contraindications, procedure_id)
             )
-            return dict(row) if row else None
+            row = cursor.fetchone()
+            conn.commit()
+            if row:
+                columns = [desc[0] for desc in cursor.description]
+                return dict(zip(columns, row))
+            return None
+        finally:
+            pool.putconn(conn)
 
     @staticmethod
-    async def delete(procedure_id: int) -> None:
-        async with get_pool().acquire() as conn:
-            await conn.execute("DELETE FROM procedures WHERE id=$1", procedure_id)
+    def delete(procedure_id: int) -> None:
+        pool = get_pool()
+        conn = pool.getconn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM procedures WHERE id=%s", (procedure_id,))
+            conn.commit()
+        finally:
+            pool.putconn(conn)

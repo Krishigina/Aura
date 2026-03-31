@@ -134,6 +134,12 @@ def init_db():
     except:
         pass
     
+    # Fix video column type from BYTEA to VARCHAR for file paths
+    try:
+        cursor.execute("ALTER TABLE products ALTER COLUMN video TYPE VARCHAR(500) USING CASE WHEN video IS NOT NULL THEN 'legacy' ELSE NULL END")
+    except:
+        pass
+    
     _seed_dictionary(cursor, "brands", [
         'Aura', 'La Roche-Posay', 'Vichy', 'Bioderma', 'CeraVe', 
         'The Ordinary', "Paula's Choice", 'Cosrx', 'Eucerin', 'Nivea'

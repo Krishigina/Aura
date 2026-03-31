@@ -105,13 +105,13 @@ class ProductService:
                     purpose=%s, skin_type=%s, application_time=%s, area=%s,
                     active_ingredient=%s, volume=%s, segment=%s, composition=%s,
                     application_info=%s, country=%s, country_origin=%s, manufacturer=%s,
-                    description=%s, photos=%s, has_video=%s
+                    description=%s, photos=%s, has_video=%s, video=%s
                 WHERE id=%s RETURNING *""",
                 (data.name, data.what_is_it, data.brand, data.product_type, data.for_whom,
                  serialize_purpose(data.purpose), data.skin_type, data.application_time, data.area,
                  data.active_ingredient, data.volume, data.segment, data.composition,
                  data.application_info, data.country, getattr(data, 'country_origin', None), data.manufacturer,
-                 data.description, json.dumps(data.photos) if data.photos else None, data.has_video, product_id)
+                 data.description, json.dumps(data.photos) if data.photos else None, data.has_video, data.video, product_id)
             )
             row = cursor.fetchone()
             conn.commit()

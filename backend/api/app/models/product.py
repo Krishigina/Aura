@@ -88,6 +88,7 @@ class ProductBase(BaseModel):
     description: Optional[str] = None
     photos: Optional[Any] = None
     has_video: Optional[bool] = False
+    video: Optional[str] = None
 
 class ProductCreate(ProductBase):
     pass
