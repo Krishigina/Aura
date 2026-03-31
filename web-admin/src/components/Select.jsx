@@ -1,12 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
-import { ChevronDown, Check } from 'lucide-react'
+import { ChevronDown, Check, X } from 'lucide-react'
 import './Select.css'
 
-export default function Select({ label, name, value, onChange, options, required, placeholder }) {
+export default function Select({ label, name, value, onChange, options, required, placeholder, multiple = false, searchable = false }) {
   const [isOpen, setIsOpen] = useState(false)
   const [search, setSearch] = useState('')
   const wrapperRef = useRef(null)
   const inputRef = useRef(null)
+
+  const values = multiple ? (value || []) : [value].filter(Boolean)
 
   const filteredOptions = options.filter(opt => 
     opt.toLowerCase().includes(search.toLowerCase())
@@ -30,9 +32,31 @@ export default function Select({ label, name, value, onChange, options, required
   }, [isOpen])
 
   const handleSelect = (option) => {
-    onChange(name, option)
-    setIsOpen(false)
-    setSearch('')
+    if (multiple) {
+      const newValues = values.includes(option)
+        ? values.filter(v => v !== option)
+        : [...values, option]
+      onChange(name, newValues)
+    } else {
+      onChange(name, option)
+      setIsOpen(false)
+      setSearch('')
+    }
+  }
+
+  const handleRemove = (option, e) => {
+    e.stopPropagation()
+    const newValues = values.filter(v => v !== option)
+    onChange(name, newValues)
+  }
+
+  const displayValue = () => {
+    if (multiple) {
+      if (!values.length) return placeholder || 'Выберите...'
+      if (values.length === 1) return values[0]
+      return `${values.length} выбрано`
+    }
+    return value || placeholder || 'Выберите...'
   }
 
   return (
@@ -41,26 +65,40 @@ export default function Select({ label, name, value, onChange, options, required
       <div className="custom-select-wrapper" ref={wrapperRef}>
         <button
           type="button"
-          className={`custom-select-trigger ${isOpen ? 'open' : ''} ${value ? 'has-value' : ''}`}
+          className={`custom-select-trigger ${isOpen ? 'open' : ''} ${value || (multiple && values.length) ? 'has-value' : ''}`}
           onClick={() => setIsOpen(!isOpen)}
         >
-          <span className="select-value">{value || placeholder || 'Выберите...'}</span>
+          {multiple && values.length > 0 ? (
+            <div className="multiple-values">
+              {values.slice(0, 2).map(v => (
+                <span key={v} className="multi-tag">
+                  {v}
+                  <X size={12} onClick={(e) => handleRemove(v, e)} />
+                </span>
+              ))}
+              {values.length > 2 && <span className="multi-tag-more">+{values.length - 2}</span>}
+            </div>
+          ) : (
+            <span className="select-value">{displayValue()}</span>
+          )}
           <ChevronDown size={18} className="select-arrow" />
         </button>
         
         {isOpen && (
           <div className="custom-select-dropdown">
-            <div className="select-search-wrapper">
-              <input
-                ref={inputRef}
-                type="text"
-                className="select-search-input"
-                placeholder="Поиск..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
+            {(multiple || searchable) && (
+              <div className="select-search-wrapper">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  className="select-search-input"
+                  placeholder="Поиск..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+            )}
             <div className="select-options">
               {filteredOptions.length === 0 ? (
                 <div className="select-no-results">Ничего не найдено</div>
@@ -69,11 +107,12 @@ export default function Select({ label, name, value, onChange, options, required
                   <button
                     key={idx}
                     type="button"
-                    className={`select-option ${option === value ? 'selected' : ''}`}
+                    className={`select-option ${values.includes(option) ? 'selected' : ''}`}
                     onClick={() => handleSelect(option)}
                   >
+                    {multiple && <span className={`checkbox ${values.includes(option) ? 'checked' : ''}`}></span>}
                     <span>{option}</span>
-                    {option === value && <Check size={16} className="option-check" />}
+                    {!multiple && values.includes(option) && <Check size={16} className="option-check" />}
                   </button>
                 ))
               )}

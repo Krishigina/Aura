@@ -40,8 +40,8 @@ export default function Products() {
     brand: '',
     product_type: '',
     for_whom: '',
-    purpose: '',
-    skin_type: '',
+      purpose: [],
+      skin_type: '',
     application_time: '',
     area: '',
     active_ingredient: '',
@@ -50,6 +50,7 @@ export default function Products() {
     composition: '',
     application_info: '',
     country: '',
+    country_origin: '',
     manufacturer: '',
     description: '',
     photos: [],
@@ -58,6 +59,10 @@ export default function Products() {
   const [videoUrl, setVideoUrl] = useState('')
   const [url, setUrl] = useState('')
   const [parsing, setParsing] = useState(false)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [uploadingVideo, setUploadingVideo] = useState(false)
+  const [mediaModal, setMediaModal] = useState(null)
+  const [draggedPhotoIndex, setDraggedPhotoIndex] = useState(null)
 
   const canEdit = hasPermission('products')
 
@@ -68,26 +73,37 @@ export default function Products() {
   const loadData = async () => {
     try {
       setLoading(true)
-      const [productsData, brandsData, categoriesData, segmentsData, volumesData, countriesData] = await Promise.all([
-        productsApi.getAll().catch(() => []),
-        dictionariesApi.get('brands').catch(() => defaultEnums.brands),
-        dictionariesApi.get('categories').catch(() => defaultEnums.categories),
-        dictionariesApi.get('segments').catch(() => defaultEnums.segments),
-        dictionariesApi.get('volumes').catch(() => defaultEnums.volumes),
-        dictionariesApi.get('countries').catch(() => ['Франция', 'Германия', 'Италия', 'Япония', 'Корея', 'США']),
-      ])
+      const productsData = await productsApi.getAll().catch(e => { console.error('products error:', e); return [] })
+      const brandsData = await dictionariesApi.get('brands').catch(e => { console.error('brands error:', e); return defaultEnums.brands })
+      const categoriesData = await dictionariesApi.get('categories').catch(e => { console.error('categories error:', e); return defaultEnums.categories })
+      const segmentsData = await dictionariesApi.get('segments').catch(e => { console.error('segments error:', e); return defaultEnums.segments })
+      const volumesData = await dictionariesApi.get('volumes').catch(e => { console.error('volumes error:', e); return defaultEnums.volumes })
+      const countriesData = await dictionariesApi.get('countries').catch(e => { console.error('countries error:', e); return [] })
+      const productTypesData = await dictionariesApi.get('product_types').catch(e => { console.error('product_types error:', e); return productEnums.product_types })
+      const forWhomData = await dictionariesApi.get('for_whom').catch(e => { console.error('for_whom error:', e); return productEnums.for_whom })
+      const purposesData = await dictionariesApi.get('purposes').catch(e => { console.error('purposes error:', e); return productEnums.purposes })
+      const skin_typesData = await dictionariesApi.get('skin_types').catch(e => { console.error('skin_types error:', e); return productEnums.skin_types })
+      const applicationTimesData = await dictionariesApi.get('application_times').catch(e => { console.error('application_times error:', e); return productEnums.application_times })
+      const areasData = await dictionariesApi.get('areas').catch(e => { console.error('areas error:', e); return productEnums.areas })
+      
       setProducts(productsData)
       setEnums({
         brands: brandsData,
         categories: categoriesData,
         segments: segmentsData,
         volumes: volumesData,
-        countries: countriesData
+        countries: countriesData,
+        product_types: productTypesData,
+        for_whom: forWhomData,
+        purposes: purposesData,
+        skin_types: skin_typesData,
+        application_times: applicationTimesData,
+        areas: areasData
       })
     } catch (err) {
       error('Ошибка загрузки данных')
       setProducts([])
-      setEnums(defaultEnums)
+      setEnums({...defaultEnums, ...productEnums})
     } finally {
       setLoading(false)
     }
@@ -122,7 +138,8 @@ export default function Products() {
       brand: product.brand || '',
       product_type: product.product_type || '',
       for_whom: product.for_whom || '',
-      purpose: product.purpose || '',
+      purpose: Array.isArray(product.purpose) ? product.purpose : (product.purpose ? [product.purpose] : []),
+      country_origin: product.country_origin || '',
       skin_type: product.skin_type || '',
       application_time: product.application_time || '',
       area: product.area || '',
@@ -148,7 +165,7 @@ export default function Products() {
       brand: enums.brands[0] || '',
       product_type: '',
       for_whom: '',
-      purpose: '',
+    purpose: [],
       skin_type: '',
       application_time: '',
       area: '',
@@ -269,7 +286,17 @@ export default function Products() {
       error('Сначала сохраните продукт')
       return
     }
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    if (!validTypes.includes(file.type)) {
+      error('Поддерживаются только JPG, PNG, WebP, GIF')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      error('Максимальный размер файла - 10MB')
+      return
+    }
     try {
+      setUploadingPhoto(true)
       const result = await productsApi.uploadPhoto(editingProduct.id, file)
       setFormData(prev => ({
         ...prev,
@@ -277,12 +304,15 @@ export default function Products() {
       }))
       success('Фото загружено')
     } catch (err) {
-      error('Ошибка загрузки')
+      error('Ошибка загрузки фото')
+    } finally {
+      setUploadingPhoto(false)
     }
   }
 
   const handlePhotoDelete = async (photoId) => {
     try {
+      setUploadingPhoto(true)
       await productsApi.deletePhoto(editingProduct.id, photoId)
       setFormData(prev => ({
         ...prev,
@@ -291,6 +321,8 @@ export default function Products() {
       success('Фото удалено')
     } catch (err) {
       error('Ошибка удаления')
+    } finally {
+      setUploadingPhoto(false)
     }
   }
 
@@ -299,24 +331,67 @@ export default function Products() {
       error('Сначала сохраните продукт')
       return
     }
+    const validTypes = ['video/mp4', 'video/webm']
+    if (!validTypes.includes(file.type)) {
+      error('Поддерживаются только MP4, WebM')
+      return
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      error('Максимальный размер файла - 50MB')
+      return
+    }
     try {
+      setUploadingVideo(true)
       await productsApi.uploadVideo(editingProduct.id, file)
       setFormData(prev => ({ ...prev, has_video: true }))
       setVideoUrl(productsApi.getVideoUrl(editingProduct.id))
       success('Видео загружено')
     } catch (err) {
-      error('Ошибка загрузки')
+      error('Ошибка загрузки видео')
+    } finally {
+      setUploadingVideo(false)
     }
   }
 
   const handleVideoDelete = async () => {
     try {
+      setUploadingVideo(true)
       await productsApi.deleteVideo(editingProduct.id)
       setFormData(prev => ({ ...prev, has_video: false }))
       setVideoUrl('')
       success('Видео удалено')
     } catch (err) {
       error('Ошибка удаления')
+    } finally {
+      setUploadingVideo(false)
+    }
+  }
+
+  const handlePhotoDragStart = (index) => {
+    setDraggedPhotoIndex(index)
+  }
+
+  const handlePhotoDragOver = (e) => {
+    e.preventDefault()
+  }
+
+  const handlePhotoDrop = async (dropIndex) => {
+    if (draggedPhotoIndex === null || draggedPhotoIndex === dropIndex) {
+      setDraggedPhotoIndex(null)
+      return
+    }
+    const newPhotos = [...formData.photos]
+    const [draggedPhoto] = newPhotos.splice(draggedPhotoIndex, 1)
+    newPhotos.splice(dropIndex, 0, draggedPhoto)
+    setDraggedPhotoIndex(null)
+    setFormData(prev => ({ ...prev, photos: newPhotos }))
+    
+    try {
+      const product = { ...formData, photos: newPhotos }
+      await productsApi.update(editingProduct.id, product)
+      success('Порядок фото обновлён')
+    } catch (err) {
+      error('Ошибка сохранения порядка')
     }
   }
 
@@ -338,6 +413,7 @@ export default function Products() {
       composition: formData.composition,
       application_info: formData.application_info,
       country: formData.country,
+      country_origin: formData.country_origin,
       manufacturer: formData.manufacturer,
       description: formData.description,
       photos: formData.photos,
@@ -449,7 +525,8 @@ export default function Products() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--spacing-md)' }}>
                     <div className="form-group"><label>Название *</label><input name="name" value={formData.name} onChange={handleInputChange} className="input" required /></div>
                     <div className="form-group"><label>Что это?</label><input name="what_is_it" value={formData.what_is_it} onChange={handleInputChange} className="input" placeholder="Например: увлажняющий крем" /></div>
-                    <div className="form-group" style={{ gridColumn: 'span 2' }}><Select label="Бренд *" name="brand" value={formData.brand} onChange={handleSelectChange} options={enums.brands} /></div>
+                    <div className="form-group"><Select label="Бренд *" name="brand" value={formData.brand} onChange={handleSelectChange} options={enums.brands} searchable /></div>
+                    <div className="form-group"><Select label="Сегмент" name="segment" value={formData.segment} onChange={handleSelectChange} options={enums.segments} placeholder="Выберите сегмент" /></div>
                   </div>
                 </div>
 
@@ -469,14 +546,14 @@ export default function Products() {
                     <span>Характеристики</span>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--spacing-md)' }}>
-                    <Select label="Тип продукта" name="product_type" value={formData.product_type} onChange={handleSelectChange} options={productEnums.product_types} placeholder="Выберите тип" />
-                    <Select label="Для кого" name="for_whom" value={formData.for_whom} onChange={handleSelectChange} options={productEnums.for_whom} placeholder="Выберите" />
-                    <Select label="Назначение" name="purpose" value={formData.purpose} onChange={handleSelectChange} options={productEnums.purposes} placeholder="Выберите назначение" />
-                    <Select label="Тип кожи" name="skin_type" value={formData.skin_type} onChange={handleSelectChange} options={productEnums.skin_types} placeholder="Выберите тип кожи" />
-                    <Select label="Время применения" name="application_time" value={formData.application_time} onChange={handleSelectChange} options={productEnums.application_times} placeholder="Выберите время" />
-                    <Select label="Область применения" name="area" value={formData.area} onChange={handleSelectChange} options={productEnums.areas} placeholder="Выберите область" />
+                    <Select label="Тип продукта" name="product_type" value={formData.product_type} onChange={handleSelectChange} options={enums.product_types || productEnums.product_types} placeholder="Выберите тип" searchable />
+                    <Select label="Для кого" name="for_whom" value={formData.for_whom} onChange={handleSelectChange} options={enums.for_whom || productEnums.for_whom} placeholder="Выберите" />
+                    <Select label="Назначение" name="purpose" value={formData.purpose} onChange={handleSelectChange} options={enums.purposes || productEnums.purposes} placeholder="Выберите назначение" multiple={true} searchable />
+                    <Select label="Тип кожи" name="skin_type" value={formData.skin_type} onChange={handleSelectChange} options={enums.skin_types || productEnums.skin_types} placeholder="Выберите тип кожи" />
+                    <Select label="Время применения" name="application_time" value={formData.application_time} onChange={handleSelectChange} options={enums.application_times || productEnums.application_times} placeholder="Выберите время" />
+                    <Select label="Область применения" name="area" value={formData.area} onChange={handleSelectChange} options={enums.areas || productEnums.areas} placeholder="Выберите область" />
                     <div className="form-group"><label>Активный компонент</label><input name="active_ingredient" value={formData.active_ingredient} onChange={handleInputChange} className="input" placeholder="Например: гиалуроновая кислота" /></div>
-                    <Select label="Объём" name="volume" value={formData.volume} onChange={handleSelectChange} options={enums.volumes} placeholder="Выберите объём" />
+                    <Select label="Объём" name="volume" value={formData.volume} onChange={handleSelectChange} options={enums.volumes} placeholder="Выберите объём" searchable />
                   </div>
                 </div>
 
@@ -504,7 +581,7 @@ export default function Products() {
                     <div className="form-section-icon" style={{ background: 'rgba(236, 72, 153, 0.1)', color: '#EC4899' }}><Palette size={16} /></div>
                     <span>Бренд</span>
                   </div>
-                  <Select label="Страна бренда" name="country" value={formData.country} onChange={handleSelectChange} options={enums.countries || []} placeholder="Выберите страну" />
+                  <Select label="Страна бренда" name="country" value={formData.country} onChange={handleSelectChange} options={enums.countries || []} placeholder="Выберите страну" searchable />
                 </div>
 
                 {/* Секция 7: Дополнительно */}
@@ -514,7 +591,7 @@ export default function Products() {
                     <span>Дополнительная информация</span>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--spacing-md)' }}>
-                    <Select label="Страна происхождения" name="country_origin" value={formData.country_origin || ''} onChange={handleSelectChange} options={enums.countries || []} placeholder="Выберите страну" />
+                    <Select label="Страна происхождения" name="country_origin" value={formData.country_origin || ''} onChange={handleSelectChange} options={enums.countries || []} placeholder="Выберите страну" searchable />
                     <div className="form-group"><label>Производитель</label><input name="manufacturer" value={formData.manufacturer} onChange={handleInputChange} className="input" /></div>
                   </div>
                 </div>
@@ -526,32 +603,99 @@ export default function Products() {
                       <div className="form-section-icon" style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#F59E0B' }}><Image size={16} /></div>
                       <span>Медиа</span>
                     </div>
-                    <div className="form-group">
-                      <label>Фотографии</label>
-                      <div className="file-upload-area">
-                        {formData.photos?.length > 0 && (
-                          <div className="photo-gallery">
-                            {formData.photos.map((photo, idx) => (
-                              <div key={photo.id || idx} className="photo-item">
-                                <img src={photo.data ? `data:${photo.content_type};base64,${photo.data}` : `/api/products/${editingProduct.id}/photos/${photo.id}`} alt="" />
-                                <button type="button" className="btn btn-ghost btn-sm" onClick={() => handlePhotoDelete(photo.id)}><X size={14} /></button>
+                      <div className="form-group">
+                        <label>Фотографии</label>
+                        <div className="media-upload-section">
+                          {formData.photos?.length > 0 && (
+                            <div className="photo-grid">
+                              {formData.photos.map((photo, idx) => (
+                                <div 
+                                  key={photo.id || idx} 
+                                  className={`photo-card ${draggedPhotoIndex === idx ? 'dragging' : ''}`}
+                                  draggable
+                                  onDragStart={() => handlePhotoDragStart(idx)}
+                                  onDragOver={handlePhotoDragOver}
+                                  onDrop={() => handlePhotoDrop(idx)}
+                                  onClick={() => setMediaModal({ type: 'image', src: productsApi.getPhotoUrl(editingProduct.id, photo.id) })}
+                                >
+                                  <div className="photo-preview">
+                                    {photo.data && photo.data.length > 0 ? (
+                                      <img 
+                                        src={`data:${photo.content_type};base64,${photo.data}`}
+                                        alt="" 
+                                      />
+                                    ) : (
+                                      <img 
+                                        src={productsApi.getPhotoUrl(editingProduct.id, photo.id)}
+                                        alt="" 
+                                        className="photo-from-endpoint"
+                                      />
+                                    )}
+                                  </div>
+                                  <button type="button" className="photo-delete-btn" onClick={(e) => { e.stopPropagation(); handlePhotoDelete(photo.id) }}>
+                                  <X size={14} />
+                                </button>
                               </div>
                             ))}
                           </div>
                         )}
-                        <input type="file" accept="image/*" onChange={e => e.target.files[0] && handlePhotoUpload(e.target.files[0])} className="input" />
+                        <label className={`upload-zone ${uploadingPhoto ? 'uploading' : ''}`}>
+                          {uploadingPhoto ? (
+                            <div className="upload-content">
+                              <span className="spinner" style={{ width: 24, height: 24 }}></span>
+                              <span className="upload-text">Загрузка...</span>
+                            </div>
+                          ) : (
+                            <>
+                              <input 
+                                type="file" 
+                                accept="image/*" 
+                                onChange={e => e.target.files[0] && handlePhotoUpload(e.target.files[0])} 
+                                className="hidden-input"
+                              />
+                              <div className="upload-content">
+                                <Image size={24} className="upload-icon" />
+                                <span className="upload-text">Добавить фото</span>
+                                <span className="upload-hint">PNG, JPG, WebP до 10MB</span>
+                              </div>
+                            </>
+                          )}
+                        </label>
                       </div>
                     </div>
                     <div className="form-group" style={{ marginTop: 'var(--spacing-md)' }}>
                       <label>Видео</label>
-                      <div className="file-upload-area">
+                      <div className="media-upload-section">
                         {formData.has_video && videoUrl ? (
-                          <div className="video-preview">
-                            <video src={videoUrl} controls />
-                            <button type="button" className="btn btn-ghost btn-sm" onClick={handleVideoDelete}><X size={14} /></button>
+                          <div className="video-card" onClick={() => setMediaModal({ type: 'video', src: videoUrl })}>
+                            <video src={videoUrl} controls className="video-preview" onClick={(e) => e.stopPropagation()} />
+                            <button type="button" className="video-delete-btn" onClick={(e) => { e.stopPropagation(); handleVideoDelete() }}>
+                              <X size={16} /> Удалить
+                            </button>
                           </div>
                         ) : (
-                          <input type="file" accept="video/mp4" onChange={e => e.target.files[0] && handleVideoUpload(e.target.files[0])} className="input" />
+                          <label className={`upload-zone ${uploadingVideo ? 'uploading' : ''}`}>
+                            {uploadingVideo ? (
+                              <div className="upload-content">
+                                <span className="spinner" style={{ width: 24, height: 24 }}></span>
+                                <span className="upload-text">Загрузка...</span>
+                              </div>
+                            ) : (
+                              <>
+                                <input 
+                                  type="file" 
+                                  accept="video/mp4,video/webm" 
+                                  onChange={e => e.target.files[0] && handleVideoUpload(e.target.files[0])} 
+                                  className="hidden-input"
+                                />
+                                <div className="upload-content">
+                                  <Image size={24} className="upload-icon" />
+                                  <span className="upload-text">Добавить видео</span>
+                                  <span className="upload-hint">MP4, WebM до 50MB</span>
+                                </div>
+                              </>
+                            )}
+                          </label>
                         )}
                       </div>
                     </div>
@@ -609,6 +753,21 @@ export default function Products() {
               <button className="btn btn-ghost" onClick={() => setDeleteModal(null)}>Отмена</button>
               <button className="btn btn-danger" onClick={confirmDelete}>Удалить</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {mediaModal && (
+        <div className="modal-overlay" onClick={() => setMediaModal(null)}>
+          <div className="modal media-modal" onClick={e => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={() => setMediaModal(null)}>
+              <X size={24} />
+            </button>
+            {mediaModal.type === 'image' ? (
+              <img src={mediaModal.src} alt="Preview" className="media-modal-image" />
+            ) : (
+              <video src={mediaModal.src} controls className="media-modal-video" />
+            )}
           </div>
         </div>
       )}

@@ -1,157 +1,193 @@
 import os
-import asyncpg
+import pg8000
+from queue import Queue, Empty
+import threading
 
-_pool: asyncpg.Pool = None
+class SimpleConnectionPool:
+    def __init__(self, min_conn, max_conn, host, port, database, user, password):
+        self.min_conn = min_conn
+        self.max_conn = max_conn
+        self.host = host
+        self.port = port
+        self.database = database
+        self.user = user
+        self.password = password
+        self.pool = Queue(max_conn)
+        self.lock = threading.Lock()
+        
+        for _ in range(min_conn):
+            conn = self._create_connection()
+            self.pool.put(conn)
+    
+    def _create_connection(self):
+        return pg8000.connect(
+            host=self.host,
+            port=self.port,
+            database=self.database,
+            user=self.user,
+            password=self.password
+        )
+    
+    def getconn(self):
+        try:
+            conn = self.pool.get(block=False)
+            try:
+                conn.run("SELECT 1")
+                return conn
+            except:
+                conn = self._create_connection()
+                return conn
+        except Empty:
+            with self.lock:
+                if self.pool.qsize() < self.max_conn:
+                    return self._create_connection()
+            return self.pool.get(block=True, timeout=10)
+    
+    def putconn(self, conn):
+        try:
+            self.pool.put_nowait(conn)
+        except:
+            conn.close()
+    
+    def close(self):
+        while not self.pool.empty():
+            try:
+                conn = self.pool.get_nowait()
+                conn.close()
+            except Empty:
+                break
+
+
+_connection_pool = None
 
 
 def get_pool():
-    return _pool
+    return _connection_pool
 
 
-async def get_db_pool():
-    return _pool
+def get_db_pool():
+    return _connection_pool
 
 
-async def init_db():
-    global _pool
-    _pool = await asyncpg.create_pool(
-        host=os.getenv("DB_HOST", "localhost"),
-        port=int(os.getenv("DB_PORT", "5432")),
-        database=os.getenv("DB_NAME", "aura"),
-        user=os.getenv("DB_USER", "aura_user"),
-        password=os.getenv("DB_PASSWORD", "aura_password"),
-        command_timeout=60
-    )
-
-    async with _pool.acquire() as conn:
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS products (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(255) NOT NULL,
-                what_is_it TEXT,
-                brand VARCHAR(255),
-                product_type VARCHAR(50),
-                for_whom VARCHAR(50),
-                purpose VARCHAR(255),
-                skin_type VARCHAR(50),
-                application_time VARCHAR(50),
-                area VARCHAR(50),
-                active_ingredient TEXT,
-                volume VARCHAR(50),
-                segment VARCHAR(50),
-                composition TEXT,
-                application_info TEXT,
-                country VARCHAR(100),
-                manufacturer VARCHAR(255),
-                description TEXT,
-                photos JSONB,
-                has_video BOOLEAN DEFAULT FALSE,
-                video BYTEA,
-                created_at TIMESTAMP DEFAULT NOW()
-            );
-
-            CREATE TABLE IF NOT EXISTS procedures (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(255) NOT NULL,
-                category VARCHAR(255),
-                duration INTEGER,
-                price DECIMAL(10,2),
-                description TEXT,
-                contraindications TEXT,
-                created_at TIMESTAMP DEFAULT NOW()
-            );
-
-            CREATE TABLE IF NOT EXISTS content (
-                id SERIAL PRIMARY KEY,
-                title VARCHAR(255) NOT NULL,
-                type VARCHAR(50),
-                body TEXT,
-                image_url VARCHAR(500),
-                published BOOLEAN DEFAULT false,
-                created_at TIMESTAMP DEFAULT NOW()
-            );
-
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(255) NOT NULL,
-                email VARCHAR(255) UNIQUE NOT NULL,
-                role VARCHAR(50) DEFAULT 'user',
-                avatar VARCHAR(500),
-                created_at TIMESTAMP DEFAULT NOW()
-            );
-
-            CREATE TABLE IF NOT EXISTS brands (
-                id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
-            );
-
-            CREATE TABLE IF NOT EXISTS categories (
-                id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
-            );
-
-            CREATE TABLE IF NOT EXISTS segments (
-                id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
-            );
-
-            CREATE TABLE IF NOT EXISTS volumes (
-                id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
-            );
-
-            CREATE TABLE IF NOT EXISTS procedure_categories (
-                id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
-            );
-
-            CREATE TABLE IF NOT EXISTS content_categories (
-                id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
-            );
-
-            CREATE TABLE IF NOT EXISTS user_roles (
-                id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
-            );
-
-            CREATE TABLE IF NOT EXISTS skin_types (
-                id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
-            );
-        """)
-
-        await _seed_dictionary(conn, "brands", [
-            'Aura', 'La Roche-Posay', 'Vichy', 'Bioderma', 'CeraVe', 
-            'The Ordinary', "Paula's Choice", 'Cosrx', 'Eucerin', 'Nivea'
-        ])
-        await _seed_dictionary(conn, "categories", [
-            'Очищение', 'Увлажнение', 'Сыворотки', 'SPF', 'Уход', 'Маска', 'Тоник', 'Крем', 'Масло'
-        ])
-        await _seed_dictionary(conn, "segments", [
-            'Бюджетная', 'Люкс', 'Профессиональная', 'Космецевтика'
-        ])
-        await _seed_dictionary(conn, "volumes", [
-            '15мл', '30мл', '50мл', '75мл', '100мл', '150мл', '200мл', '250мл', '500мл', '1л'
-        ])
-        await _seed_dictionary(conn, "procedure_categories", [
-            'Чистка', 'Увлажнение', 'Инъекции', 'Эпиляция', 'Массаж', 'Пилинг', 'Уход'
-        ])
-        await _seed_dictionary(conn, "content_categories", [
-            'Уход за кожей', 'Ингредиенты', 'Защита', 'Процедуры', 'Питание', 'Образ жизни'
-        ])
-        await _seed_dictionary(conn, "user_roles", [
-            'Пользователь', 'Косметолог', 'Менеджер', 'Администратор'
-        ])
-        await _seed_dictionary(conn, "skin_types", [
-            'Нормальная', 'Сухая', 'Жирная', 'Комбинированная', 'Чувствительная'
-        ])
-
-        print("Database initialized successfully")
+def init_db():
+    global _connection_pool
+    
+    db_host = os.getenv("DB_HOST", "localhost")
+    db_port = os.getenv("DB_PORT", "5432")
+    db_name = os.getenv("DB_NAME", "beauty_db")
+    db_user = os.getenv("DB_USER", "postgres")
+    db_password = os.getenv("DB_PASSWORD", "postgres")
+    
+    for attempt in range(5):
+        try:
+            _connection_pool = SimpleConnectionPool(
+                min_conn=1,
+                max_conn=3,
+                host=db_host,
+                port=int(db_port),
+                database=db_name,
+                user=db_user,
+                password=db_password
+            )
+            break
+        except Exception as e:
+            print(f"Attempt {attempt+1} failed: {e}")
+            if attempt < 4:
+                import time
+                time.sleep(3)
+            else:
+                raise e
+    
+    conn = _connection_pool.getconn()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS products (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            what_is_it TEXT,
+            brand VARCHAR(255),
+            product_type VARCHAR(50),
+            for_whom VARCHAR(50),
+            purpose VARCHAR(255),
+            skin_type VARCHAR(50),
+            application_time VARCHAR(50),
+            area VARCHAR(50),
+            active_ingredient TEXT,
+            volume VARCHAR(50),
+            segment VARCHAR(50),
+            composition TEXT,
+            application_info TEXT,
+            country VARCHAR(100),
+            country_origin VARCHAR(100),
+            manufacturer VARCHAR(255),
+            description TEXT,
+            photos JSONB,
+            has_video BOOLEAN DEFAULT FALSE,
+            video BYTEA,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+    """)
+    
+    try:
+        cursor.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS country_origin VARCHAR(100)")
+    except:
+        pass
+    
+    _seed_dictionary(cursor, "brands", [
+        'Aura', 'La Roche-Posay', 'Vichy', 'Bioderma', 'CeraVe', 
+        'The Ordinary', "Paula's Choice", 'Cosrx', 'Eucerin', 'Nivea'
+    ])
+    _seed_dictionary(cursor, "categories", [
+        'Очищение', 'Увлажнение', 'Сыворотки', 'SPF', 'Уход', 'Маска', 'Тоник', 'Крем', 'Масло'
+    ])
+    _seed_dictionary(cursor, "segments", [
+        'Бюджетная', 'Люкс', 'Профессиональная', 'Космецевтика'
+    ])
+    _seed_dictionary(cursor, "volumes", [
+        '15мл', '30мл', '50мл', '75мл', '100мл', '150мл', '200мл', '250мл', '500мл', '1л'
+    ])
+    _seed_dictionary(cursor, "procedure_categories", [
+        'Чистка', 'Увлажнение', 'Инъекции', 'Эпиляция', 'Массаж', 'Пилинг', 'Уход'
+    ])
+    _seed_dictionary(cursor, "content_categories", [
+        'Уход за кожей', 'Ингредиенты', 'Защита', 'Процедуры', 'Питание', 'Образ жизни'
+    ])
+    _seed_dictionary(cursor, "user_roles", [
+        'Пользователь', 'Косметолог', 'Менеджер', 'Администратор'
+    ])
+    _seed_dictionary(cursor, "skin_types", [
+        'Нормальная', 'Сухая', 'Жирная', 'Комбинированная', 'Чувствительная'
+    ])
+    _seed_dictionary(cursor, "product_types", [
+        'Крем', 'Сыворотка', 'Лосьон', 'Тоник', 'Маска', 'Масло', 'Спрей', 'Гель', 'Эмульсия', 'Бальзам'
+    ])
+    _seed_dictionary(cursor, "for_whom", [
+        'Универсальный', 'Мужчинам', 'Женщинам', 'Детям', 'Беременным'
+    ])
+    _seed_dictionary(cursor, "purposes", [
+        'Увлажнение', 'Питание', 'Очищение', 'Омоложение', 'Отбеливание', 'Защита от солнца', 'Против акне', 'Восстановление'
+    ])
+    _seed_dictionary(cursor, "application_times", [
+        'Утро', 'Вечер', 'Утро и вечер', 'По необходимости'
+    ])
+    _seed_dictionary(cursor, "areas", [
+        'Лицо', 'Тело', 'Волосы', 'Губы', 'Глаза', 'Шея', 'Руки', 'Ноги'
+    ])
+    _seed_dictionary(cursor, "countries", [
+        'Франция', 'Корея', 'Япония', 'США', 'Германия', 'Швейцария', 'Россия', 'Италия', 'Испания', 'Израиль'
+    ])
+    
+    conn.commit()
+    cursor.close()
+    _connection_pool.putconn(conn)
+    
+    print("Database initialized successfully")
 
 
-async def _seed_dictionary(conn, table: str, values: list):
-    count = await conn.fetchval(f"SELECT COUNT(*) FROM {table}")
+def _seed_dictionary(cursor, table: str, values: list):
+    cursor.execute(f"SELECT COUNT(*) FROM {table}")
+    count = cursor.fetchone()[0]
     if count == 0:
         for value in values:
-            await conn.execute(f"INSERT INTO {table} (value) VALUES ($1)", value)
+            cursor.execute(f"INSERT INTO {table} (value) VALUES (%s)", (value,))
