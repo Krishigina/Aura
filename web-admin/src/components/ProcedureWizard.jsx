@@ -48,9 +48,26 @@ export default function ProcedureWizard({ initialData, dictionaries, onSave, onC
   useEffect(() => {
     if (initialData) {
       const merged = { ...initialFormData }
+      const arrayFields = ['zones', 'effects', 'problems']
+      
       for (const key in initialData) {
         if (initialData[key] !== null && initialData[key] !== undefined) {
-          merged[key] = initialData[key]
+          if (arrayFields.includes(key)) {
+            // Parse JSON string to array if needed
+            if (typeof initialData[key] === 'string') {
+              try {
+                merged[key] = JSON.parse(initialData[key])
+              } catch {
+                merged[key] = []
+              }
+            } else if (Array.isArray(initialData[key])) {
+              merged[key] = initialData[key]
+            } else {
+              merged[key] = []
+            }
+          } else {
+            merged[key] = initialData[key]
+          }
         }
       }
       setFormData(merged)
