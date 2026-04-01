@@ -385,7 +385,7 @@ class ProcedureCreate(BaseModel):
     name: str
     direction: Optional[str] = None
     method_type: Optional[str] = None
-    duration: Optional[str] = None
+    duration: Optional[Union[str, int]] = None
     equipment: Optional[str] = None
     zones: Optional[Union[List[str], str]] = None
     effects: Optional[Union[List[str], str]] = None
@@ -672,22 +672,32 @@ async def create_procedure(procedure: ProcedureCreate):
             return json.dumps(field, ensure_ascii=False)
         return field
     
+    def parse_duration(duration):
+        if duration is None:
+            return None
+        if isinstance(duration, int):
+            return duration
+        try:
+            return int(duration)
+        except (ValueError, TypeError):
+            return None
+    
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """INSERT INTO procedures (name, direction, method_type, duration, equipment, 
                zones, effects, problems, description, procedure_about, advantages, 
                indications, principle, how_it_goes, for_whom, problems_solved, 
-               contraindications, preparation, recommended_course, rehabilitation, 
-               post_care, side_effects) 
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22) 
+               contraindications_full, preparation, recommended_course, rehabilitation, 
+               post_care, side_effects, photos) 
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23) 
                RETURNING *""",
-            procedure.name, procedure.direction, procedure.method_type, procedure.duration,
+            procedure.name, procedure.direction, procedure.method_type, parse_duration(procedure.duration),
             procedure.equipment, serialize_field(procedure.zones), serialize_field(procedure.effects),
             serialize_field(procedure.problems), procedure.description, procedure.procedure_about,
             procedure.advantages, procedure.indications, procedure.principle, procedure.how_it_goes,
             procedure.for_whom, procedure.problems_solved, procedure.contraindications,
             procedure.preparation, procedure.recommended_course, procedure.rehabilitation,
-            procedure.post_care, procedure.side_effects
+            procedure.post_care, procedure.side_effects, None
         )
         return dict(row)
 
@@ -701,6 +711,16 @@ async def update_procedure(procedure_id: int, procedure: ProcedureCreate):
             return json.dumps(field, ensure_ascii=False)
         return field
     
+    def parse_duration(duration):
+        if duration is None:
+            return None
+        if isinstance(duration, int):
+            return duration
+        try:
+            return int(duration)
+        except (ValueError, TypeError):
+            return None
+    
     async with pool.acquire() as conn:
         existing = await conn.fetchrow("SELECT * FROM procedures WHERE id=$1", procedure_id)
         if not existing:
@@ -711,13 +731,13 @@ async def update_procedure(procedure_id: int, procedure: ProcedureCreate):
                name=$1, direction=$2, method_type=$3, duration=$4, equipment=$5,
                zones=$6, effects=$7, problems=$8, description=$9, procedure_about=$10,
                advantages=$11, indications=$12, principle=$13, how_it_goes=$14,
-               for_whom=$15, problems_solved=$16, contraindications=$17, preparation=$18,
+               for_whom=$15, problems_solved=$16, contraindications_full=$17, preparation=$18,
                recommended_course=$19, rehabilitation=$20, post_care=$21, side_effects=$22
                WHERE id=$23 RETURNING *""",
             procedure.name,
             procedure.direction or existing['direction'],
             procedure.method_type or existing['method_type'],
-            procedure.duration or existing['duration'],
+            parse_duration(procedure.duration) if procedure.duration is not None else existing['duration'],
             procedure.equipment or existing['equipment'],
             serialize_field(procedure.zones) if procedure.zones is not None else existing['zones'],
             serialize_field(procedure.effects) if procedure.effects is not None else existing['effects'],
@@ -730,7 +750,7 @@ async def update_procedure(procedure_id: int, procedure: ProcedureCreate):
             procedure.how_it_goes or existing['how_it_goes'],
             procedure.for_whom or existing['for_whom'],
             procedure.problems_solved or existing['problems_solved'],
-            procedure.contraindications or existing['contraindications'],
+            procedure.contraindications or existing['contraindications_full'],
             procedure.preparation or existing['preparation'],
             procedure.recommended_course or existing['recommended_course'],
             procedure.rehabilitation or existing['rehabilitation'],
