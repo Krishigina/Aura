@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react'
-import { Bold, Italic, List, ListOrdered, Heading2, Table, Image, Link, Undo, Redo } from 'lucide-react'
+import { Bold, Italic, List, ListOrdered, Heading2, Table, Image, Link, Undo, Redo, X } from 'lucide-react'
 import './AdvancedRichTextEditor.css'
 
 export default function AdvancedRichTextEditor({ value, onChange, placeholder, rows = 8, contentId }) {
@@ -12,6 +12,7 @@ export default function AdvancedRichTextEditor({ value, onChange, placeholder, r
   useEffect(() => {
     if (editorRef.current && editorRef.current.innerHTML !== value) {
       editorRef.current.innerHTML = value || ''
+      attachImageDeleteHandlers()
     }
   }, [value])
 
@@ -21,9 +22,38 @@ export default function AdvancedRichTextEditor({ value, onChange, placeholder, r
     }
   }
 
+  const attachImageDeleteHandlers = () => {
+    if (!editorRef.current) return
+    const images = editorRef.current.querySelectorAll('img')
+    images.forEach(img => {
+      if (!img.parentElement.classList.contains('image-container')) {
+        const container = document.createElement('div')
+        container.className = 'image-container'
+        container.style.position = 'relative'
+        container.style.display = 'inline-block'
+        
+        const deleteBtn = document.createElement('button')
+        deleteBtn.type = 'button'
+        deleteBtn.className = 'image-delete-btn'
+        deleteBtn.innerHTML = '×'
+        deleteBtn.onclick = (e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          container.remove()
+          handleInput()
+        }
+        
+        img.parentNode.insertBefore(container, img)
+        container.appendChild(img)
+        container.appendChild(deleteBtn)
+      }
+    })
+  }
+
   const execCommand = (command, value = null) => {
     document.execCommand(command, false, value)
     editorRef.current?.focus()
+    setTimeout(attachImageDeleteHandlers, 100)
   }
 
   const insertTable = () => {
@@ -54,7 +84,7 @@ export default function AdvancedRichTextEditor({ value, onChange, placeholder, r
     const reader = new FileReader()
     reader.onload = () => {
       const base64 = reader.result
-      const imgHTML = `<img src="${base64}" style="max-width:100%;height:auto;margin:16px 0;border-radius:8px;" />`
+      const imgHTML = `<div class="image-container" style="position:relative;display:inline-block;"><img src="${base64}" style="max-width:100%;height:auto;margin:16px 0;border-radius:8px;" /><button type="button" class="image-delete-btn" onclick="event.preventDefault();event.stopPropagation();this.parentElement.remove();">×</button></div><p></p>`
       editorRef.current?.focus()
       document.execCommand('insertHTML', false, imgHTML)
       handleInput()

@@ -121,6 +121,50 @@
   margin: 12px 0;
 }
 
+.rich-text-content .image-container {
+  position: relative;
+  display: inline-block;
+  margin: 12px 0;
+}
+
+.rich-text-content .image-container img {
+  margin: 0;
+  display: block;
+}
+
+.rich-text-content .image-delete-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(4px);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s ease;
+  font-size: 18px;
+  font-weight: bold;
+  line-height: 1;
+  padding: 0;
+  margin: 0;
+}
+
+.rich-text-content .image-container:hover .image-delete-btn {
+  opacity: 1;
+}
+
+.rich-text-content .image-delete-btn:hover {
+  background: var(--color-red-500);
+  transform: scale(1.1);
+}
+
 .rich-text-content a {
   color: var(--color-mint-green);
   text-decoration: underline;
