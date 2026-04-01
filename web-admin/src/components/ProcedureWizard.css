@@ -1,0 +1,345 @@
+.procedure-wizard {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.wizard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--color-gray-200);
+  background: var(--color-surface-elevated);
+}
+
+.wizard-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-on-surface);
+  margin: 0;
+}
+
+.wizard-progress {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--color-surface-elevated);
+  border-bottom: 1px solid var(--color-gray-200);
+  position: relative;
+}
+
+.wizard-progress::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 60px;
+  right: 60px;
+  height: 2px;
+  background: var(--color-gray-200);
+  transform: translateY(-50%);
+  z-index: 0;
+}
+
+.progress-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-xs);
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+  flex: 1;
+}
+
+.step-number {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--color-gray-100);
+  color: var(--color-gray-500);
+  border: 2px solid var(--color-gray-200);
+  transition: all var(--transition-fast);
+}
+
+.progress-step.active .step-number {
+  background: var(--color-mint-green);
+  color: var(--color-on-mint-green);
+  border-color: var(--color-mint-green);
+  box-shadow: 0 0 0 4px rgba(167, 243, 208, 0.3);
+}
+
+.progress-step.completed .step-number {
+  background: var(--color-mint-green-dark);
+  color: white;
+  border-color: var(--color-mint-green-dark);
+}
+
+.step-title {
+  font-size: 12px;
+  color: var(--color-gray-500);
+  text-align: center;
+  max-width: 80px;
+  line-height: 1.3;
+}
+
+.progress-step.active .step-title {
+  color: var(--color-mint-green-dark);
+  font-weight: 500;
+}
+
+.progress-step.completed .step-title {
+  color: var(--color-gray-700);
+}
+
+.wizard-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-lg);
+}
+
+.step-indicator {
+  font-size: 14px;
+  color: var(--color-gray-600);
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--color-gray-100);
+}
+
+.step-form {
+  animation: fadeIn var(--transition-normal) ease-out;
+}
+
+.wizard-section {
+  background: var(--color-surface);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-md);
+}
+
+.form-grid .full-width {
+  grid-column: 1 / -1;
+}
+
+.wizard-section .form-group label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-gray-700);
+  margin-bottom: var(--spacing-xs);
+}
+
+.wizard-section .input {
+  width: 100%;
+  padding: 10px 12px;
+  font-family: var(--font-family);
+  font-size: 14px;
+  color: var(--color-on-surface);
+  background: var(--color-surface);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.wizard-section .input:focus {
+  border-color: var(--color-mint-green);
+  box-shadow: 0 0 0 3px rgba(167, 243, 208, 0.2);
+}
+
+.wizard-section .input::placeholder {
+  color: var(--color-gray-400);
+}
+
+.wizard-section .textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.wizard-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-top: 1px solid var(--color-gray-200);
+  background: var(--color-surface-elevated);
+}
+
+.wizard-actions-right {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.wizard-actions .btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.wizard-actions .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.photo-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
+}
+
+.photo-card {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  cursor: grab;
+  border: 2px solid transparent;
+  transition: all var(--transition-fast);
+}
+
+.photo-card:hover {
+  border-color: var(--color-mint-green);
+}
+
+.photo-card.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+}
+
+.photo-preview {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-gray-100);
+}
+
+.photo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-delete-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.photo-card:hover .photo-delete-btn {
+  opacity: 1;
+}
+
+.photo-delete-btn:hover {
+  background: rgba(220, 38, 38, 0.9);
+}
+
+.upload-zone {
+  width: 100px;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--color-gray-300);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  background: var(--color-gray-50);
+}
+
+.upload-zone:hover {
+  border-color: var(--color-mint-green);
+  background: rgba(167, 243, 208, 0.1);
+}
+
+.upload-zone .upload-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-gray-500);
+}
+
+.upload-zone .upload-text {
+  font-size: 11px;
+  text-align: center;
+}
+
+.upload-zone .upload-icon {
+  color: var(--color-gray-400);
+}
+
+.upload-zone.uploading {
+  pointer-events: none;
+}
+
+.hidden-input {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .wizard-progress {
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    justify-content: center;
+  }
+
+  .wizard-progress::before {
+    display: none;
+  }
+
+  .progress-step {
+    flex: 0 0 auto;
+  }
+
+  .step-title {
+    display: none;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wizard-actions {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  .wizard-actions-right {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .wizard-actions-right .btn {
+    flex: 1;
+  }
+}
