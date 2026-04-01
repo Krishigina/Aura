@@ -255,7 +255,7 @@ export default function Users() {
                 <label>Никнейм</label>
                 <input className="input" name="nickname" value={form.nickname} onChange={handleInputChange} placeholder="@username" />
               </div>
-              <Select label="Роль" name="role" value={form.role} onChange={handleSelectChange} options={userRoles.map(r => r.label)} />
+              <Select label="Роль" name="role" value={form.role} onChange={handleSelectChange} options={sampleUsers.map(r => r.label)} />
               <div className="form-group">
                 <label>Email *</label>
                 <input className="input" name="email" type="email" value={form.email} onChange={handleInputChange} required />
