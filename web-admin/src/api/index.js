@@ -75,6 +75,24 @@ export const productsApi = {
   getVideoUrl: (productId) => `${API_URL}/products/${productId}/video`,
   getPhotoUrl: (productId, photoId) => `${API_URL}/products/${productId}/photos/${photoId}`,
   parseUrl: (url) => request('/products/parse', { method: 'POST', body: JSON.stringify({ url }) }),
+  
+  export: () => {
+    window.open(`${API_URL}/products/export`, '_blank')
+  },
+  
+  import: async (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await fetch(`${API_URL}/products/import`, {
+      method: 'POST',
+      body: formData
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Import failed' }))
+      throw new Error(error.detail || 'Import failed')
+    }
+    return response.json()
+  },
 }
 
 export const dictionariesApi = {
@@ -82,6 +100,7 @@ export const dictionariesApi = {
   create: (key, value) => request(`/dictionaries/${key}`, { method: 'POST', body: JSON.stringify({ value }) }),
   update: (key, oldValue, newValue) => request(`/dictionaries/${key}`, { method: 'PUT', body: JSON.stringify({ oldValue, newValue }) }),
   delete: (key, value) => request(`/dictionaries/${key}/${encodeURIComponent(value)}`, { method: 'DELETE' }),
+  updateBrand: (brand) => request('/dictionaries/brands', { method: 'PUT', body: JSON.stringify(brand) }),
 }
 
 export const proceduresApi = {

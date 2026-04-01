@@ -74,7 +74,7 @@ class ProductBase(BaseModel):
     product_type: Optional[str] = None
     for_whom: Optional[str] = None
     purpose: Optional[Union[str, List[str]]] = None
-    skin_type: Optional[str] = None
+    skin_type: Optional[Union[str, List[str]]] = None
     application_time: Optional[str] = None
     area: Optional[str] = None
     active_ingredient: Optional[str] = None

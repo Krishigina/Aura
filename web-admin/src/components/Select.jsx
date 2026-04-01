@@ -10,9 +10,10 @@ export default function Select({ label, name, value, onChange, options, required
 
   const values = multiple ? (value || []) : [value].filter(Boolean)
 
-  const filteredOptions = options.filter(opt => 
-    opt.toLowerCase().includes(search.toLowerCase())
-  )
+  const filteredOptions = options.filter(opt => {
+    const optValue = typeof opt === 'object' ? opt.value : opt
+    return optValue.toLowerCase().includes(search.toLowerCase())
+  })
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -56,7 +57,8 @@ export default function Select({ label, name, value, onChange, options, required
       if (values.length === 1) return values[0]
       return `${values.length} выбрано`
     }
-    return value || placeholder || 'Выберите...'
+    const displayVal = typeof value === 'object' ? value?.value : value
+    return displayVal || placeholder || 'Выберите...'
   }
 
   return (
@@ -103,18 +105,21 @@ export default function Select({ label, name, value, onChange, options, required
               {filteredOptions.length === 0 ? (
                 <div className="select-no-results">Ничего не найдено</div>
               ) : (
-                filteredOptions.map((option, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    className={`select-option ${values.includes(option) ? 'selected' : ''}`}
-                    onClick={() => handleSelect(option)}
-                  >
-                    {multiple && <span className={`checkbox ${values.includes(option) ? 'checked' : ''}`}></span>}
-                    <span>{option}</span>
-                    {!multiple && values.includes(option) && <Check size={16} className="option-check" />}
-                  </button>
-                ))
+                filteredOptions.map((option, idx) => {
+                    const optValue = typeof option === 'object' ? option.value : option
+                    return (
+                    <button
+                      key={idx}
+                      type="button"
+                      className={`select-option ${values.includes(optValue) ? 'selected' : ''}`}
+                      onClick={() => handleSelect(optValue)}
+                    >
+                      {multiple && <span className={`checkbox ${values.includes(optValue) ? 'checked' : ''}`}></span>}
+                      <span>{optValue}</span>
+                      {!multiple && values.includes(optValue) && <Check size={16} className="option-check" />}
+                    </button>
+                    )
+                  })
               )}
             </div>
           </div>

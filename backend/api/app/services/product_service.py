@@ -60,6 +60,8 @@ class ProductService:
                 product = dict(zip(columns, row))
                 if product.get('purpose'):
                     product['purpose'] = deserialize_purpose(product['purpose'])
+                if product.get('skin_type'):
+                    product['skin_type'] = deserialize_purpose(product['skin_type'])
                 if product.get('photos') and isinstance(product['photos'], str):
                     product['photos'] = json.loads(product['photos'])
                 results.append(product)
@@ -81,7 +83,7 @@ class ProductService:
                     country, country_origin, manufacturer, description, photos, has_video
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *""",
                 (data.name, data.what_is_it, data.brand, data.product_type, data.for_whom,
-                 serialize_purpose(data.purpose), data.skin_type, data.application_time, data.area,
+                 serialize_purpose(data.purpose), serialize_purpose(data.skin_type), data.application_time, data.area,
                  data.active_ingredient, data.volume, data.segment, data.composition,
                  data.application_info, data.country, getattr(data, 'country_origin', None), data.manufacturer,
                  data.description, json.dumps(data.photos) if data.photos else None, data.has_video)
@@ -99,6 +101,50 @@ class ProductService:
         conn = pool.getconn()
         try:
             cursor = conn.cursor()
+            
+            # Get existing product to merge with new data
+            cursor.execute("SELECT * FROM products WHERE id=%s", (product_id,))
+            existing_row = cursor.fetchone()
+            if not existing_row:
+                return None
+            
+            columns = [desc[0] for desc in cursor.description]
+            existing = dict(zip(columns, existing_row))
+            
+            # Merge: use new value if provided, otherwise keep existing
+            def merge(new_val, existing_val):
+                if new_val is None:
+                    return existing_val
+                if isinstance(new_val, list) and len(new_val) == 0:
+                    return existing_val
+                if isinstance(new_val, str) and new_val.strip() == '':
+                    return existing_val
+                if isinstance(new_val, bool):
+                    return new_val
+                return new_val
+            
+            name = merge(data.name, existing.get('name'))
+            what_is_it = merge(data.what_is_it, existing.get('what_is_it'))
+            brand = merge(data.brand, existing.get('brand'))
+            product_type = merge(data.product_type, existing.get('product_type'))
+            for_whom = merge(data.for_whom, existing.get('for_whom'))
+            purpose = merge(serialize_purpose(data.purpose), existing.get('purpose'))
+            skin_type = merge(serialize_purpose(data.skin_type), existing.get('skin_type'))
+            application_time = merge(data.application_time, existing.get('application_time'))
+            area = merge(data.area, existing.get('area'))
+            active_ingredient = merge(data.active_ingredient, existing.get('active_ingredient'))
+            volume = merge(data.volume, existing.get('volume'))
+            segment = merge(data.segment, existing.get('segment'))
+            composition = merge(data.composition, existing.get('composition'))
+            application_info = merge(data.application_info, existing.get('application_info'))
+            country = merge(data.country, existing.get('country'))
+            country_origin = merge(getattr(data, 'country_origin', None), existing.get('country_origin'))
+            manufacturer = merge(data.manufacturer, existing.get('manufacturer'))
+            description = merge(data.description, existing.get('description'))
+            photos = merge(json.dumps(data.photos) if data.photos else None, existing.get('photos'))
+            has_video = data.has_video if data.has_video is not None else existing.get('has_video')
+            video = merge(data.video, existing.get('video'))
+            
             cursor.execute(
                 """UPDATE products SET 
                     name=%s, what_is_it=%s, brand=%s, product_type=%s, for_whom=%s,
@@ -107,11 +153,11 @@ class ProductService:
                     application_info=%s, country=%s, country_origin=%s, manufacturer=%s,
                     description=%s, photos=%s, has_video=%s, video=%s
                 WHERE id=%s RETURNING *""",
-                (data.name, data.what_is_it, data.brand, data.product_type, data.for_whom,
-                 serialize_purpose(data.purpose), data.skin_type, data.application_time, data.area,
-                 data.active_ingredient, data.volume, data.segment, data.composition,
-                 data.application_info, data.country, getattr(data, 'country_origin', None), data.manufacturer,
-                 data.description, json.dumps(data.photos) if data.photos else None, data.has_video, data.video, product_id)
+                (name, what_is_it, brand, product_type, for_whom,
+                 purpose, skin_type, application_time, area,
+                 active_ingredient, volume, segment, composition,
+                 application_info, country, country_origin, manufacturer,
+                 description, photos, has_video, video, product_id)
             )
             row = cursor.fetchone()
             conn.commit()
@@ -135,6 +181,8 @@ class ProductService:
                 product = dict(zip(columns, row))
                 if product.get('purpose'):
                     product['purpose'] = deserialize_purpose(product['purpose'])
+                if product.get('skin_type'):
+                    product['skin_type'] = deserialize_purpose(product['skin_type'])
                 if product.get('photos') and isinstance(product['photos'], str):
                     product['photos'] = json.loads(product['photos'])
                 return product
@@ -446,6 +494,51 @@ class DictionaryService:
     @staticmethod
     def get_table(key: str) -> Optional[str]:
         return DICT_TABLE_MAP.get(key)
+
+    @staticmethod
+    def get_brands() -> List[dict]:
+        pool = get_pool()
+        conn = pool.getconn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, value, description, country, country_origin, manufacturer FROM brands ORDER BY id")
+            rows = cursor.fetchall()
+            return [{'id': row[0], 'value': row[1], 'description': row[2], 'country': row[3], 'country_origin': row[4], 'manufacturer': row[5]} for row in rows]
+        finally:
+            pool.putconn(conn)
+
+    @staticmethod
+    def create_brand(value: str, description: str = None, country: str = None, country_origin: str = None, manufacturer: str = None) -> dict:
+        pool = get_pool()
+        conn = pool.getconn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO brands (value, description, country, country_origin, manufacturer) VALUES (%s, %s, %s, %s, %s) RETURNING *", (value, description, country, country_origin, manufacturer))
+            row = cursor.fetchone()
+            conn.commit()
+            columns = [desc[0] for desc in cursor.description]
+            return dict(zip(columns, row))
+        finally:
+            pool.putconn(conn)
+
+    @staticmethod
+    def update_brand(value: str, description: str = None, country: str = None, country_origin: str = None, manufacturer: str = None) -> dict:
+        pool = get_pool()
+        conn = pool.getconn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE brands SET description=%s, country=%s, country_origin=%s, manufacturer=%s WHERE value=%s RETURNING *",
+                (description, country, country_origin, manufacturer, value)
+            )
+            row = cursor.fetchone()
+            conn.commit()
+            if row:
+                columns = [desc[0] for desc in cursor.description]
+                return dict(zip(columns, row))
+            return {}
+        finally:
+            pool.putconn(conn)
 
     @staticmethod
     def get_values(key: str) -> List[str]:
