@@ -405,7 +405,7 @@ class ProcedureCreate(BaseModel):
     how_it_goes: Optional[str] = None
     for_whom: Optional[str] = None
     problems_solved: Optional[str] = None
-    contraindications: Optional[str] = None
+    contraindications_full: Optional[str] = None
     preparation: Optional[str] = None
     recommended_course: Optional[str] = None
     rehabilitation: Optional[str] = None
@@ -702,7 +702,7 @@ async def create_procedure(procedure: ProcedureCreate):
             procedure.equipment, serialize_field(procedure.zones), serialize_field(procedure.effects),
             serialize_field(procedure.problems), procedure.description, procedure.procedure_about,
             procedure.advantages, procedure.indications, procedure.principle, procedure.how_it_goes,
-            procedure.for_whom, procedure.problems_solved, procedure.contraindications,
+            procedure.for_whom, procedure.problems_solved, procedure.contraindications_full,
             procedure.preparation, procedure.recommended_course, procedure.rehabilitation,
             procedure.post_care, procedure.side_effects, None
         )
@@ -757,7 +757,7 @@ async def update_procedure(procedure_id: int, procedure: ProcedureCreate):
             procedure.how_it_goes or existing['how_it_goes'],
             procedure.for_whom or existing['for_whom'],
             procedure.problems_solved or existing['problems_solved'],
-            procedure.contraindications or existing['contraindications_full'],
+            procedure.contraindications_full or existing['contraindications_full'],
             procedure.preparation or existing['preparation'],
             procedure.recommended_course or existing['recommended_course'],
             procedure.rehabilitation or existing['rehabilitation'],
