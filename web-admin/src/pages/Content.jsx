@@ -1,34 +1,39 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { Search, Plus, Edit2, Trash2, BookOpen, Tag, Calendar, User, X } from 'lucide-react'
+import { useToast } from '../context/ToastContext'
+import { Search, Plus, Edit2, Trash2, BookOpen, Tag, Calendar, User, X, ChevronLeft, Image as ImageIcon, Upload } from 'lucide-react'
 import { contentApi, dictionariesApi, usersApi } from '../api'
 import Select from '../components/Select'
+import AdvancedRichTextEditor from '../components/AdvancedRichTextEditor'
 import './Content.css'
 
 const defaultContentCategories = ['Уход за кожей', 'Ингредиенты', 'Защита', 'Процедуры', 'Питание', 'Образ жизни']
 
 export default function Content() {
   const { user, hasPermission } = useAuth()
+  const { success, error } = useToast()
   const [articles, setArticles] = useState([])
   const [cosmetologists, setCosmetologists] = useState([])
   const [contentCategories, setContentCategories] = useState(defaultContentCategories)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [modalOpen, setModalOpen] = useState(false)
-  const [deleteModal, setDeleteModal] = useState(null)
   const [editingArticle, setEditingArticle] = useState(null)
+  const [deleteModal, setDeleteModal] = useState(null)
   const [form, setForm] = useState({ 
     title: '', 
     category: '', 
     tags: '', 
-    author: '',
+    author_id: null,
+    author_name: '',
     body: '',
     image_url: '',
     published: false
   })
+  const [uploadingImage, setUploadingImage] = useState(false)
 
   const canCreate = hasPermission('content_create')
   const canEdit = hasPermission('content_edit_own')
+  const isCosmetologist = user?.role === 'cosmetologist'
 
   useEffect(() => {
     loadData()
@@ -47,8 +52,7 @@ export default function Content() {
       const cosmetologistsList = usersData.filter(u => u.role === 'cosmetologist').map(u => ({
         id: u.id,
         name: u.name,
-        nickname: u.nickname || `@${u.name?.toLowerCase().replace(/\s+/g, '_') || 'user'}`,
-        role: 'cosmetologist'
+        nickname: u.nickname || u.name
       }))
       setCosmetologists(cosmetologistsList)
     } catch (err) {
@@ -67,26 +71,38 @@ export default function Content() {
       title: '', 
       category: contentCategories[0] || '', 
       tags: '', 
-      author: cosmetologists[0]?.nickname || '',
+      author_id: isCosmetologist ? user.id : null,
+      author_name: isCosmetologist ? (user.nickname || user.name) : '',
       body: '',
       image_url: '',
       published: false
     })
-    setModalOpen(true)
   }
 
   const openEditModal = (article) => {
     setEditingArticle(article)
+    let parsedTags = ''
+    if (article.tags) {
+      if (typeof article.tags === 'string') {
+        try {
+          parsedTags = JSON.parse(article.tags).join(', ')
+        } catch {
+          parsedTags = article.tags
+        }
+      } else if (Array.isArray(article.tags)) {
+        parsedTags = article.tags.join(', ')
+      }
+    }
     setForm({
       title: article.title || '',
       category: article.category || '',
-      tags: article.tags?.join(', ') || '',
-      author: article.author || '',
+      tags: parsedTags,
+      author_id: article.author_id || null,
+      author_name: article.author_name || '',
       body: article.body || '',
       image_url: article.image_url || '',
       published: article.published || false
     })
-    setModalOpen(true)
   }
 
   const handleInputChange = (e) => {
@@ -95,7 +111,34 @@ export default function Content() {
   }
 
   const handleSelectChange = (name, value) => {
-    setForm(prev => ({ ...prev, [name]: value }))
+    if (name === 'author_id') {
+      const selectedAuthor = cosmetologists.find(c => c.id === value)
+      setForm(prev => ({ ...prev, author_id: value, author_name: selectedAuthor?.name || '' }))
+    } else {
+      setForm(prev => ({ ...prev, [name]: value }))
+    }
+  }
+
+  const handleRichTextChange = (html) => {
+    setForm(prev => ({ ...prev, body: html }))
+  }
+
+  const handleImageUpload = async (file) => {
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) return
+
+    setUploadingImage(true)
+    try {
+      const reader = new FileReader()
+      reader.onload = () => {
+        setForm(prev => ({ ...prev, image_url: reader.result }))
+      }
+      reader.readAsDataURL(file)
+    } catch (err) {
+      console.error('Error uploading image:', err)
+    } finally {
+      setUploadingImage(false)
+    }
   }
 
   const handleSave = async () => {
@@ -106,7 +149,8 @@ export default function Content() {
       title: form.title,
       category: form.category,
       tags,
-      author: form.author,
+      author_id: form.author_id,
+      author_name: form.author_name,
       body: form.body || '',
       image_url: form.image_url || '',
       published: form.published
@@ -116,13 +160,16 @@ export default function Content() {
       if (editingArticle) {
         const updated = await contentApi.update(editingArticle.id, articleData)
         setArticles(prev => prev.map(a => a.id === editingArticle.id ? updated : a))
+        success('Статья обновлена')
       } else {
         const created = await contentApi.create(articleData)
         setArticles(prev => [created, ...prev])
+        success('Статья создана')
       }
-      setModalOpen(false)
+      setEditingArticle(null)
     } catch (err) {
       console.error('Error saving article:', err)
+      error('Ошибка сохранения')
     }
   }
 
@@ -131,8 +178,10 @@ export default function Content() {
       try {
         await contentApi.delete(deleteModal.id)
         setArticles(prev => prev.filter(a => a.id !== deleteModal.id))
+        success('Статья удалена')
       } catch (err) {
         console.error('Error deleting article:', err)
+        error('Ошибка удаления')
       }
       setDeleteModal(null)
     }
@@ -141,7 +190,7 @@ export default function Content() {
   const formatDate = (dateStr) => {
     if (!dateStr) return ''
     const date = new Date(dateStr)
-    return date.toLocaleDateString('ru-RU')
+    return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
   }
 
   if (loading) {
@@ -154,102 +203,169 @@ export default function Content() {
 
   return (
     <div className="content-page">
-      <div className="page-header">
-        <div>
-          <h2>База знаний</h2>
-          <p>Управление статьями и контентом</p>
-        </div>
-        {canCreate && (
-          <button className="btn btn-primary" onClick={openAddModal}><Plus size={18} />Добавить статью</button>
-        )}
-      </div>
-
-      <div className="filters-bar glass-card">
-        <div className="search-wrapper">
-          <Search className="search-icon" />
-          <input type="text" placeholder="Поиск статей..." value={search} onChange={e => setSearch(e.target.value)} className="search-input" />
-        </div>
-      </div>
-
-      <div className="articles-list">
-        {filtered.map(article => (
-          <div key={article.id} className="article-card glass-card clickable" onClick={() => openEditModal(article)}>
-            <div className="article-icon"><BookOpen size={24} /></div>
-            <div className="article-content">
-              <h4>{article.title}</h4>
-              <div className="article-meta">
-                <span className="meta-tag"><Tag size={14} />{article.category}</span>
-                <span className="meta-tag"><User size={14} />{article.author}</span>
-                <span className="meta-tag"><Calendar size={14} />{formatDate(article.created_at)}</span>
-              </div>
-              <div className="article-tags">
-                {article.tags?.map(tag => (
-                  <span key={tag} className="tag">{tag}</span>
-                ))}
-              </div>
+      {editingArticle !== null || (form.title === '' && form.body === '' && !editingArticle) ? (
+        <>
+          <div className="page-header">
+            <div>
+              <h2>База знаний</h2>
+              <p>Управление статьями и контентом</p>
             </div>
-            {(canEdit || user?.role === 'admin') && (
-              <div className="article-actions">
-                <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); openEditModal(article) }}><Edit2 size={16} /></button>
-                <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); setDeleteModal(article) }}><Trash2 size={16} /></button>
-              </div>
+            {canCreate && (
+              <button className="btn btn-primary" onClick={openAddModal}><Plus size={18} />Добавить статью</button>
             )}
           </div>
-        ))}
-      </div>
 
-      {filtered.length === 0 && (
-        <div className="empty-state glass-card">
-          <p>Статьи не найдены</p>
-        </div>
-      )}
-
-      {modalOpen && (
-        <div className="modal-overlay" onClick={() => setModalOpen(false)}>
-          <div className="modal glass-card" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>{editingArticle ? 'Редактировать статью' : 'Новая статья'}</h3>
-              <button className="btn btn-ghost btn-sm" onClick={() => setModalOpen(false)}><X size={20} /></button>
+          <div className="filters-bar glass-card">
+            <div className="search-wrapper">
+              <Search className="search-icon" />
+              <input type="text" placeholder="Поиск статей..." value={search} onChange={e => setSearch(e.target.value)} className="search-input" />
             </div>
-            <div className="form-grid">
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+          </div>
+
+          <div className="articles-list">
+            {filtered.map(article => (
+              <div key={article.id} className="article-card glass-card clickable" onClick={() => openEditModal(article)}>
+                {article.image_url && (
+                  <div className="article-thumbnail">
+                    <img src={article.image_url} alt="" />
+                  </div>
+                )}
+                <div className="article-content">
+                  <h4>{article.title}</h4>
+                  <div className="article-meta">
+                    {article.category && <span className="meta-tag"><Tag size={14} />{article.category}</span>}
+                    {article.author_name && <span className="meta-tag"><User size={14} />{article.author_name}</span>}
+                    <span className="meta-tag"><Calendar size={14} />{formatDate(article.created_at)}</span>
+                  </div>
+                  {article.tags && (
+                    <div className="article-tags">
+                      {(typeof article.tags === 'string' ? JSON.parse(article.tags || '[]') : article.tags || []).map(tag => (
+                        <span key={tag} className="tag">{tag}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {(canEdit || user?.role === 'admin') && (
+                  <div className="article-actions">
+                    <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); openEditModal(article) }}><Edit2 size={16} /></button>
+                    <button className="btn btn-ghost btn-sm btn-danger" onClick={(e) => { e.stopPropagation(); setDeleteModal(article) }}><Trash2 size={16} /></button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {filtered.length === 0 && (
+            <div className="empty-state glass-card">
+              <p>Статьи не найдены</p>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="page-header">
+            <button className="btn btn-ghost" onClick={() => setEditingArticle(null)}>
+              <ChevronLeft size={18} />Назад к списку
+            </button>
+          </div>
+
+          <div className="content-editor glass-card">
+            <div className="editor-header">
+              <h3>{editingArticle ? 'Редактирование статьи' : 'Новая статья'}</h3>
+              <div className="editor-actions">
+                <button className="btn btn-ghost" onClick={() => setEditingArticle(null)}>Отмена</button>
+                <button className="btn btn-primary" onClick={handleSave}>Сохранить</button>
+              </div>
+            </div>
+
+            <div className="editor-form">
+              <div className="form-group full-width">
                 <label>Заголовок *</label>
                 <input className="input" name="title" value={form.title} onChange={handleInputChange} placeholder="Название статьи" required />
               </div>
-              <Select label="Категория" name="category" value={form.category} onChange={handleSelectChange} options={contentCategories} placeholder="Выберите категорию" />
-              <Select 
-                label="Автор" 
-                name="author" 
-                value={form.author} 
-                onChange={handleSelectChange} 
-                options={cosmetologists.map(c => c.nickname)} 
-                placeholder="Выберите автора" 
-              />
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+
+              <div className="form-row">
+                <Select label="Категория" name="category" value={form.category} onChange={handleSelectChange} options={contentCategories} placeholder="Выберите категорию" />
+                
+                {isCosmetologist ? (
+                  <div className="form-group">
+                    <label>Автор</label>
+                    <input className="input" value={form.author_name} disabled placeholder="Вы (автоматически)" />
+                  </div>
+                ) : (
+                  <Select 
+                    label="Автор" 
+                    name="author_id" 
+                    value={form.author_id} 
+                    onChange={handleSelectChange} 
+                    options={cosmetologists.map(c => ({ value: c.id, label: c.name }))} 
+                    placeholder="Выберите автора" 
+                  />
+                )}
+              </div>
+
+              <div className="form-group full-width">
                 <label>Теги (через запятую)</label>
-                <input className="input" name="tags" value={form.tags} onChange={handleInputChange} placeholder="увлажнение, сухая кожа" />
+                <input className="input" name="tags" value={form.tags} onChange={handleInputChange} placeholder="увлажнение, сухая кожа, уход" />
               </div>
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label>Изображение (URL)</label>
-                <input className="input" name="image_url" value={form.image_url} onChange={handleInputChange} placeholder="https://..." />
+
+              <div className="form-group full-width">
+                <label>Изображение для карточки</label>
+                <div className="media-upload-section">
+                  {form.image_url ? (
+                    <div className="image-preview-container">
+                      <img src={form.image_url} alt="" className="image-preview" />
+                      <button type="button" className="photo-delete-btn" onClick={() => setForm(prev => ({ ...prev, image_url: '' }))}>
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className={`upload-zone ${uploadingImage ? 'uploading' : ''}`}>
+                      {uploadingImage ? (
+                        <div className="upload-content">
+                          <span className="spinner" style={{ width: 24, height: 24 }}></span>
+                          <span className="upload-text">Загрузка...</span>
+                        </div>
+                      ) : (
+                        <>
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            onChange={e => e.target.files[0] && handleImageUpload(e.target.files[0])} 
+                            className="hidden-input"
+                          />
+                          <div className="upload-content">
+                            <ImageIcon size={24} className="upload-icon" />
+                            <span className="upload-text">Добавить изображение</span>
+                            <span className="upload-hint">PNG, JPG, WebP до 10MB</span>
+                          </div>
+                        </>
+                      )}
+                    </label>
+                  )}
+                </div>
               </div>
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+
+              <div className="form-group full-width">
                 <label>Содержание</label>
-                <textarea className="input textarea" name="body" value={form.body} onChange={handleInputChange} rows="4" />
+                <AdvancedRichTextEditor
+                  value={form.body}
+                  onChange={handleRichTextChange}
+                  placeholder="Напишите содержание статьи..."
+                  rows={12}
+                  contentId={editingArticle?.id}
+                />
               </div>
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+
+              <div className="form-group">
                 <label className="checkbox-label">
                   <input type="checkbox" name="published" checked={form.published} onChange={handleInputChange} />
                   Опубликовано
                 </label>
               </div>
             </div>
-            <div className="modal-actions">
-              <button className="btn btn-ghost" onClick={() => setModalOpen(false)}>Отмена</button>
-              <button className="btn btn-primary" onClick={handleSave}>Сохранить</button>
-            </div>
           </div>
-        </div>
+        </>
       )}
 
       {deleteModal && (

@@ -34,26 +34,27 @@
   align-items: flex-start;
   gap: var(--spacing-md);
   padding: var(--spacing-lg);
-  overflow-y: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  max-height: 150px;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.article-card::-webkit-scrollbar {
-  display: none;
+.article-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
 }
 
-.article-icon {
-  width: 48px;
-  height: 48px;
-  background: rgba(167, 243, 208, 0.2);
+.article-thumbnail {
+  width: 80px;
+  height: 80px;
   border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-mint-green-dark);
+  overflow: hidden;
   flex-shrink: 0;
+}
+
+.article-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .clickable {
@@ -81,6 +82,7 @@
   display: flex;
   gap: var(--spacing-md);
   margin-bottom: var(--spacing-sm);
+  flex-wrap: wrap;
 }
 
 .meta-tag {
@@ -108,6 +110,14 @@
 .article-actions {
   display: flex;
   gap: var(--spacing-xs);
+}
+
+.btn-danger {
+  color: var(--color-red-500) !important;
+}
+
+.btn-danger:hover {
+  background: rgba(239, 68, 68, 0.1) !important;
 }
 
 .search-wrapper {
@@ -168,12 +178,161 @@
   color: var(--color-gray-500);
 }
 
-/* Dark Theme */
-[data-theme="dark"] .article-icon {
-  background: rgba(167, 243, 208, 0.15);
-  color: var(--color-mint-green);
+/* Content Editor */
+.content-editor {
+  padding: var(--spacing-xl);
 }
 
+.editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-xl);
+  padding-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--color-gray-200);
+}
+
+.editor-header h3 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.editor-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-lg);
+}
+
+.form-group.full-width {
+  grid-column: span 2;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-gray-700);
+}
+
+/* Media Upload */
+.media-upload-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.image-preview-container {
+  position: relative;
+  max-width: 300px;
+}
+
+.image-preview {
+  width: 100%;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-gray-200);
+}
+
+.photo-delete-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(4px);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.photo-delete-btn:hover {
+  background: var(--color-red-500);
+  transform: scale(1.1);
+}
+
+.upload-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 140px;
+  max-width: 300px;
+  border: 2px dashed var(--color-gray-300);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.upload-zone:hover {
+  border-color: var(--color-mint-green);
+  border-style: solid;
+  background: linear-gradient(135deg, rgba(167, 243, 208, 0.1) 0%, rgba(167, 243, 208, 0.05) 100%);
+}
+
+.upload-zone.uploading {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.upload-zone .hidden-input {
+  display: none;
+}
+
+.upload-zone .upload-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: var(--spacing-md);
+}
+
+.upload-zone .upload-icon {
+  width: 48px;
+  height: 48px;
+  padding: 12px;
+  background: white;
+  border-radius: var(--radius-full);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  color: var(--color-gray-400);
+  transition: all 0.2s ease;
+}
+
+.upload-zone:hover .upload-icon {
+  background: var(--color-mint-green);
+  color: white;
+  transform: scale(1.1);
+}
+
+.upload-zone .upload-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-gray-600);
+}
+
+.upload-zone .upload-hint {
+  font-size: 12px;
+  color: var(--color-gray-400);
+}
+
+/* Dark Theme */
 [data-theme="dark"] .tag {
   background: var(--color-gray-200);
   color: var(--color-gray-400);

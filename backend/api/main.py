@@ -134,10 +134,20 @@ async def init_db():
             CREATE TABLE IF NOT EXISTS content (
                 id SERIAL PRIMARY KEY,
                 title VARCHAR(255) NOT NULL,
-                type VARCHAR(50),
+                category VARCHAR(255),
+                tags TEXT,
+                author_id INTEGER REFERENCES users(id),
+                author_name VARCHAR(255),
                 body TEXT,
                 image_url VARCHAR(500),
                 published BOOLEAN DEFAULT false,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+
+            CREATE TABLE IF NOT EXISTS content_images (
+                id SERIAL PRIMARY KEY,
+                content_id INTEGER REFERENCES content(id) ON DELETE CASCADE,
+                filename VARCHAR(255) NOT NULL,
                 created_at TIMESTAMP DEFAULT NOW()
             );
 
@@ -415,7 +425,10 @@ class ProcedureCreate(BaseModel):
 
 class ContentCreate(BaseModel):
     title: str
-    type: Optional[str] = None
+    category: Optional[str] = None
+    tags: Optional[Union[List[str], str]] = None
+    author_id: Optional[int] = None
+    author_name: Optional[str] = None
     body: Optional[str] = None
     image_url: Optional[str] = None
     published: Optional[bool] = False
@@ -931,25 +944,37 @@ async def get_content():
 
 @app.post("/api/content")
 async def create_content(content: ContentCreate):
+    tags_json = json.dumps(content.tags, ensure_ascii=False) if isinstance(content.tags, list) else content.tags
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            """INSERT INTO content (title, type, body, image_url, published) 
-               VALUES ($1, $2, $3, $4, $5) RETURNING *""",
-            content.title, content.type, content.body, content.image_url, content.published
+            """INSERT INTO content (title, category, tags, author_id, author_name, body, image_url, published) 
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *""",
+            content.title, content.category, tags_json, content.author_id, 
+            content.author_name, content.body, content.image_url, content.published
         )
         return dict(row)
 
 
 @app.put("/api/content/{content_id}")
 async def update_content(content_id: int, content: ContentCreate):
+    tags_json = json.dumps(content.tags, ensure_ascii=False) if isinstance(content.tags, list) else content.tags
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """UPDATE content SET title=$1, type=$2, body=$3, image_url=$4, published=$5 
-               WHERE id=$6 RETURNING *""",
-            content.title, content.type, content.body, content.image_url, content.published, content_id
-        )
-        if not row:
+        existing = await conn.fetchrow("SELECT * FROM content WHERE id=$1", content_id)
+        if not existing:
             raise HTTPException(status_code=404, detail="Content not found")
+        row = await conn.fetchrow(
+            """UPDATE content SET title=$1, category=$2, tags=$3, author_id=$4, author_name=$5, 
+               body=$6, image_url=$7, published=$8 WHERE id=$9 RETURNING *""",
+            content.title or existing['title'],
+            content.category or existing['category'],
+            tags_json if content.tags is not None else existing['tags'],
+            content.author_id or existing['author_id'],
+            content.author_name or existing['author_name'],
+            content.body or existing['body'],
+            content.image_url or existing['image_url'],
+            content.published if content.published is not None else existing['published'],
+            content_id
+        )
         return dict(row)
 
 
@@ -958,6 +983,80 @@ async def delete_content(content_id: int):
     async with pool.acquire() as conn:
         await conn.execute("DELETE FROM content WHERE id=$1", content_id)
         return {"success": True}
+
+
+@app.post("/api/content/{content_id}/images")
+async def upload_content_image(content_id: int, file: UploadFile = File(...)):
+    async with pool.acquire() as conn:
+        content_item = await conn.fetchrow("SELECT id FROM content WHERE id=$1", content_id)
+        if not content_item:
+            raise HTTPException(status_code=404, detail="Content not found")
+    
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    uploads_dir = os.path.join(base_dir, "content_images")
+    os.makedirs(uploads_dir, exist_ok=True)
+    
+    file_ext = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
+    filename = f"{content_id}_{uuid.uuid4()}.{file_ext}"
+    file_path = os.path.join(uploads_dir, filename)
+    
+    content = await file.read()
+    with open(file_path, 'wb') as f:
+        f.write(content)
+    
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "INSERT INTO content_images (content_id, filename) VALUES ($1, $2) RETURNING *",
+            content_id, filename
+        )
+        return {"id": row["id"], "filename": row["filename"]}
+
+
+@app.delete("/api/content/{content_id}/images/{image_id}")
+async def delete_content_image(content_id: int, image_id: int):
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT filename FROM content_images WHERE id=$1 AND content_id=$2",
+            image_id, content_id
+        )
+        if row:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            file_path = os.path.join(base_dir, "content_images", row["filename"])
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            await conn.execute("DELETE FROM content_images WHERE id=$1", image_id)
+    return {"success": True}
+
+
+@app.get("/api/content/{content_id}/images")
+async def get_content_images(content_id: int):
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT id, filename FROM content_images WHERE content_id=$1 ORDER BY id",
+            content_id
+        )
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        images = []
+        for row in rows:
+            file_path = os.path.join(base_dir, "content_images", row["filename"])
+            if os.path.exists(file_path):
+                with open(file_path, 'rb') as f:
+                    import base64
+                    data = base64.b64encode(f.read()).decode()
+                    ext = row["filename"].split('.')[-1]
+                    content_type = f"image/{ext}" if ext in ['jpg', 'jpeg', 'png', 'gif', 'webp'] else "image/jpeg"
+                    images.append({
+                        "id": row["id"],
+                        "filename": row["filename"],
+                        "data": data,
+                        "content_type": content_type
+                    })
+        return images
+
+
+@app.get("/api/content/{content_id}/image-url")
+async def get_content_image_url(content_id: int):
+    return {"url": f"/api/content/{content_id}/images"}
 
 
 @app.get("/api/users")
