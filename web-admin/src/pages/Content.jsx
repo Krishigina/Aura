@@ -116,7 +116,7 @@ export default function Content() {
   const handleSelectChange = (name, value) => {
     if (name === 'author_id') {
       const selectedAuthor = cosmetologists.find(c => c.id === value)
-      setForm(prev => ({ ...prev, author_id: value, author_name: selectedAuthor?.name || '' }))
+      setForm(prev => ({ ...prev, author_id: value, author_name: selectedAuthor ? `${selectedAuthor.nickname} (${selectedAuthor.name})` : '' }))
     } else {
       setForm(prev => ({ ...prev, [name]: value }))
     }
@@ -148,6 +148,9 @@ export default function Content() {
     if (!form.title) return
 
     const tags = form.tags.split(',').map(t => t.trim()).filter(Boolean)
+    
+    // Don't send base64 image in the article data - it's too large
+    // We'll upload it separately after creating/updating the article
     const articleData = {
       title: form.title,
       category: form.category,
@@ -155,20 +158,36 @@ export default function Content() {
       author_id: form.author_id,
       author_name: form.author_name,
       body: form.body || '',
-      image_url: form.image_url || '',
+      image_url: '',  // Will be set after image upload
       published: form.published
     }
 
     try {
+      let articleId
       if (editingArticle) {
         const updated = await contentApi.update(editingArticle.id, articleData)
+        articleId = editingArticle.id
         setArticles(prev => prev.map(a => a.id === editingArticle.id ? updated : a))
         success('Статья обновлена')
       } else {
         const created = await contentApi.create(articleData)
+        articleId = created.id
         setArticles(prev => [created, ...prev])
         success('Статья создана')
       }
+      
+      // Upload image separately if we have one
+      if (form.image_url && form.image_url.startsWith('data:')) {
+        try {
+          const response = await fetch(form.image_url)
+          const blob = await response.blob()
+          const file = new File([blob], 'card-image.jpg', { type: 'image/jpeg' })
+          await contentApi.uploadCardImage(articleId, file)
+        } catch (imgErr) {
+          console.error('Error uploading card image:', imgErr)
+        }
+      }
+      
       setShowEditor(false)
       setEditingArticle(null)
     } catch (err) {
@@ -231,7 +250,7 @@ export default function Content() {
               <div key={article.id} className="article-card glass-card clickable" onClick={() => openEditModal(article)}>
                 {article.image_url && (
                   <div className="article-thumbnail">
-                    <img src={article.image_url} alt="" />
+                    <img src={article.image_url.startsWith('/api/') ? `http://localhost:3001${article.image_url}` : article.image_url} alt="" />
                   </div>
                 )}
                 <div className="article-content">
@@ -290,7 +309,7 @@ export default function Content() {
                 {isCosmetologist ? (
                   <div className="form-group">
                     <label>Автор</label>
-                    <input className="input" value={form.author_name} disabled placeholder="Вы (автоматически)" />
+                    <input className="input" value={form.author_name || `${user.nickname || user.name} (${user.name})`} disabled />
                   </div>
                 ) : (
                   <Select 
@@ -298,7 +317,7 @@ export default function Content() {
                     name="author_id" 
                     value={form.author_id} 
                     onChange={handleSelectChange} 
-                    options={cosmetologists.map(c => ({ value: c.id, label: c.name }))} 
+                    options={cosmetologists.map(c => ({ value: c.id, label: `${c.nickname} (${c.name})` }))} 
                     placeholder="Выберите автора" 
                   />
                 )}
@@ -314,7 +333,7 @@ export default function Content() {
                 <div className="media-upload-section">
                   {form.image_url ? (
                     <div className="image-preview-container">
-                      <img src={form.image_url} alt="" className="image-preview" />
+                      <img src={form.image_url.startsWith('/api/') ? `http://localhost:3001${form.image_url}` : form.image_url} alt="" className="image-preview" />
                       <button type="button" className="photo-delete-btn" onClick={() => setForm(prev => ({ ...prev, image_url: '' }))}>
                         <X size={14} />
                       </button>
