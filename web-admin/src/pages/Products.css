@@ -994,17 +994,25 @@
 
 .photo-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: var(--spacing-sm);
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--spacing-md);
 }
 
 .photo-card {
   position: relative;
   aspect-ratio: 1;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   overflow: hidden;
   background: var(--color-gray-100);
-  border: 1px solid var(--color-gray-200);
+  border: 2px solid transparent;
+  transition: all 0.2s ease;
+  cursor: grab;
+}
+
+.photo-card:hover {
+  border-color: var(--color-mint-green);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
 }
 
 .photo-card .photo-preview {
@@ -1025,29 +1033,38 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   color: var(--color-gray-500);
-  font-size: 12px;
-  gap: 4px;
+  font-size: 13px;
+  gap: 8px;
+  padding: var(--spacing-md);
+}
+
+.photo-card .photo-placeholder svg {
+  width: 40px;
+  height: 40px;
+  color: var(--color-gray-300);
 }
 
 .photo-card .photo-placeholder .photo-type {
   font-size: 10px;
   text-transform: uppercase;
-  padding: 2px 8px;
+  padding: 4px 10px;
   background: var(--color-gray-200);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-full);
   color: var(--color-gray-600);
+  font-weight: 500;
 }
 
 .photo-delete-btn {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 24px;
-  height: 24px;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
   border-radius: var(--radius-full);
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(4px);
   color: white;
   border: none;
   cursor: pointer;
@@ -1055,39 +1072,48 @@
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: opacity var(--transition-fast);
+  transition: all 0.2s ease;
+  transform: scale(0.8);
 }
 
 .photo-card:hover .photo-delete-btn {
   opacity: 1;
+  transform: scale(1);
 }
 
 .photo-delete-btn:hover {
   background: var(--color-red-500);
+  transform: scale(1.1) !important;
 }
 
 .video-card {
   position: relative;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   overflow: hidden;
   background: var(--color-gray-100);
-  border: 1px solid var(--color-gray-200);
+  border: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.video-card:hover {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
 }
 
 .video-card .video-preview {
   width: 100%;
-  max-height: 300px;
+  max-height: 280px;
   display: block;
 }
 
 .video-delete-btn {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 24px;
-  height: 24px;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
   border-radius: var(--radius-full);
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(4px);
   color: white;
   border: none;
   cursor: pointer;
@@ -1095,15 +1121,18 @@
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: opacity var(--transition-fast), background var(--transition-fast);
+  transition: all 0.2s ease;
+  transform: scale(0.8);
 }
 
 .video-card:hover .video-delete-btn {
   opacity: 1;
+  transform: scale(1);
 }
 
 .video-delete-btn:hover {
   background: var(--color-red-500);
+  transform: scale(1.1) !important;
 }
 
 .video-placeholder {
@@ -1111,22 +1140,41 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 120px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: var(--radius-lg);
+  min-height: 160px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+  border-radius: var(--radius-xl);
   color: white;
   cursor: pointer;
-  gap: 8px;
-  transition: transform var(--transition-fast);
+  gap: 12px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
 }
 
 .video-placeholder:hover {
-  transform: scale(1.02);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(99, 102, 241, 0.4);
+}
+
+.video-placeholder svg {
+  width: 48px;
+  height: 48px;
+  opacity: 0.9;
+}
+
+.video-placeholder-card {
+  width: 100%;
+  padding: var(--spacing-lg);
+  text-align: center;
+}
+
+.video-placeholder-card:hover .video-icon {
+  transform: scale(1.1);
 }
 
 .video-placeholder .video-hint {
-  font-size: 12px;
-  opacity: 0.8;
+  font-size: 13px;
+  opacity: 0.85;
+  font-weight: 500;
 }
 
 .video-placeholder-card {
@@ -1135,9 +1183,16 @@
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 150px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: var(--radius-lg);
+  height: 160px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+  border-radius: var(--radius-xl);
+  transition: all 0.3s ease;
+}
+
+.video-placeholder-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(99, 102, 241, 0.4);
+}
   color: white;
   cursor: pointer;
   gap: 8px;
@@ -1152,17 +1207,19 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 120px;
+  min-height: 140px;
   border: 2px dashed var(--color-gray-300);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   cursor: pointer;
-  transition: all var(--transition-fast);
-  background: var(--color-gray-50);
+  transition: all 0.2s ease;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
 }
 
 .upload-zone:hover {
   border-color: var(--color-mint-green);
-  background: rgba(167, 243, 208, 0.1);
+  border-style: solid;
+  background: linear-gradient(135deg, rgba(167, 243, 208, 0.1) 0%, rgba(167, 243, 208, 0.05) 100%);
+  box-shadow: 0 4px 12px rgba(167, 243, 208, 0.15);
 }
 
 .upload-zone.uploading {
@@ -1172,7 +1229,8 @@
 
 .upload-zone.uploading:hover {
   border-color: var(--color-gray-300);
-  background: var(--color-gray-50);
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  box-shadow: none;
 }
 
 .upload-zone .hidden-input {
@@ -1183,22 +1241,31 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   text-align: center;
-  padding: var(--spacing-md);
+  padding: var(--spacing-lg);
 }
 
 .upload-zone .upload-icon {
-  color: var(--color-gray-400);
+  width: 48px;
+  height: 48px;
+  padding: 12px;
+  background: white;
+  border-radius: var(--radius-full);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  color: var(--color-gray-500);
+  transition: all 0.2s ease;
 }
 
 .upload-zone:hover .upload-icon {
-  color: var(--color-mint-green);
+  background: var(--color-mint-green);
+  color: white;
+  transform: scale(1.1);
 }
 
 .upload-zone .upload-text {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--color-gray-700);
 }
 
@@ -1214,7 +1281,8 @@
 
 .photo-card.dragging {
   opacity: 0.5;
-  transform: scale(0.95);
+  transform: scale(0.95) rotate(2deg);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
 }
 
 .photo-card:active {

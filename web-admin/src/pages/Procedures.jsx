@@ -1,35 +1,39 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { Search, Plus, Edit2, Trash2, Clock, DollarSign, X } from 'lucide-react'
+import { useToast } from '../context/ToastContext'
+import { Search, Plus, Edit2, Trash2, Clock, DollarSign, Image as ImageIcon } from 'lucide-react'
 import { proceduresApi, dictionariesApi } from '../api'
-import Select from '../components/Select'
+import ProcedureWizard from '../components/ProcedureWizard'
 import './Procedures.css'
 
 const defaultProcedureCategories = ['Чистка', 'Увлажнение', 'Инъекции', 'Эпиляция', 'Массаж', 'Пилинг', 'Уход']
 
 export default function Procedures() {
   const { hasPermission } = useAuth()
+  const { success, error } = useToast()
   const [procedures, setProcedures] = useState([])
   const [categories, setCategories] = useState(defaultProcedureCategories)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('Все')
-  const [modalOpen, setModalOpen] = useState(false)
   const [deleteModal, setDeleteModal] = useState(null)
-  const [editingProcedure, setEditingProcedure] = useState(null)
-  const [form, setForm] = useState({ 
-    name: '', 
-    duration: '', 
-    price: '', 
-    category: '', 
-    description: '',
-    contraindications: ''
+  const [dictionaries, setDictionaries] = useState({
+    method_types: [],
+    durations: [],
+    equipment: [],
+    zones: [],
+    effects: [],
+    problems: [],
+    directions: []
   })
+  const [showWizard, setShowWizard] = useState(false)
+  const [editingProcedure, setEditingProcedure] = useState(null)
 
   const canEdit = hasPermission('procedures')
 
   useEffect(() => {
     loadData()
+    loadDictionaries()
   }, [])
 
   const loadData = async () => {
@@ -49,72 +53,37 @@ export default function Procedures() {
     }
   }
 
+  const loadDictionaries = async () => {
+    try {
+      const [method_types, durations, equipment, zones, effects, problems, directions] = await Promise.all([
+        proceduresApi.getMethodTypes().catch(() => []),
+        proceduresApi.getDurations().catch(() => []),
+        proceduresApi.getEquipment().catch(() => []),
+        proceduresApi.getZones().catch(() => []),
+        proceduresApi.getEffects().catch(() => []),
+        proceduresApi.getProblems().catch(() => []),
+        dictionariesApi.get('procedureCategories').catch(() => ['Аппаратная косметология', 'Инъекционная косметология', 'Эстетическая косметология']),
+      ])
+      setDictionaries({
+        method_types: method_types.map(m => m.value),
+        durations: durations.map(d => d.value),
+        equipment: equipment.map(e => e.value),
+        zones: zones.map(z => z.value),
+        effects: effects.map(e => e.value),
+        problems: problems.map(p => p.value),
+        directions
+      })
+      setCategories(directions)
+    } catch (err) {
+      console.error('Error loading dictionaries:', err)
+    }
+  }
+
   const filtered = procedures.filter(p => {
     const matchesSearch = p.name?.toLowerCase().includes(search.toLowerCase())
     const matchesCategory = category === 'Все' || p.category === category
     return matchesSearch && matchesCategory
   })
-
-  const openAddModal = () => {
-    setEditingProcedure(null)
-    setForm({ 
-      name: '', 
-      duration: '', 
-      price: '', 
-      category: categories[0] || '', 
-      description: '',
-      contraindications: ''
-    })
-    setModalOpen(true)
-  }
-
-  const openEditModal = (procedure) => {
-    setEditingProcedure(procedure)
-    setForm({
-      name: procedure.name || '',
-      duration: procedure.duration?.toString() || '',
-      price: procedure.price?.toString() || '',
-      category: procedure.category || '',
-      description: procedure.description || '',
-      contraindications: procedure.contraindications || ''
-    })
-    setModalOpen(true)
-  }
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target
-    setForm(prev => ({ ...prev, [name]: value }))
-  }
-
-  const handleSelectChange = (name, value) => {
-    setForm(prev => ({ ...prev, [name]: value }))
-  }
-
-  const handleSave = async () => {
-    if (!form.name || !form.duration || !form.price) return
-
-    const procedureData = {
-      name: form.name,
-      duration: parseInt(form.duration),
-      price: parseInt(form.price),
-      category: form.category,
-      description: form.description || '',
-      contraindications: form.contraindications || ''
-    }
-
-    try {
-      if (editingProcedure) {
-        const updated = await proceduresApi.update(editingProcedure.id, procedureData)
-        setProcedures(prev => prev.map(p => p.id === editingProcedure.id ? updated : p))
-      } else {
-        const created = await proceduresApi.create(procedureData)
-        setProcedures(prev => [created, ...prev])
-      }
-      setModalOpen(false)
-    } catch (err) {
-      console.error('Error saving procedure:', err)
-    }
-  }
 
   const handleDelete = async () => {
     if (deleteModal) {
@@ -144,7 +113,9 @@ export default function Procedures() {
           <p>Управление салонными процедурами</p>
         </div>
         {canEdit && (
-          <button className="btn btn-primary" onClick={openAddModal}><Plus size={18} />Добавить процедуру</button>
+          <button className="btn btn-primary" onClick={() => { setEditingProcedure(null); setShowWizard(true) }}>
+            <Plus size={18} />Добавить процедуру
+          </button>
         )}
       </div>
 
@@ -163,18 +134,38 @@ export default function Procedures() {
 
       <div className="procedures-grid">
         {filtered.map(procedure => (
-          <div key={procedure.id} className="procedure-card glass-card clickable" onClick={() => openEditModal(procedure)}>
+          <div key={procedure.id} className="procedure-card glass-card clickable" onClick={() => { setEditingProcedure(procedure); setShowWizard(true) }}>
             <div className="procedure-header">
               <h4>{procedure.name}</h4>
+              {procedure.direction && <span className="direction-badge">{procedure.direction}</span>}
             </div>
             <div className="procedure-meta">
               <div className="meta-item"><Clock size={16} /><span>{procedure.duration} мин</span></div>
-              <div className="meta-item"><DollarSign size={16} /><span>{parseInt(procedure.price).toLocaleString()} ₽</span></div>
+              <div className="meta-item"><DollarSign size={16} /><span>{parseInt(procedure.price || 0).toLocaleString()} ₽</span></div>
+            </div>
+            {procedure.photos && procedure.photos.length > 0 && (
+              <div className="procedure-photos">
+                {procedure.photos.slice(0, 3).map((photo, idx) => (
+                  <div key={photo.id || idx} className="procedure-photo-thumb">
+                    {photo.data ? (
+                      <img src={`data:${photo.content_type};base64,${photo.data}`} alt="" />
+                    ) : (
+                      <ImageIcon size={16} />
+                    )}
+                  </div>
+                ))}
+                {procedure.photos.length > 3 && <span className="more-photos">+{procedure.photos.length - 3}</span>}
+              </div>
+            )}
+            <div className="procedure-fields">
+              {procedure.description && <p className="field-line">{procedure.description.substring(0, 80)}{procedure.description.length > 80 ? '...' : ''}</p>}
+              {procedure.indications && <p className="field-line"><strong>Показания:</strong> {procedure.indications.substring(0, 60)}{procedure.indications.length > 60 ? '...' : ''}</p>}
+              {procedure.contraindications_full && <p className="field-line"><strong>Противопоказания:</strong> {procedure.contraindications_full.substring(0, 60)}{procedure.contraindications_full.length > 60 ? '...' : ''}</p>}
             </div>
             <div className="procedure-category">{procedure.category}</div>
             {canEdit && (
               <div className="procedure-actions">
-                <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); openEditModal(procedure) }}><Edit2 size={16} /></button>
+                <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); setEditingProcedure(procedure); setShowWizard(true) }}><Edit2 size={16} /></button>
                 <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); setDeleteModal(procedure) }}><Trash2 size={16} /></button>
               </div>
             )}
@@ -188,42 +179,27 @@ export default function Procedures() {
         </div>
       )}
 
-      {modalOpen && (
-        <div className="modal-overlay" onClick={() => setModalOpen(false)}>
-          <div className="modal glass-card" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>{editingProcedure ? 'Редактировать процедуру' : 'Новая процедура'}</h3>
-              <button className="btn btn-ghost btn-sm" onClick={() => setModalOpen(false)}><X size={20} /></button>
-            </div>
-            <div className="form-grid">
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label>Название *</label>
-                <input className="input" name="name" value={form.name} onChange={handleInputChange} placeholder="Название процедуры" required />
-              </div>
-              <Select label="Категория" name="category" value={form.category} onChange={handleSelectChange} options={categories} placeholder="Выберите категорию" />
-              <div className="form-group">
-                <label>Длительность (мин) *</label>
-                <input className="input" name="duration" type="number" value={form.duration} onChange={handleInputChange} required />
-              </div>
-              <div className="form-group">
-                <label>Цена (₽) *</label>
-                <input className="input" name="price" type="number" value={form.price} onChange={handleInputChange} required />
-              </div>
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label>Описание</label>
-                <textarea className="input textarea" name="description" value={form.description} onChange={handleInputChange} rows="3" />
-              </div>
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label>Противопоказания</label>
-                <textarea className="input textarea" name="contraindications" value={form.contraindications} onChange={handleInputChange} rows="2" />
-              </div>
-            </div>
-            <div className="modal-actions">
-              <button className="btn btn-ghost" onClick={() => setModalOpen(false)}>Отмена</button>
-              <button className="btn btn-primary" onClick={handleSave}>Сохранить</button>
-            </div>
-          </div>
-        </div>
+      {showWizard && (
+        <ProcedureWizard
+          initialData={editingProcedure}
+          dictionaries={dictionaries}
+          onSave={async (data) => {
+            try {
+              if (editingProcedure) {
+                await proceduresApi.update(editingProcedure.id, data)
+              } else {
+                await proceduresApi.create(data)
+              }
+              loadData()
+              setShowWizard(false)
+              success('Процедура сохранена')
+            } catch (err) {
+              console.error('Error saving procedure:', err)
+              error('Ошибка сохранения')
+            }
+          }}
+          onCancel={() => setShowWizard(false)}
+        />
       )}
 
       {deleteModal && (

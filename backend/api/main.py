@@ -1,13 +1,15 @@
 import os
 import re
+import json
 import asyncio
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Union
 import asyncpg
 import aiohttp
+import uuid
 from bs4 import BeautifulSoup
 
 if os.name == 'nt':
@@ -35,14 +37,17 @@ async def lifespan(app: FastAPI):
             pool = await asyncpg.create_pool(
                 host=os.getenv("DB_HOST", "localhost"),
                 port=int(os.getenv("DB_PORT", "5432")),
-                database=os.getenv("DB_NAME", "aura"),
+                database=os.getenv("DB_NAME", "beauty_db"),
                 user=os.getenv("DB_USER", "aura_user"),
                 password=os.getenv("DB_PASSWORD", "aura_password"),
                 command_timeout=60,
                 min_size=1,
                 max_size=3,
-                server_settings={'application_name': 'aura_standalone'}
+                server_settings={'application_name': 'aura_standalone'},
+                timeout=30
             )
+            async with pool.acquire() as conn:
+                await conn.fetch('SELECT 1')
             print("Pool created successfully!")
             break
         except Exception as e:
@@ -80,6 +85,15 @@ async def init_db():
                 images TEXT[],
                 volume VARCHAR(50),
                 segment VARCHAR(50),
+                video VARCHAR(255),
+                has_video BOOLEAN DEFAULT false,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+
+            CREATE TABLE IF NOT EXISTS product_photos (
+                id SERIAL PRIMARY KEY,
+                product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
+                filename VARCHAR(255) NOT NULL,
                 created_at TIMESTAMP DEFAULT NOW()
             );
 
@@ -242,11 +256,11 @@ async def init_db():
             for value in default_volumes:
                 await conn.execute("INSERT INTO volumes (value) VALUES ($1)", value)
 
-        procedure_categories_count = await conn.fetchval("SELECT COUNT(*) FROM procedure_categories")
-        if procedure_categories_count == 0:
-            default_procedure_categories = ['Чистка', 'Увлажнение', 'Инъекции', 'Эпиляция', 'Массаж', 'Пилинг', 'Уход']
-            for value in default_procedure_categories:
-                await conn.execute("INSERT INTO procedure_categories (value) VALUES ($1)", value)
+        # Reset procedure categories to new directions
+        await conn.execute("DELETE FROM procedure_categories")
+        default_procedure_categories = ['Аппаратная косметология', 'Инъекционная косметология', 'Эстетическая косметология']
+        for value in default_procedure_categories:
+            await conn.execute("INSERT INTO procedure_categories (value) VALUES ($1)", value)
 
         content_categories_count = await conn.fetchval("SELECT COUNT(*) FROM content_categories")
         if content_categories_count == 0:
@@ -319,18 +333,36 @@ DICT_TABLE_MAP = {
     "purposes": "purposes",
     "application_times": "application_times",
     "areas": "areas",
-    "countries": "countries"
+    "countries": "countries",
+    "methodTypes": "procedure_method_types",
+    "procedureDurations": "procedure_durations",
+    "procedureEquipment": "procedure_equipment",
+    "procedureZones": "procedure_zones",
+    "procedureEffects": "procedure_effects",
+    "procedureProblems": "procedure_problems",
 }
 
 
 class ProductCreate(BaseModel):
     name: str
+    what_is_it: Optional[str] = None
     brand: Optional[str] = None
+    product_type: Optional[str] = None
+    for_whom: Optional[str] = None
+    purpose: Optional[Union[List[str], str]] = None
+    skin_type: Optional[Union[List[str], str]] = None
+    application_time: Optional[str] = None
+    area: Optional[str] = None
+    active_ingredient: Optional[str] = None
+    volume: Optional[str] = None
+    segment: Optional[str] = None
+    composition: Optional[str] = None
+    application_info: Optional[str] = None
+    country: Optional[str] = None
     category: Optional[str] = None
     description: Optional[str] = None
     images: Optional[List[str]] = None
-    volume: Optional[str] = None
-    segment: Optional[str] = None
+    has_video: Optional[bool] = False
 
 
 class ProcedureCreate(BaseModel):
@@ -390,25 +422,160 @@ async def create_product(product: ProductCreate):
         return dict(row)
 
 
-@app.put("/api/products/{product_id}")
-async def update_product(product_id: int, product: ProductCreate):
+@app.get("/api/products/{product_id:int}")
+async def get_product(product_id: int):
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """UPDATE products SET name=$1, brand=$2, category=$3, description=$4, images=$5, volume=$6, segment=$7 
-               WHERE id=$8 RETURNING *""",
-            product.name, product.brand, product.category, product.description,
-            product.images, product.volume, product.segment, product_id
-        )
+        row = await conn.fetchrow("SELECT * FROM products WHERE id=$1", product_id)
         if not row:
             raise HTTPException(status_code=404, detail="Product not found")
         return dict(row)
 
 
-@app.delete("/api/products/{product_id}")
+@app.put("/api/products/{product_id:int}")
+async def update_product(product_id: int, product: ProductCreate):
+    async with pool.acquire() as conn:
+        existing = await conn.fetchrow("SELECT * FROM products WHERE id=$1", product_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Product not found")
+        
+        def serialize_field(field):
+            if field is None:
+                return None
+            if isinstance(field, list):
+                return json.dumps(field, ensure_ascii=False)
+            return field
+        
+        row = await conn.fetchrow(
+            """UPDATE products SET 
+               name=$1, what_is_it=$2, brand=$3, product_type=$4, for_whom=$5,
+               purpose=$6, skin_type=$7, application_time=$8, area=$9,
+               active_ingredient=$10, volume=$11, segment=$12, composition=$13,
+               application_info=$14, country=$15, description=$16, has_video=$17
+               WHERE id=$18 RETURNING *""",
+            product.name,
+            product.what_is_it or existing['what_is_it'],
+            product.brand or existing['brand'],
+            product.product_type or existing['product_type'],
+            product.for_whom or existing['for_whom'],
+            serialize_field(product.purpose) if product.purpose is not None else existing['purpose'],
+            serialize_field(product.skin_type) if product.skin_type is not None else existing['skin_type'],
+            product.application_time or existing['application_time'],
+            product.area or existing['area'],
+            product.active_ingredient or existing['active_ingredient'],
+            product.volume or existing['volume'],
+            product.segment or existing['segment'],
+            product.composition or existing['composition'],
+            product.application_info or existing['application_info'],
+            product.country or existing['country'],
+            product.description or existing['description'],
+            product.has_video if product.has_video is not None else existing['has_video'],
+            product_id
+        )
+        return dict(row)
+
+
+@app.delete("/api/products/{product_id:int}")
 async def delete_product(product_id: int):
     async with pool.acquire() as conn:
         await conn.execute("DELETE FROM products WHERE id=$1", product_id)
         return {"success": True}
+
+
+@app.post("/api/products/{product_id:int}/photos")
+async def upload_product_photo(product_id: int, file: UploadFile = File(...)):
+    product = await get_product_by_id(product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    uploads_dir = os.path.join(base_dir, "product_photos")
+    os.makedirs(uploads_dir, exist_ok=True)
+    
+    file_ext = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
+    filename = f"{product_id}_{uuid.uuid4()}.{file_ext}"
+    file_path = os.path.join(uploads_dir, filename)
+    
+    content = await file.read()
+    with open(file_path, 'wb') as f:
+        f.write(content)
+    
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "INSERT INTO product_photos (product_id, filename) VALUES ($1, $2) RETURNING *",
+            product_id, filename
+        )
+        return {"id": row["id"], "filename": row["filename"]}
+
+
+@app.delete("/api/products/{product_id:int}/photos/{photo_id:int}")
+async def delete_product_photo(product_id: int, photo_id: int):
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT filename FROM product_photos WHERE id=$1 AND product_id=$2",
+            photo_id, product_id
+        )
+        if row:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            file_path = os.path.join(base_dir, "product_photos", row["filename"])
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            await conn.execute("DELETE FROM product_photos WHERE id=$1", photo_id)
+    return {"success": True}
+
+
+@app.post("/api/products/{product_id}/video")
+async def upload_product_video(product_id: int, file: UploadFile = File(...)):
+    async with pool.acquire() as conn:
+        product = await conn.fetchrow("SELECT id FROM products WHERE id=$1", product_id)
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+    
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    uploads_dir = os.path.join(base_dir, "product_videos")
+    os.makedirs(uploads_dir, exist_ok=True)
+    
+    file_ext = file.filename.split('.')[-1] if '.' in file.filename else 'mp4'
+    filename = f"{product_id}_{uuid.uuid4()}.{file_ext}"
+    file_path = os.path.join(uploads_dir, filename)
+    
+    content = await file.read()
+    with open(file_path, 'wb') as f:
+        f.write(content)
+    
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE products SET video=$1, has_video=true WHERE id=$2", filename, product_id)
+    return {"success": True, "filename": filename}
+
+
+@app.delete("/api/products/{product_id}/video")
+async def delete_product_video(product_id: int):
+    print(f"DEBUG: delete_product_video called with product_id={product_id}")
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT video FROM products WHERE id=$1", product_id)
+        if row and row["video"]:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            file_path = os.path.join(base_dir, "product_videos", row["video"])
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            await conn.execute("UPDATE products SET video=NULL, has_video=false WHERE id=$1", product_id)
+    return {"success": True}
+
+
+@app.get("/api/products/{product_id}/video")
+async def get_product_video(product_id: int):
+    print(f"DEBUG: get_product_video called with product_id={product_id}")
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT video FROM products WHERE id=$1", product_id)
+        if not row or not row["video"]:
+            return None
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.join(base_dir, "product_videos", row["video"])
+        if os.path.exists(file_path):
+            with open(file_path, 'rb') as f:
+                import base64
+                data = base64.b64encode(f.read()).decode()
+                return {"filename": row["video"], "data": data}
+        return None
 
 
 @app.get("/api/dictionaries/{key}")
@@ -476,7 +643,7 @@ async def create_procedure(procedure: ProcedureCreate):
         return dict(row)
 
 
-@app.put("/api/procedures/{procedure_id}")
+@app.put("/api/procedures/{procedure_id:int}")
 async def update_procedure(procedure_id: int, procedure: ProcedureCreate):
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
@@ -490,10 +657,88 @@ async def update_procedure(procedure_id: int, procedure: ProcedureCreate):
         return dict(row)
 
 
-@app.delete("/api/procedures/{procedure_id}")
+@app.delete("/api/procedures/{procedure_id:int}")
 async def delete_procedure(procedure_id: int):
     async with pool.acquire() as conn:
         await conn.execute("DELETE FROM procedures WHERE id=$1", procedure_id)
+        return {"success": True}
+
+
+@app.get("/api/procedures/dictionaries/method-types")
+async def get_method_types():
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT id, value FROM procedure_method_types ORDER BY id")
+        return [{"id": row["id"], "value": row["value"]} for row in rows]
+
+
+@app.get("/api/procedures/dictionaries/durations")
+async def get_durations():
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT id, value FROM procedure_durations ORDER BY id")
+        return [{"id": row["id"], "value": row["value"]} for row in rows]
+
+
+@app.get("/api/procedures/dictionaries/equipment")
+async def get_equipment():
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT id, value FROM procedure_equipment ORDER BY id")
+        return [{"id": row["id"], "value": row["value"]} for row in rows]
+
+
+@app.get("/api/procedures/dictionaries/zones")
+async def get_zones():
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT id, value FROM procedure_zones ORDER BY id")
+        return [{"id": row["id"], "value": row["value"]} for row in rows]
+
+
+@app.get("/api/procedures/dictionaries/effects")
+async def get_effects():
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT id, value FROM procedure_effects ORDER BY id")
+        return [{"id": row["id"], "value": row["value"]} for row in rows]
+
+
+@app.get("/api/procedures/dictionaries/problems")
+async def get_problems():
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT id, value FROM procedure_problems ORDER BY id")
+        return [{"id": row["id"], "value": row["value"]} for row in rows]
+
+
+@app.post("/api/procedures/dictionaries/{dict_type}")
+async def add_procedure_dict_value(dict_type: str, value: str):
+    table_map = {
+        "methodTypes": "procedure_method_types",
+        "procedureDurations": "procedure_durations",
+        "procedureEquipment": "procedure_equipment",
+        "procedureZones": "procedure_zones",
+        "procedureEffects": "procedure_effects",
+        "procedureProblems": "procedure_problems",
+    }
+    table_name = table_map.get(dict_type)
+    if not table_name:
+        raise HTTPException(status_code=400, detail="Invalid dictionary type")
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(f"INSERT INTO {table_name} (value) VALUES ($1) RETURNING *", value)
+        return dict(row)
+
+
+@app.delete("/api/procedures/dictionaries/{dict_type}/{value}")
+async def delete_procedure_dict_value(dict_type: str, value: str):
+    table_map = {
+        "methodTypes": "procedure_method_types",
+        "procedureDurations": "procedure_durations",
+        "procedureEquipment": "procedure_equipment",
+        "procedureZones": "procedure_zones",
+        "procedureEffects": "procedure_effects",
+        "procedureProblems": "procedure_problems",
+    }
+    table_name = table_map.get(dict_type)
+    if not table_name:
+        raise HTTPException(status_code=400, detail="Invalid dictionary type")
+    async with pool.acquire() as conn:
+        await conn.execute(f"DELETE FROM {table_name} WHERE value=$1", value)
         return {"success": True}
 
 

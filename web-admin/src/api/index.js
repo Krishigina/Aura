@@ -46,7 +46,19 @@ export const productsApi = {
     }
     return response.json()
   },
-  
+
+  getPhotos: async (productId) => {
+    const response = await fetch(`${API_URL}/products/${productId}/photos`)
+    if (!response.ok) return []
+    return response.json()
+  },
+
+  getVideo: async (productId) => {
+    const response = await fetch(`${API_URL}/products/${productId}/video`)
+    if (!response.ok) return null
+    return response.json()
+  },
+
   uploadVideo: async (productId, file) => {
     const formData = new FormData()
     formData.append('file', file)
@@ -118,9 +130,14 @@ export const proceduresApi = {
   getProblems: () => request('/procedures/dictionaries/problems'),
   
   addDictionaryValue: async (dictType, value) => {
-    return request(`/procedures/dictionaries/${dictType}`, { 
-      method: 'POST',
-      body: JSON.stringify({ value })
+    return request(`/procedures/dictionaries/${dictType}?value=${encodeURIComponent(value)}`, { 
+      method: 'POST'
+    })
+  },
+  
+  deleteDictionaryValue: async (dictType, value) => {
+    return request(`/procedures/dictionaries/${dictType}/${encodeURIComponent(value)}`, { 
+      method: 'DELETE'
     })
   },
   

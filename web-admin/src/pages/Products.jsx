@@ -41,8 +41,8 @@ export default function Products() {
     brand: '',
     product_type: '',
     for_whom: '',
-      purpose: [],
-      skin_type: [],
+    purpose: [],
+    skin_type: [],
     application_time: '',
     area: '',
     active_ingredient: '',
@@ -130,7 +130,50 @@ export default function Products() {
       setDeleteModal(null)
     }
   }
-  const handleEdit = (product) => { 
+  const handleEdit = async (product) => { 
+    let parsedPurpose = []
+    let parsedSkinType = []
+    
+    if (product.purpose) {
+      if (Array.isArray(product.purpose)) {
+        parsedPurpose = product.purpose
+      } else if (typeof product.purpose === 'string') {
+        try {
+          parsedPurpose = JSON.parse(product.purpose)
+        } catch {
+          parsedPurpose = [product.purpose]
+        }
+      }
+    }
+    
+    if (product.skin_type) {
+      if (Array.isArray(product.skin_type)) {
+        parsedSkinType = product.skin_type
+      } else if (typeof product.skin_type === 'string') {
+        try {
+          parsedSkinType = JSON.parse(product.skin_type)
+        } catch {
+          parsedSkinType = [product.skin_type]
+        }
+      }
+    }
+    
+    let loadedPhotos = []
+    let loadedVideo = null
+    
+    if (product.id) {
+      try {
+        loadedPhotos = await productsApi.getPhotos(product.id)
+      } catch (e) {
+        console.error('Error loading photos:', e)
+      }
+      try {
+        loadedVideo = await productsApi.getVideo(product.id)
+      } catch (e) {
+        console.error('Error loading video:', e)
+      }
+    }
+    
     setEditingProduct(product)
     setFormData({
       name: product.name || '',
@@ -138,8 +181,8 @@ export default function Products() {
       brand: product.brand || '',
       product_type: product.product_type || '',
       for_whom: product.for_whom || '',
-      purpose: Array.isArray(product.purpose) ? product.purpose : (product.purpose ? [product.purpose] : []),
-      skin_type: Array.isArray(product.skin_type) ? product.skin_type : (product.skin_type ? [product.skin_type] : []),
+      purpose: parsedPurpose,
+      skin_type: parsedSkinType,
       application_time: product.application_time || '',
       area: product.area || '',
       active_ingredient: product.active_ingredient || '',
@@ -149,9 +192,9 @@ export default function Products() {
       application_info: product.application_info || '',
       country: product.country || '',
       description: product.description || '',
-      photos: product.photos || [],
-      has_video: product.has_video || false,
-      video: product.video || null
+      photos: loadedPhotos,
+      has_video: loadedVideo ? true : false,
+      video: loadedVideo
     })
     setShowModal(true) 
   }
@@ -404,9 +447,7 @@ export default function Products() {
       application_info: formData.application_info,
       country: formData.country,
       description: formData.description,
-      photos: formData.photos,
-      has_video: formData.has_video,
-      video: formData.video
+      has_video: formData.has_video
     }
     try {
       const updated = await productsApi.update(editingProduct.id, product)

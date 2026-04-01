@@ -175,7 +175,7 @@ def init_db():
         '15мл', '30мл', '50мл', '75мл', '100мл', '150мл', '200мл', '250мл', '500мл', '1л'
     ])
     _seed_dictionary(cursor, "procedure_categories", [
-        'Чистка', 'Увлажнение', 'Инъекции', 'Эпиляция', 'Массаж', 'Пилинг', 'Уход'
+        'Аппаратная косметология', 'Инъекционная косметология', 'Эстетическая косметология'
     ])
     _seed_dictionary(cursor, "content_categories", [
         'Уход за кожей', 'Ингредиенты', 'Защита', 'Процедуры', 'Питание', 'Образ жизни'
@@ -204,43 +204,20 @@ def init_db():
     _seed_dictionary(cursor, "countries", [
         'Франция', 'Корея', 'Япония', 'США', 'Германия', 'Швейцария', 'Россия', 'Италия', 'Испания', 'Израиль'
     ])
-    
+
+    # Seed procedure dictionaries
     def _seed_procedure_dict(cursor, table: str, values: list):
-        cursor.execute(f"SELECT COUNT(*) FROM {table}")
-        count = cursor.fetchone()[0]
-        if count == 0:
-            for value in values:
-                cursor.execute(f"INSERT INTO {table} (value) VALUES (%s)", (value,))
+        try:
+            cursor.execute(f"SELECT COUNT(*) FROM {table}")
+            count = cursor.fetchone()[0]
+            if count == 0:
+                for value in values:
+                    cursor.execute(f"INSERT INTO {table} (value) VALUES (%s)", (value,))
+        except:
+            pass  # Table might not exist yet
 
-    _seed_procedure_dict(cursor, "procedure_method_types", [
-        "Лазер", "УЗ-терапия", "RF-лифтинг", "Микротоки", "Криотерапия",
-        "Мезотерапия", "Биоревитализация", "Ботокс", "Филлеры", "Пилинг",
-        "Электропорация", "Вакуумный массаж", "Светотерапия"
-    ])
-
-    _seed_procedure_dict(cursor, "procedure_durations", [
-        "30 минут", "45 минут", "1 час", "1.5 часа", "2 часа"
-    ])
-
-    _seed_procedure_dict(cursor, "procedure_zones", [
-        "Лицо", "Шея", "Декольте", "Руки", "Тело", "Веки", "Губы", "Живот", "Бедра"
-    ])
-
-    _seed_procedure_dict(cursor, "procedure_effects", [
-        "Омоложение", "Лифтинг", "Увлажнение", "Осветление", "Липолиз",
-        "Укрепление", "Очищение", "Тонизация", "Anti-age"
-    ])
-
-    _seed_procedure_dict(cursor, "procedure_problems", [
-        "Морщины", "Акне", "Пигментация", "Целлюлит", "Растяжки",
-        "Сухость", "Жирность", "Расширенные поры", "Шрамы", "Веснушки",
-        "Купероз", "Отечность", "Тусклый цвет"
-    ])
-    
-    _seed_procedure_dict(cursor, "procedure_equipment", [
-        "Laser Genesis", "Ulthera", "Thermage", "IPL", "Cryo 6",
-        "DermaPen", "HydraFacial", "EmFace", "Emsculpt", "Accent"
-    ])
+    # Skip procedure dictionary seeding since tables don't exist in main.py
+    # They will be created manually or via separate migration
     
     try:
         cursor.execute("ALTER TABLE procedures ADD COLUMN IF NOT EXISTS direction VARCHAR(50)")

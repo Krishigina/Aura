@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { FlaskConical, Sparkles, BookOpen, UserCog, ChevronDown, Plus, Edit2, Trash2, Search, X, Package, MapPin, Factory, Check } from 'lucide-react'
 import { dictionariesApi } from '../api'
+import { proceduresApi } from '../api'
 import DictionaryPanel from '../components/DictionaryPanel'
 import Select from '../components/Select'
 import './Dictionaries.css'
@@ -46,7 +47,7 @@ const dictGroups = [
     label: 'Процедуры',
     icon: Sparkles,
     color: '#EC4899',
-    dictionaries: ['procedureCategories']
+    dictionaries: ['procedureCategories', 'methodTypes', 'procedureDurations', 'procedureEquipment', 'procedureZones', 'procedureEffects', 'procedureProblems']
   },
   {
     id: 'content',
@@ -76,7 +77,13 @@ const dictConfig = {
   application_times: { label: 'Время применения', icon: FlaskConical, color: '#F59E0B' },
   areas: { label: 'Области применения', icon: FlaskConical, color: '#3B82F6' },
   countries: { label: 'Страны', icon: FlaskConical, color: '#6366F1' },
-  procedureCategories: { label: 'Категории процедур', icon: Sparkles, color: '#EC4899' },
+  procedureCategories: { label: 'Направления', icon: Sparkles, color: '#EC4899' },
+  methodTypes: { label: 'Тип методики', icon: Sparkles, color: '#F97316' },
+  procedureDurations: { label: 'Продолжительность', icon: Sparkles, color: '#84CC16' },
+  procedureEquipment: { label: 'Оборудование', icon: Sparkles, color: '#06B6D4' },
+  procedureZones: { label: 'Зоны', icon: Sparkles, color: '#8B5CF6' },
+  procedureEffects: { label: 'Эффекты', icon: Sparkles, color: '#10B981' },
+  procedureProblems: { label: 'Проблемы', icon: Sparkles, color: '#EF4444' },
   contentCategories: { label: 'Категории контента', icon: BookOpen, color: '#10B981' },
   userRoles: { label: 'Роли', icon: UserCog, color: '#3B82F6' },
 }
@@ -101,7 +108,7 @@ export default function Dictionaries() {
   const loadData = async () => {
     try {
       setLoading(true)
-      const [brands, categories, segments, volumes, procedureCategories, contentCategories, userRoles, skin_types, productTypes, forWhom, purposes, applicationTimes, areas, countries] = await Promise.all([
+      const [brands, categories, segments, volumes, procedureCategories, contentCategories, userRoles, skin_types, productTypes, forWhom, purposes, applicationTimes, areas, countries, methodTypes, procedureDurations, procedureEquipment, procedureZones, procedureEffects, procedureProblems] = await Promise.all([
         dictionariesApi.get('brands').catch(() => defaultEnums.brands),
         dictionariesApi.get('categories').catch(() => defaultEnums.categories),
         dictionariesApi.get('segments').catch(() => defaultEnums.segments),
@@ -116,6 +123,12 @@ export default function Dictionaries() {
         dictionariesApi.get('application_times').catch(() => defaultEnums.application_times),
         dictionariesApi.get('areas').catch(() => defaultEnums.areas),
         dictionariesApi.get('countries').catch(() => defaultEnums.countries),
+        proceduresApi.getMethodTypes().catch(() => []),
+        proceduresApi.getDurations().catch(() => []),
+        proceduresApi.getEquipment().catch(() => []),
+        proceduresApi.getZones().catch(() => []),
+        proceduresApi.getEffects().catch(() => []),
+        proceduresApi.getProblems().catch(() => []),
       ])
       setDictionaries({
         brands,
@@ -131,7 +144,13 @@ export default function Dictionaries() {
         purposes: purposes,
         application_times: applicationTimes,
         areas: areas,
-        countries: countries
+        countries: countries,
+        methodTypes: methodTypes.map(m => m.value),
+        procedureDurations: procedureDurations.map(d => d.value),
+        procedureEquipment: procedureEquipment.map(e => e.value),
+        procedureZones: procedureZones.map(z => z.value),
+        procedureEffects: procedureEffects.map(e => e.value),
+        procedureProblems: procedureProblems.map(p => p.value)
       })
     } catch (err) {
       console.error('Error loading dictionaries:', err)
@@ -142,8 +161,13 @@ export default function Dictionaries() {
 
   const handleDictAdd = async (key, value) => {
     try {
-      await dictionariesApi.create(key, value)
-      setDictionaries(prev => ({ ...prev, [key]: [...prev[key], value] }))
+      const procedureDicts = ['methodTypes', 'procedureDurations', 'procedureEquipment', 'procedureZones', 'procedureEffects', 'procedureProblems']
+      if (procedureDicts.includes(key)) {
+        await dictionariesApi.create(key, value)
+      } else {
+        await dictionariesApi.create(key, value)
+      }
+      setDictionaries(prev => ({ ...prev, [key]: [...(prev[key] || []), value] }))
       success(`Значение "${value}" добавлено`)
     } catch (err) {
       console.error('Error adding dictionary value:', err)
@@ -153,8 +177,13 @@ export default function Dictionaries() {
 
   const handleDictDelete = async (key, value) => {
     try {
-      await dictionariesApi.delete(key, value)
-      setDictionaries(prev => ({ ...prev, [key]: prev[key].filter(v => v !== value) }))
+      const procedureDicts = ['methodTypes', 'procedureDurations', 'procedureEquipment', 'procedureZones', 'procedureEffects', 'procedureProblems']
+      if (procedureDicts.includes(key)) {
+        await dictionariesApi.delete(key, value)
+      } else {
+        await dictionariesApi.delete(key, value)
+      }
+      setDictionaries(prev => ({ ...prev, [key]: (prev[key] || []).filter(v => v !== value) }))
       success(`Значение "${value}" удалено`)
     } catch (err) {
       console.error('Error deleting dictionary value:', err)
