@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, Check, X, Image as ImageIcon } from 'lucide-react'
 import Select from '../components/Select'
 import RichTextEditor from '../components/RichTextEditor'
+import { proceduresApi } from '../api'
 import './ProcedureWizard.css'
 
 const STEPS = [
@@ -72,6 +73,15 @@ export default function ProcedureWizard({ initialData, dictionaries, onSave, onC
         }
       }
       setFormData(merged)
+      
+      // Load photos from API
+      if (initialData.id) {
+        proceduresApi.getPhotos(initialData.id)
+          .then(photos => {
+            setFormData(prev => ({ ...prev, photos }))
+          })
+          .catch(err => console.error('Error loading photos:', err))
+      }
     }
   }, [initialData])
 
@@ -101,25 +111,43 @@ export default function ProcedureWizard({ initialData, dictionaries, onSave, onC
 
     setUploadingPhoto(true)
     try {
-      const reader = new FileReader()
-      reader.onload = () => {
-        setFormData(prev => ({
-          ...prev,
-          photos: [...prev.photos, {
-            id: Date.now().toString(),
-            filename: file.name,
-            content_type: file.type,
-            data: reader.result.split(',')[1]
-          }]
-        }))
+      if (initialData?.id) {
+        // Upload to API if we have a procedure ID
+        const result = await proceduresApi.uploadPhoto(initialData.id, file)
+        // Get the photo with data from API
+        const photos = await proceduresApi.getPhotos(initialData.id)
+        setFormData(prev => ({ ...prev, photos }))
+      } else {
+        // Store locally if no procedure ID yet
+        const reader = new FileReader()
+        reader.onload = () => {
+          setFormData(prev => ({
+            ...prev,
+            photos: [...prev.photos, {
+              id: Date.now().toString(),
+              filename: file.name,
+              content_type: file.type,
+              data: reader.result.split(',')[1]
+            }]
+          }))
+        }
+        reader.readAsDataURL(file)
       }
-      reader.readAsDataURL(file)
+    } catch (err) {
+      console.error('Error uploading photo:', err)
     } finally {
       setUploadingPhoto(false)
     }
   }
 
-  const handlePhotoDelete = (photoId) => {
+  const handlePhotoDelete = async (photoId) => {
+    if (initialData?.id) {
+      try {
+        await proceduresApi.deletePhoto(initialData.id, photoId)
+      } catch (err) {
+        console.error('Error deleting photo:', err)
+      }
+    }
     setFormData(prev => ({
       ...prev,
       photos: prev.photos.filter(p => p.id !== photoId)
