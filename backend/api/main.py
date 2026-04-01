@@ -115,7 +115,11 @@ async def init_db():
 
             CREATE TABLE IF NOT EXISTS brands (
                 id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
+                value VARCHAR(255) NOT NULL UNIQUE,
+                description TEXT,
+                country VARCHAR(100),
+                country_origin VARCHAR(100),
+                manufacturer VARCHAR(255)
             );
 
             CREATE TABLE IF NOT EXISTS categories (

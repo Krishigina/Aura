@@ -15,8 +15,11 @@ export default function VideoPlayer({ productId, onDelete, onUpload }) {
       setVideoSrc(null)
       
       try {
-        const response = await fetch(`http://localhost:3001/api/products/${productId}/video`)
-        if (!response.ok) throw new Error('Video not found')
+        const url = `http://localhost:3001/api/products/${productId}/video`
+        console.log('Fetching video from:', url)
+        const response = await fetch(url)
+        console.log('Video response status:', response.status)
+        if (!response.ok) throw new Error(`Video not found: ${response.status}`)
         
         const arrayBuffer = await response.arrayBuffer()
         const blob = new Blob([arrayBuffer], { type: 'video/mp4' })

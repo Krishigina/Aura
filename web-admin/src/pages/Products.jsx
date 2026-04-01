@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
-import { Search, Plus, Edit2, Trash2, X, Image, Tag, Check, Package, AlertTriangle, Link as LinkIcon, FlaskConical, FileText, Settings, Palette, MapPin, Factory, Clock, Droplets, Play } from 'lucide-react'
+import { Search, Plus, Edit2, Trash2, X, Image, Tag, Check, Package, AlertTriangle, Link as LinkIcon, FlaskConical, FileText, Settings, Palette, MapPin, Factory, Clock, Droplets, Play, Download, Upload } from 'lucide-react'
 import { productsApi, dictionariesApi } from '../api'
 import Select from '../components/Select'
 import VideoPlayer from '../components/VideoPlayer'
@@ -26,7 +26,7 @@ const productEnums = {
 
 export default function Products() {
   const { hasPermission } = useAuth()
-  const { success, error } = useToast()
+  const { success, error, danger } = useToast()
   const [products, setProducts] = useState([])
   const [enums, setEnums] = useState(defaultEnums)
   const [loading, setLoading] = useState(true)
@@ -42,7 +42,7 @@ export default function Products() {
     product_type: '',
     for_whom: '',
       purpose: [],
-      skin_type: '',
+      skin_type: [],
     application_time: '',
     area: '',
     active_ingredient: '',
@@ -51,8 +51,6 @@ export default function Products() {
     composition: '',
     application_info: '',
     country: '',
-    country_origin: '',
-    manufacturer: '',
     description: '',
     photos: [],
     has_video: false,
@@ -64,6 +62,7 @@ export default function Products() {
   const [uploadingVideo, setUploadingVideo] = useState(false)
   const [url, setUrl] = useState('')
   const [parsing, setParsing] = useState(false)
+  const [importing, setImporting] = useState(false)
 
   const canEdit = hasPermission('products')
 
@@ -124,7 +123,7 @@ export default function Products() {
       try {
         await productsApi.delete(deleteModal.id)
         setProducts(prev => prev.filter(p => p.id !== deleteModal.id))
-        success(`Продукт "${deleteModal.name}" удалён`)
+        danger(`Продукт "${deleteModal.name}" удалён`)
       } catch (err) {
         error('Ошибка удаления')
       }
@@ -140,8 +139,7 @@ export default function Products() {
       product_type: product.product_type || '',
       for_whom: product.for_whom || '',
       purpose: Array.isArray(product.purpose) ? product.purpose : (product.purpose ? [product.purpose] : []),
-      country_origin: product.country_origin || '',
-      skin_type: product.skin_type || '',
+      skin_type: Array.isArray(product.skin_type) ? product.skin_type : (product.skin_type ? [product.skin_type] : []),
       application_time: product.application_time || '',
       area: product.area || '',
       active_ingredient: product.active_ingredient || '',
@@ -150,7 +148,6 @@ export default function Products() {
       composition: product.composition || '',
       application_info: product.application_info || '',
       country: product.country || '',
-      manufacturer: product.manufacturer || '',
       description: product.description || '',
       photos: product.photos || [],
       has_video: product.has_video || false,
@@ -161,9 +158,11 @@ export default function Products() {
   const openAddModal = async () => {
     try {
       // Create empty product first to get ID for photo/video uploads
+      const firstBrand = enums.brands[0]
+      const brandValue = typeof firstBrand === 'object' ? firstBrand.value : firstBrand
       const created = await productsApi.create({
-        name: 'Новый продукт',
-        brand: enums.brands[0] || '',
+        name: '',
+        brand: brandValue || '',
         volume: enums.volumes[0] || ''
       })
       setProducts(prev => [created, ...prev])
@@ -404,8 +403,6 @@ export default function Products() {
       composition: formData.composition,
       application_info: formData.application_info,
       country: formData.country,
-      country_origin: formData.country_origin,
-      manufacturer: formData.manufacturer,
       description: formData.description,
       photos: formData.photos,
       has_video: formData.has_video,
@@ -418,7 +415,8 @@ export default function Products() {
       setShowModal(false)
       setEditingProduct(null)
     } catch (err) {
-      error('Ошибка сохранения')
+      console.error('Save error:', err)
+      error('Ошибка сохранения: ' + err.message)
     }
   }
 
@@ -443,6 +441,26 @@ export default function Products() {
           <p>Управление косметическими средствами</p>
         </div>
         <div className="header-actions">
+          <button className="btn btn-ghost" onClick={() => productsApi.export()}>
+            <Download size={18} />Экспорт
+          </button>
+          <label className="btn btn-ghost" style={{cursor: 'pointer'}}>
+            <Upload size={18} />Импорт
+            <input type="file" accept=".csv" style={{display: 'none'}} onChange={async (e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              setImporting(true)
+              try {
+                const result = await productsApi.import(file)
+                success(`Импортировано ${result.created} продуктов`)
+                loadData()
+              } catch (err) {
+                error('Ошибка импорта: ' + err.message)
+              } finally {
+                setImporting(false)
+              }
+            }} disabled={importing} />
+          </label>
           {canEdit && (
             <button className="btn btn-primary" onClick={openAddModal}>
               <Plus size={18} />Добавить
@@ -509,10 +527,10 @@ export default function Products() {
                     <span>О продукте</span>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--spacing-md)' }}>
-                    <div className="form-group"><label>Название *</label><input name="name" value={formData.name} onChange={handleInputChange} className="input" required /></div>
+                    <div className="form-group"><label>Название *</label><input name="name" value={formData.name} onChange={handleInputChange} className="input" placeholder="Введите название продукта" required /></div>
                     <div className="form-group"><label>Что это?</label><input name="what_is_it" value={formData.what_is_it} onChange={handleInputChange} className="input" placeholder="Например: увлажняющий крем" /></div>
                     <div className="form-group"><Select label="Бренд *" name="brand" value={formData.brand} onChange={handleSelectChange} options={enums.brands} searchable /></div>
-                    <div className="form-group"><Select label="Сегмент" name="segment" value={formData.segment} onChange={handleSelectChange} options={enums.segments} placeholder="Выберите сегмент" /></div>
+                    <div className="form-group"><Select label="Сегмент" name="segment" value={formData.segment} onChange={handleSelectChange} options={enums.segments} placeholder="Выберите сегмент" searchable /></div>
                   </div>
                 </div>
 
@@ -533,11 +551,11 @@ export default function Products() {
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--spacing-md)' }}>
                     <Select label="Тип продукта" name="product_type" value={formData.product_type} onChange={handleSelectChange} options={enums.product_types || productEnums.product_types} placeholder="Выберите тип" searchable />
-                    <Select label="Для кого" name="for_whom" value={formData.for_whom} onChange={handleSelectChange} options={enums.for_whom || productEnums.for_whom} placeholder="Выберите" />
+                    <Select label="Для кого" name="for_whom" value={formData.for_whom} onChange={handleSelectChange} options={enums.for_whom || productEnums.for_whom} placeholder="Выберите" searchable />
                     <Select label="Назначение" name="purpose" value={formData.purpose} onChange={handleSelectChange} options={enums.purposes || productEnums.purposes} placeholder="Выберите назначение" multiple={true} searchable />
-                    <Select label="Тип кожи" name="skin_type" value={formData.skin_type} onChange={handleSelectChange} options={enums.skin_types || productEnums.skin_types} placeholder="Выберите тип кожи" />
-                    <Select label="Время применения" name="application_time" value={formData.application_time} onChange={handleSelectChange} options={enums.application_times || productEnums.application_times} placeholder="Выберите время" />
-                    <Select label="Область применения" name="area" value={formData.area} onChange={handleSelectChange} options={enums.areas || productEnums.areas} placeholder="Выберите область" />
+                    <Select label="Тип кожи" name="skin_type" value={formData.skin_type} onChange={handleSelectChange} options={enums.skin_types || productEnums.skin_types} placeholder="Выберите тип кожи" multiple={true} searchable />
+                    <Select label="Время применения" name="application_time" value={formData.application_time} onChange={handleSelectChange} options={enums.application_times || productEnums.application_times} placeholder="Выберите время" searchable />
+                    <Select label="Область применения" name="area" value={formData.area} onChange={handleSelectChange} options={enums.areas || productEnums.areas} placeholder="Выберите область" searchable />
                     <div className="form-group"><label>Активный компонент</label><input name="active_ingredient" value={formData.active_ingredient} onChange={handleInputChange} className="input" placeholder="Например: гиалуроновая кислота" /></div>
                     <Select label="Объём" name="volume" value={formData.volume} onChange={handleSelectChange} options={enums.volumes} placeholder="Выберите объём" searchable />
                   </div>
@@ -559,27 +577,6 @@ export default function Products() {
                     <span>Состав</span>
                   </div>
                   <div className="form-group"><label>Состав</label><textarea name="composition" value={formData.composition} onChange={handleInputChange} className="input textarea" rows="3" placeholder="Список ингредиентов..." /></div>
-                </div>
-
-                {/* Секция 6: Бренд */}
-                <div className="form-section" style={{ gridColumn: 'span 2' }}>
-                  <div className="form-section-header">
-                    <div className="form-section-icon" style={{ background: 'rgba(236, 72, 153, 0.1)', color: '#EC4899' }}><Palette size={16} /></div>
-                    <span>Бренд</span>
-                  </div>
-                  <Select label="Страна бренда" name="country" value={formData.country} onChange={handleSelectChange} options={enums.countries || []} placeholder="Выберите страну" searchable />
-                </div>
-
-                {/* Секция 7: Дополнительно */}
-                <div className="form-section" style={{ gridColumn: 'span 2' }}>
-                  <div className="form-section-header">
-                    <div className="form-section-icon" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3B82F6' }}><Factory size={16} /></div>
-                    <span>Дополнительная информация</span>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--spacing-md)' }}>
-                    <Select label="Страна происхождения" name="country_origin" value={formData.country_origin || ''} onChange={handleSelectChange} options={enums.countries || []} placeholder="Выберите страну" searchable />
-                    <div className="form-group"><label>Производитель</label><input name="manufacturer" value={formData.manufacturer} onChange={handleInputChange} className="input" /></div>
-                  </div>
                 </div>
 
                 {/* Секция 8: Медиа (только при редактировании) */}

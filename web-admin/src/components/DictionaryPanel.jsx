@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Edit2, Trash2, X, Check, ChevronDown, ExternalLink } from 'lucide-react'
+import { Plus, Edit2, Trash2, X, Check, ChevronDown, ExternalLink, Info } from 'lucide-react'
 
 function pluralize(n, one, two, five) {
   const absN = Math.abs(n)
@@ -17,7 +17,8 @@ export default function DictionaryPanel({
   onUpdate, 
   canEdit = true,
   config = {},
-  onFullPage
+  onFullPage,
+  onEditBrand
 }) {
   const [expandedDict, setExpandedDict] = useState(null)
   const [newValue, setNewValue] = useState('')
@@ -30,9 +31,12 @@ export default function DictionaryPanel({
   const handleAdd = (key) => {
     if (!newValue.trim()) return
     const values = dictionaries[key] || []
-    const duplicates = values.filter(v => v.toLowerCase().includes(newValue.toLowerCase()))
+    const duplicates = values.filter(v => {
+      const vValue = typeof v === 'object' ? v.value : v
+      return vValue.toLowerCase().includes(newValue.toLowerCase())
+    })
     if (duplicates.length > 0) {
-      alert(`Найдены похожие значения: ${duplicates.join(', ')}`)
+      alert(`Найдены похожие значения: ${duplicates.map(d => typeof d === 'object' ? d.value : d).join(', ')}`)
       return
     }
     onAdd(key, newValue.trim())
@@ -52,15 +56,18 @@ export default function DictionaryPanel({
 
   const startEdit = (key, value) => {
     setEditingValue({ key, value })
-    setEditValue(value)
+    setEditValue(typeof value === 'object' ? value.value : value)
   }
 
   const saveEdit = (key, oldValue) => {
     if (!editValue.trim()) return
     const values = dictionaries[key] || []
-    const duplicates = values.filter(v => v.toLowerCase().includes(editValue.toLowerCase()) && v !== oldValue)
+    const duplicates = values.filter(v => {
+      const vValue = typeof v === 'object' ? v.value : v
+      return vValue.toLowerCase().includes(editValue.toLowerCase()) && vValue !== oldValue
+    })
     if (duplicates.length > 0) {
-      alert(`Такое значение уже есть: ${duplicates.join(', ')}`)
+      alert(`Такое значение уже есть: ${duplicates.map(d => typeof d === 'object' ? d.value : d).join(', ')}`)
       return
     }
     onUpdate(key, oldValue, editValue.trim())
@@ -98,7 +105,10 @@ export default function DictionaryPanel({
                 {isExpanded && (
                   <div className="dict-item-content">
                     <div className="dict-values-list">
-                      {listValues.filter(v => !newValue || v.toLowerCase().includes(newValue.toLowerCase())).map((value, idx) => (
+                      {listValues.filter(v => !newValue || (typeof v === 'string' ? v.toLowerCase().includes(newValue.toLowerCase()) : v.value?.toLowerCase().includes(newValue.toLowerCase()))).map((item, idx) => {
+                        const value = typeof item === 'string' ? item : item.value
+                        const description = typeof item === 'string' ? null : item.description
+                        return (
                         <div key={idx} className="dict-value-row">
                           {editingValue?.key === key && editingValue?.value === value ? (
                             <div className="dict-edit-row">
@@ -107,7 +117,15 @@ export default function DictionaryPanel({
                               <button className="btn btn-sm btn-ghost" onClick={() => { setEditingValue(null); setEditValue('') }}><X size={14} /></button>
                             </div>
                           ) : (
-                            <span className="dict-value">{value}</span>
+                            <div className="dict-value-container">
+                              <span className="dict-value">{value}</span>
+                              {key === 'brands' && typeof item === 'object' && item.description && (
+                                <span className="dict-value-desc" onClick={() => onEditBrand?.(item)} title="Редактировать описание"><Info size={12} />{item.description.substring(0, 30)}{item.description.length > 30 ? '...' : ''}</span>
+                              )}
+                              {key === 'brands' && (
+                                <button className="btn btn-icon btn-ghost btn-sm" onClick={() => onEditBrand?.(typeof item === 'object' ? item : { value })} title="О бренде"><Info size={14} /></button>
+                              )}
+                            </div>
                           )}
                           {canEdit && (
                             <div className="dict-value-actions">
@@ -116,7 +134,7 @@ export default function DictionaryPanel({
                             </div>
                           )}
                         </div>
-                      ))}
+                      )})}
                     </div>
                     {canEdit && (
                       <div className="dict-add-row">

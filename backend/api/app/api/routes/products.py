@@ -21,6 +21,97 @@ def get_products():
     return ProductService.get_all()
 
 
+@router.get("/export")
+def export_products():
+    products = ProductService.get_all()
+    import csv
+    import io
+    
+    output = io.StringIO()
+    
+    if not products:
+        return {"message": "No products to export"}
+    
+    fieldnames = ['name', 'what_is_it', 'brand', 'product_type', 'for_whom', 
+                  'purpose', 'skin_type', 'application_time', 'area', 
+                  'active_ingredient', 'volume', 'segment', 'composition', 
+                  'application_info', 'country', 'country_origin', 'manufacturer', 'description']
+    
+    writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction='ignore')
+    writer.writeheader()
+    
+    for product in products:
+        row = {}
+        for field in fieldnames:
+            val = product.get(field)
+            if isinstance(val, list):
+                row[field] = '|'.join(val) if val else ''
+            else:
+                row[field] = val or ''
+        writer.writerow(row)
+    
+    output.seek(0)
+    
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode('utf-8-sig')),
+        media_type='text/csv; charset=utf-8',
+        headers={'Content-Disposition': 'attachment; filename=products.csv'}
+    )
+
+
+@router.post("/import")
+async def import_products(file: UploadFile = File(...)):
+    import csv
+    import io
+    
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(400, "Only CSV files allowed")
+    
+    contents = await file.read()
+    text = contents.decode('utf-8-sig')
+    reader = csv.DictReader(io.StringIO(text))
+    
+    created = 0
+    errors = []
+    
+    for i, row in enumerate(reader):
+        try:
+            purpose = row.get('purpose', '').split('|') if row.get('purpose') else []
+            purpose = [p.strip() for p in purpose if p.strip()]
+            
+            skin_type = row.get('skin_type', '').split('|') if row.get('skin_type') else []
+            skin_type = [s.strip() for s in skin_type if s.strip()]
+            
+            product_data = ProductCreate(
+                name=row.get('name', ''),
+                what_is_it=row.get('what_is_it', ''),
+                brand=row.get('brand', ''),
+                product_type=row.get('product_type', ''),
+                for_whom=row.get('for_whom', ''),
+                purpose=purpose,
+                skin_type=skin_type,
+                application_time=row.get('application_time', ''),
+                area=row.get('area', ''),
+                active_ingredient=row.get('active_ingredient', ''),
+                volume=row.get('volume', ''),
+                segment=row.get('segment', ''),
+                composition=row.get('composition', ''),
+                application_info=row.get('application_info', ''),
+                country=row.get('country', ''),
+                country_origin=row.get('country_origin', ''),
+                manufacturer=row.get('manufacturer', ''),
+                description=row.get('description', ''),
+                photos=[],
+                has_video=False
+            )
+            ProductService.create(product_data)
+            created += 1
+        except Exception as e:
+            errors.append(f"Row {i+2}: {str(e)}")
+    
+    return {"success": True, "created": created, "errors": errors if errors else None}
+
+
 @router.get("/{product_id}")
 def get_product(product_id: int):
     product = ProductService.get_by_id(product_id)
@@ -38,6 +129,9 @@ def create_product(product: ProductCreate):
     if result.get('purpose') and isinstance(result['purpose'], str):
         from app.services.product_service import deserialize_purpose
         result['purpose'] = deserialize_purpose(result['purpose'])
+    if result.get('skin_type') and isinstance(result['skin_type'], str):
+        from app.services.product_service import deserialize_purpose
+        result['skin_type'] = deserialize_purpose(result['skin_type'])
     if result.get('photos') and isinstance(result['photos'], str):
         result['photos'] = json.loads(result['photos'])
     return result
@@ -52,6 +146,9 @@ def update_product(product_id: int, product: ProductCreate):
     if result.get('purpose') and isinstance(result['purpose'], str):
         from app.services.product_service import deserialize_purpose
         result['purpose'] = deserialize_purpose(result['purpose'])
+    if result.get('skin_type') and isinstance(result['skin_type'], str):
+        from app.services.product_service import deserialize_purpose
+        result['skin_type'] = deserialize_purpose(result['skin_type'])
     if result.get('photos') and isinstance(result['photos'], str):
         result['photos'] = json.loads(result['photos'])
     return result
@@ -223,3 +320,94 @@ async def get_video(product_id: int):
 @router.post("/parse")
 async def parse_product_url(request: ParseRequest):
     return await ProductService.parse_url(request.url)
+
+
+@router.get("/export")
+def export_products():
+    products = ProductService.get_all()
+    import csv
+    import io
+    
+    output = io.StringIO()
+    
+    if not products:
+        return {"message": "No products to export"}
+    
+    fieldnames = ['name', 'what_is_it', 'brand', 'product_type', 'for_whom', 
+                  'purpose', 'skin_type', 'application_time', 'area', 
+                  'active_ingredient', 'volume', 'segment', 'composition', 
+                  'application_info', 'country', 'country_origin', 'manufacturer', 'description']
+    
+    writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction='ignore')
+    writer.writeheader()
+    
+    for product in products:
+        row = {}
+        for field in fieldnames:
+            val = product.get(field)
+            if isinstance(val, list):
+                row[field] = '|'.join(val) if val else ''
+            else:
+                row[field] = val or ''
+        writer.writerow(row)
+    
+    output.seek(0)
+    
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode('utf-8-sig')),
+        media_type='text/csv; charset=utf-8',
+        headers={'Content-Disposition': 'attachment; filename=products.csv'}
+    )
+
+
+@router.post("/import")
+async def import_products(file: UploadFile = File(...)):
+    import csv
+    import io
+    
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(400, "Only CSV files allowed")
+    
+    contents = await file.read()
+    text = contents.decode('utf-8-sig')
+    reader = csv.DictReader(io.StringIO(text))
+    
+    created = 0
+    errors = []
+    
+    for i, row in enumerate(reader):
+        try:
+            purpose = row.get('purpose', '').split('|') if row.get('purpose') else []
+            purpose = [p.strip() for p in purpose if p.strip()]
+            
+            skin_type = row.get('skin_type', '').split('|') if row.get('skin_type') else []
+            skin_type = [s.strip() for s in skin_type if s.strip()]
+            
+            product_data = ProductCreate(
+                name=row.get('name', ''),
+                what_is_it=row.get('what_is_it', ''),
+                brand=row.get('brand', ''),
+                product_type=row.get('product_type', ''),
+                for_whom=row.get('for_whom', ''),
+                purpose=purpose,
+                skin_type=skin_type,
+                application_time=row.get('application_time', ''),
+                area=row.get('area', ''),
+                active_ingredient=row.get('active_ingredient', ''),
+                volume=row.get('volume', ''),
+                segment=row.get('segment', ''),
+                composition=row.get('composition', ''),
+                application_info=row.get('application_info', ''),
+                country=row.get('country', ''),
+                country_origin=row.get('country_origin', ''),
+                manufacturer=row.get('manufacturer', ''),
+                description=row.get('description', ''),
+                photos=[],
+                has_video=False
+            )
+            ProductService.create(product_data)
+            created += 1
+        except Exception as e:
+            errors.append(f"Row {i+2}: {str(e)}")
+    
+    return {"success": True, "created": created, "errors": errors if errors else None}

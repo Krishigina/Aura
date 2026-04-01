@@ -626,6 +626,15 @@ body {
   content: "ℹ";
 }
 
+.toast-danger {
+  background: #DC2626;
+  color: white;
+}
+
+.toast-danger::before {
+  content: "🗑";
+}
+
 @keyframes slideInRight {
   from {
     transform: translateX(100%);

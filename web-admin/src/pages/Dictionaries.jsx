@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
-import { FlaskConical, Sparkles, BookOpen, UserCog, ChevronDown, Plus, Edit2, Trash2, Search, X } from 'lucide-react'
+import { FlaskConical, Sparkles, BookOpen, UserCog, ChevronDown, Plus, Edit2, Trash2, Search, X, Package, MapPin, Factory, Check } from 'lucide-react'
 import { dictionariesApi } from '../api'
 import DictionaryPanel from '../components/DictionaryPanel'
+import Select from '../components/Select'
 import './Dictionaries.css'
 
 function pluralize(n, one, two, five) {
@@ -88,6 +89,8 @@ export default function Dictionaries() {
   const [expandedGroup, setExpandedGroup] = useState('products')
   const [fullPageDict, setFullPageDict] = useState(null)
   const [fullPageFilter, setFullPageFilter] = useState('')
+  const [brandModal, setBrandModal] = useState(null)
+  const [brandForm, setBrandForm] = useState({ value: '', description: '', country: '', country_origin: '', manufacturer: '' })
 
   const canManageEnums = user?.role === 'admin'
 
@@ -343,6 +346,7 @@ const [fullPageEditValue, setFullPageEditValue] = useState(null)
                     onUpdate={handleDictUpdate}
                     canEdit={canManageEnums}
                     onFullPage={openFullPage}
+                    onEditBrand={(brand) => { setBrandModal(true); setBrandForm(brand) }}
                   />
                 </div>
               )}
@@ -350,6 +354,103 @@ const [fullPageEditValue, setFullPageEditValue] = useState(null)
           )
         })}
       </div>
+
+      {brandModal && (
+        <div className="modal-overlay" onClick={() => setBrandModal(null)}>
+          <div className="modal glass-card brand-edit-modal" onClick={e => e.stopPropagation()}>
+            <div className="brand-modal-header">
+              <div className="brand-modal-icon">
+                <Package size={24} />
+              </div>
+              <div>
+                <h3>Редактирование бренда</h3>
+                <p className="brand-modal-subtitle">{brandForm.value}</p>
+              </div>
+            </div>
+            
+            <div className="brand-modal-body">
+              <div className="form-group">
+                <label>Описание</label>
+                <textarea 
+                  className="input textarea" 
+                  rows={3}
+                  value={brandForm.description || ''}
+                  onChange={e => setBrandForm(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Расскажите о бренде, его истории и особенностях..."
+                />
+              </div>
+              
+              <div className="brand-fields-row">
+                <div className="form-group">
+                  <label>
+                    <MapPin size={14} />
+                    Страна бренда
+                  </label>
+                  <Select 
+                    value={brandForm.country || ''}
+                    onChange={(_, val) => setBrandForm(prev => ({ ...prev, country: val }))}
+                    options={dictionaries.countries || defaultEnums.countries}
+                    placeholder="Выберите страну"
+                    searchable
+                  />
+                </div>
+                <div className="form-group">
+                  <label>
+                    <MapPin size={14} />
+                    Страна происхождения
+                  </label>
+                  <Select 
+                    value={brandForm.country_origin || ''}
+                    onChange={(_, val) => setBrandForm(prev => ({ ...prev, country_origin: val }))}
+                    options={dictionaries.countries || defaultEnums.countries}
+                    placeholder="Выберите страну"
+                    searchable
+                  />
+                </div>
+              </div>
+              
+              <div className="form-group">
+                <label>
+                  <Factory size={14} />
+                  Производитель
+                </label>
+                <input 
+                  className="input"
+                  value={brandForm.manufacturer || ''}
+                  onChange={e => setBrandForm(prev => ({ ...prev, manufacturer: e.target.value }))}
+                  placeholder="Название производителя"
+                />
+              </div>
+            </div>
+            
+            <div className="brand-modal-footer">
+              <button className="btn btn-ghost" onClick={() => setBrandModal(null)}>Отмена</button>
+              <button className="btn btn-primary" onClick={async () => {
+                try {
+                  const dataToSave = {
+                    value: brandForm.value,
+                    description: brandForm.description || null,
+                    country: brandForm.country || null,
+                    country_origin: brandForm.country_origin || null,
+                    manufacturer: brandForm.manufacturer || null
+                  }
+                  await dictionariesApi.updateBrand(dataToSave)
+                  success('Информация о бренде сохранена')
+                  setBrandModal(null)
+                  loadData()
+                } catch (err) {
+                  console.error('Brand save error:', err)
+                  const errorMsg = err instanceof Error ? err.message : String(err)
+                  error('Ошибка сохранения: ' + errorMsg)
+                }
+              }}>
+                <Check size={16} />
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

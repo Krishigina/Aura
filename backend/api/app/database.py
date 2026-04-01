@@ -144,6 +144,27 @@ def init_db():
         'Aura', 'La Roche-Posay', 'Vichy', 'Bioderma', 'CeraVe', 
         'The Ordinary', "Paula's Choice", 'Cosrx', 'Eucerin', 'Nivea'
     ])
+    
+    # Add description column to brands if not exists
+    try:
+        cursor.execute("ALTER TABLE brands ADD COLUMN IF NOT EXISTS description TEXT")
+    except:
+        pass
+    
+    try:
+        cursor.execute("ALTER TABLE brands ADD COLUMN IF NOT EXISTS country VARCHAR(100)")
+    except:
+        pass
+    
+    try:
+        cursor.execute("ALTER TABLE brands ADD COLUMN IF NOT EXISTS country_origin VARCHAR(100)")
+    except:
+        pass
+    
+    try:
+        cursor.execute("ALTER TABLE brands ADD COLUMN IF NOT EXISTS manufacturer VARCHAR(255)")
+    except:
+        pass
     _seed_dictionary(cursor, "categories", [
         'Очищение', 'Увлажнение', 'Сыворотки', 'SPF', 'Уход', 'Маска', 'Тоник', 'Крем', 'Масло'
     ])
