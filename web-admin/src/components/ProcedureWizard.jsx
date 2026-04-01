@@ -443,37 +443,48 @@ export default function ProcedureWizard({ initialData, dictionaries, onSave, onC
               </div>
               <div className="form-group full-width">
                 <label>Фотографии</label>
-                <div className="photo-grid">
-                  {formData.photos?.map((photo, idx) => (
-                    <div
-                      key={photo.id || idx}
-                      className={`photo-card ${draggedPhotoIndex === idx ? 'dragging' : ''}`}
-                      draggable
-                      onDragStart={() => handlePhotoDragStart(idx)}
-                      onDragOver={handlePhotoDragOver}
-                      onDrop={() => handlePhotoDrop(idx)}
-                    >
-                      <div className="photo-preview">
-                        {photo.data && (
-                          <img
-                            src={`data:${photo.content_type};base64,${photo.data}`}
-                            alt=""
-                          />
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        className="photo-delete-btn"
-                        onClick={() => handlePhotoDelete(photo.id)}
-                      >
-                        <X size={14} />
-                      </button>
+                <div className="media-upload-section">
+                  {formData.photos?.length > 0 && (
+                    <div className="photo-grid">
+                      {formData.photos.map((photo, idx) => (
+                        <div
+                          key={photo.id || idx}
+                          className={`photo-card ${draggedPhotoIndex === idx ? 'dragging' : ''}`}
+                          draggable
+                          onDragStart={() => handlePhotoDragStart(idx)}
+                          onDragOver={handlePhotoDragOver}
+                          onDrop={() => handlePhotoDrop(idx)}
+                        >
+                          <div className="photo-preview">
+                            {photo.data && photo.data.length > 0 ? (
+                              <img
+                                src={`data:${photo.content_type};base64,${photo.data}`}
+                                alt=""
+                              />
+                            ) : (
+                              <div className="photo-placeholder">
+                                <ImageIcon size={32} />
+                                <span className="photo-filename">{photo.filename?.split('.')[0] || 'Фото'}</span>
+                                <span className="photo-type">{photo.content_type?.split('/')[1]?.toUpperCase() || ''}</span>
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className="photo-delete-btn"
+                            onClick={(e) => { e.stopPropagation(); handlePhotoDelete(photo.id) }}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                   <label className={`upload-zone ${uploadingPhoto ? 'uploading' : ''}`}>
                     {uploadingPhoto ? (
                       <div className="upload-content">
-                        <span className="spinner" style={{ width: 20, height: 20 }}></span>
+                        <span className="spinner" style={{ width: 24, height: 24 }}></span>
+                        <span className="upload-text">Загрузка...</span>
                       </div>
                     ) : (
                       <>
@@ -484,8 +495,9 @@ export default function ProcedureWizard({ initialData, dictionaries, onSave, onC
                           className="hidden-input"
                         />
                         <div className="upload-content">
-                          <ImageIcon size={20} />
+                          <ImageIcon size={24} className="upload-icon" />
                           <span className="upload-text">Добавить фото</span>
+                          <span className="upload-hint">PNG, JPG, WebP до 10MB</span>
                         </div>
                       </>
                     )}
