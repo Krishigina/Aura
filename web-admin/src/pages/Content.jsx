@@ -149,8 +149,10 @@ export default function Content() {
 
     const tags = form.tags.split(',').map(t => t.trim()).filter(Boolean)
     
-    // Don't send base64 image in the article data - it's too large
-    // We'll upload it separately after creating/updating the article
+    // Determine if we have a new image to upload
+    const hasNewImage = form.image_url && form.image_url.startsWith('data:')
+    const existingImageUrl = form.image_url && !form.image_url.startsWith('data:') ? form.image_url : ''
+    
     const articleData = {
       title: form.title,
       category: form.category,
@@ -158,7 +160,7 @@ export default function Content() {
       author_id: form.author_id,
       author_name: form.author_name,
       body: form.body || '',
-      image_url: '',  // Will be set after image upload
+      image_url: existingImageUrl,
       published: form.published
     }
 
@@ -167,27 +169,29 @@ export default function Content() {
       if (editingArticle) {
         const updated = await contentApi.update(editingArticle.id, articleData)
         articleId = editingArticle.id
-        setArticles(prev => prev.map(a => a.id === editingArticle.id ? updated : a))
         success('Статья обновлена')
       } else {
         const created = await contentApi.create(articleData)
         articleId = created.id
-        setArticles(prev => [created, ...prev])
         success('Статья создана')
       }
       
-      // Upload image separately if we have one
-      if (form.image_url && form.image_url.startsWith('data:')) {
+      // Upload new image if we have one
+      if (hasNewImage) {
         try {
           const response = await fetch(form.image_url)
           const blob = await response.blob()
           const file = new File([blob], 'card-image.jpg', { type: 'image/jpeg' })
-          await contentApi.uploadCardImage(articleId, file)
+          const imgResult = await contentApi.uploadCardImage(articleId, file)
+          // Update article with new image URL
+          await contentApi.update(articleId, { ...articleData, image_url: imgResult.url })
         } catch (imgErr) {
           console.error('Error uploading card image:', imgErr)
         }
       }
       
+      // Reload articles to get updated data
+      await loadData()
       setShowEditor(false)
       setEditingArticle(null)
     } catch (err) {
