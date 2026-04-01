@@ -132,43 +132,43 @@ export default function Procedures() {
         </div>
       </div>
 
-      <div className="procedures-grid">
-        {filtered.map(procedure => (
-          <div key={procedure.id} className="procedure-card glass-card clickable" onClick={() => { setEditingProcedure(procedure); setShowWizard(true) }}>
-            <div className="procedure-header">
-              <h4>{procedure.name}</h4>
-              {procedure.direction && <span className="direction-badge">{procedure.direction}</span>}
-            </div>
-            <div className="procedure-meta">
-              {procedure.duration && <div className="meta-item"><Clock size={16} /><span>{procedure.duration}</span></div>}
-              {procedure.method_type && <div className="meta-item"><Scissors size={16} /><span>{procedure.method_type}</span></div>}
-            </div>
-            {procedure.photos && procedure.photos.length > 0 && (
-              <div className="procedure-photos">
-                {procedure.photos.slice(0, 3).map((photo, idx) => (
-                  <div key={photo.id || idx} className="procedure-photo-thumb">
-                    {photo.data ? (
-                      <img src={`data:${photo.content_type};base64,${photo.data}`} alt="" />
-                    ) : (
-                      <ImageIcon size={16} />
-                    )}
+      <div className="procedures-table-wrapper">
+        <table className="procedures-table">
+          <thead>
+            <tr>
+              <th>Название</th>
+              <th>Направление</th>
+              <th>Метод</th>
+              <th>Длительность</th>
+              {canEdit && <th></th>}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(procedure => (
+              <tr key={procedure.id} className="clickable" onClick={() => { setEditingProcedure(procedure); setShowWizard(true) }}>
+                <td>
+                  <div className="procedure-name-cell">
+                    <strong>{procedure.name}</strong>
+                    {procedure.description && <span className="procedure-desc">{procedure.description.substring(0, 60)}{procedure.description.length > 60 ? '...' : ''}</span>}
                   </div>
-                ))}
-                {procedure.photos.length > 3 && <span className="more-photos">+{procedure.photos.length - 3}</span>}
-              </div>
-            )}
-            <div className="procedure-fields">
-              {procedure.description && <p className="field-line">{procedure.description.substring(0, 100)}{procedure.description.length > 100 ? '...' : ''}</p>}
-              {procedure.indications && <p className="field-line"><strong>Показания:</strong> {procedure.indications.substring(0, 80)}{procedure.indications.length > 80 ? '...' : ''}</p>}
-            </div>
-            {canEdit && (
-              <div className="procedure-actions">
-                <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); setEditingProcedure(procedure); setShowWizard(true) }}><Edit2 size={16} /></button>
-                <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); setDeleteModal(procedure) }}><Trash2 size={16} /></button>
-              </div>
-            )}
-          </div>
-        ))}
+                </td>
+                <td>{procedure.direction && <span className="direction-badge">{procedure.direction}</span>}</td>
+                <td>{procedure.method_type || '—'}</td>
+                <td>{procedure.duration ? `${procedure.duration} мин` : '—'}</td>
+                {canEdit && (
+                  <td className="actions-cell">
+                    <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); setEditingProcedure(procedure); setShowWizard(true) }} title="Редактировать">
+                      <Edit2 size={16} />
+                    </button>
+                    <button className="btn btn-ghost btn-sm btn-danger" onClick={(e) => { e.stopPropagation(); setDeleteModal(procedure) }} title="Удалить">
+                      <Trash2 size={16} />
+                    </button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {filtered.length === 0 && (

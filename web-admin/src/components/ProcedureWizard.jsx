@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, Check, X, Image as ImageIcon } from 'lucide-react'
 import Select from '../components/Select'
+import RichTextEditor from '../components/RichTextEditor'
 import './ProcedureWizard.css'
 
 const STEPS = [
@@ -86,6 +87,10 @@ export default function ProcedureWizard({ initialData, dictionaries, onSave, onC
 
   const handleSelectChange = (name, value) => {
     setFormData(prev => ({ ...prev, [name]: value }))
+  }
+
+  const handleRichTextChange = (name, html) => {
+    setFormData(prev => ({ ...prev, [name]: html }))
   }
 
   const handlePhotoUpload = async (file) => {
@@ -227,35 +232,29 @@ export default function ProcedureWizard({ initialData, dictionaries, onSave, onC
               </div>
               <div className="form-group full-width">
                 <label>О процедуре</label>
-                <textarea
-                  name="procedure_about"
+                <RichTextEditor
                   value={formData.procedure_about}
-                  onChange={handleInputChange}
-                  className="input textarea"
-                  rows="3"
+                  onChange={(html) => handleRichTextChange('procedure_about', html)}
                   placeholder="Подробная информация о процедуре..."
+                  rows={5}
                 />
               </div>
               <div className="form-group full-width">
                 <label>Принцип действия</label>
-                <textarea
-                  name="principle"
+                <RichTextEditor
                   value={formData.principle}
-                  onChange={handleInputChange}
-                  className="input textarea"
-                  rows="3"
+                  onChange={(html) => handleRichTextChange('principle', html)}
                   placeholder="Принцип действия метода..."
+                  rows={4}
                 />
               </div>
               <div className="form-group full-width">
                 <label>Как проходит процедура</label>
-                <textarea
-                  name="how_it_goes"
+                <RichTextEditor
                   value={formData.how_it_goes}
-                  onChange={handleInputChange}
-                  className="input textarea"
-                  rows="3"
+                  onChange={(html) => handleRichTextChange('how_it_goes', html)}
                   placeholder="Этапы и ход процедуры..."
+                  rows={5}
                 />
               </div>
             </div>
