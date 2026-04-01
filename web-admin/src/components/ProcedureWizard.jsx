@@ -295,24 +295,20 @@ export default function ProcedureWizard({ initialData, dictionaries, onSave, onC
             <div className="form-grid">
               <div className="form-group full-width">
                 <label>Показания</label>
-                <textarea
-                  name="indications"
+                <RichTextEditor
                   value={formData.indications}
-                  onChange={handleInputChange}
-                  className="input textarea"
-                  rows="3"
+                  onChange={(html) => handleRichTextChange('indications', html)}
                   placeholder="Показания к процедуре..."
+                  rows={4}
                 />
               </div>
               <div className="form-group full-width">
                 <label>Для кого подходит</label>
-                <textarea
-                  name="for_whom"
+                <RichTextEditor
                   value={formData.for_whom}
-                  onChange={handleInputChange}
-                  className="input textarea"
-                  rows="3"
+                  onChange={(html) => handleRichTextChange('for_whom', html)}
                   placeholder="Целевая аудитория..."
+                  rows={4}
                 />
               </div>
               <div className="form-group full-width">
@@ -349,13 +345,11 @@ export default function ProcedureWizard({ initialData, dictionaries, onSave, onC
               </div>
               <div className="form-group full-width">
                 <label>Преимущества</label>
-                <textarea
-                  name="advantages"
+                <RichTextEditor
                   value={formData.advantages}
-                  onChange={handleInputChange}
-                  className="input textarea"
-                  rows="4"
+                  onChange={(html) => handleRichTextChange('advantages', html)}
                   placeholder="Преимущества процедуры..."
+                  rows={4}
                 />
               </div>
             </div>
@@ -368,24 +362,20 @@ export default function ProcedureWizard({ initialData, dictionaries, onSave, onC
             <div className="form-grid">
               <div className="form-group full-width">
                 <label>Подготовка к процедуре</label>
-                <textarea
-                  name="preparation"
+                <RichTextEditor
                   value={formData.preparation}
-                  onChange={handleInputChange}
-                  className="input textarea"
-                  rows="4"
+                  onChange={(html) => handleRichTextChange('preparation', html)}
                   placeholder="Рекомендации по подготовке..."
+                  rows={4}
                 />
               </div>
               <div className="form-group full-width">
                 <label>Рекомендуемый курс</label>
-                <textarea
-                  name="recommended_course"
+                <RichTextEditor
                   value={formData.recommended_course}
-                  onChange={handleInputChange}
-                  className="input textarea"
-                  rows="4"
+                  onChange={(html) => handleRichTextChange('recommended_course', html)}
                   placeholder="Количество сеансов, интервалы..."
+                  rows={4}
                 />
               </div>
             </div>
@@ -398,46 +388,38 @@ export default function ProcedureWizard({ initialData, dictionaries, onSave, onC
             <div className="form-grid">
               <div className="form-group full-width">
                 <label>Реабилитация</label>
-                <textarea
-                  name="rehabilitation"
+                <RichTextEditor
                   value={formData.rehabilitation}
-                  onChange={handleInputChange}
-                  className="input textarea"
-                  rows="3"
+                  onChange={(html) => handleRichTextChange('rehabilitation', html)}
                   placeholder="Восстановительный период..."
+                  rows={4}
                 />
               </div>
               <div className="form-group full-width">
                 <label>Уход после процедуры</label>
-                <textarea
-                  name="post_care"
+                <RichTextEditor
                   value={formData.post_care}
-                  onChange={handleInputChange}
-                  className="input textarea"
-                  rows="3"
+                  onChange={(html) => handleRichTextChange('post_care', html)}
                   placeholder="Рекомендации по уходу..."
+                  rows={4}
                 />
               </div>
               <div className="form-group full-width">
                 <label>Побочные эффекты</label>
-                <textarea
-                  name="side_effects"
+                <RichTextEditor
                   value={formData.side_effects}
-                  onChange={handleInputChange}
-                  className="input textarea"
-                  rows="3"
+                  onChange={(html) => handleRichTextChange('side_effects', html)}
                   placeholder="Возможные побочные эффекты..."
+                  rows={4}
                 />
               </div>
               <div className="form-group full-width">
                 <label>Полные противопоказания</label>
-                <textarea
-                  name="contraindications_full"
+                <RichTextEditor
                   value={formData.contraindications_full}
-                  onChange={handleInputChange}
-                  className="input textarea"
-                  rows="3"
+                  onChange={(html) => handleRichTextChange('contraindications_full', html)}
                   placeholder="Противопоказания к процедуре..."
+                  rows={4}
                 />
               </div>
             </div>
