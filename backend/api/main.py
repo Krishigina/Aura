@@ -186,6 +186,36 @@ async def init_db():
                 id SERIAL PRIMARY KEY,
                 value VARCHAR(255) NOT NULL UNIQUE
             );
+
+            CREATE TABLE IF NOT EXISTS procedure_method_types (
+                id SERIAL PRIMARY KEY,
+                value VARCHAR(255) NOT NULL UNIQUE
+            );
+
+            CREATE TABLE IF NOT EXISTS procedure_durations (
+                id SERIAL PRIMARY KEY,
+                value VARCHAR(100) NOT NULL UNIQUE
+            );
+
+            CREATE TABLE IF NOT EXISTS procedure_equipment (
+                id SERIAL PRIMARY KEY,
+                value VARCHAR(255) NOT NULL UNIQUE
+            );
+
+            CREATE TABLE IF NOT EXISTS procedure_zones (
+                id SERIAL PRIMARY KEY,
+                value VARCHAR(255) NOT NULL UNIQUE
+            );
+
+            CREATE TABLE IF NOT EXISTS procedure_effects (
+                id SERIAL PRIMARY KEY,
+                value VARCHAR(255) NOT NULL UNIQUE
+            );
+
+            CREATE TABLE IF NOT EXISTS procedure_problems (
+                id SERIAL PRIMARY KEY,
+                value VARCHAR(255) NOT NULL UNIQUE
+            );
         """)
 
         brands_count = await conn.fetchval("SELECT COUNT(*) FROM brands")

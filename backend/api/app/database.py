@@ -205,6 +205,127 @@ def init_db():
         'Франция', 'Корея', 'Япония', 'США', 'Германия', 'Швейцария', 'Россия', 'Италия', 'Испания', 'Израиль'
     ])
     
+    def _seed_procedure_dict(cursor, table: str, values: list):
+        cursor.execute(f"SELECT COUNT(*) FROM {table}")
+        count = cursor.fetchone()[0]
+        if count == 0:
+            for value in values:
+                cursor.execute(f"INSERT INTO {table} (value) VALUES (%s)", (value,))
+
+    _seed_procedure_dict(cursor, "procedure_method_types", [
+        "Лазер", "УЗ-терапия", "RF-лифтинг", "Микротоки", "Криотерапия",
+        "Мезотерапия", "Биоревитализация", "Ботокс", "Филлеры", "Пилинг",
+        "Электропорация", "Вакуумный массаж", "Светотерапия"
+    ])
+
+    _seed_procedure_dict(cursor, "procedure_durations", [
+        "30 минут", "45 минут", "1 час", "1.5 часа", "2 часа"
+    ])
+
+    _seed_procedure_dict(cursor, "procedure_zones", [
+        "Лицо", "Шея", "Декольте", "Руки", "Тело", "Веки", "Губы", "Живот", "Бедра"
+    ])
+
+    _seed_procedure_dict(cursor, "procedure_effects", [
+        "Омоложение", "Лифтинг", "Увлажнение", "Осветление", "Липолиз",
+        "Укрепление", "Очищение", "Тонизация", "Anti-age"
+    ])
+
+    _seed_procedure_dict(cursor, "procedure_problems", [
+        "Морщины", "Акне", "Пигментация", "Целлюлит", "Растяжки",
+        "Сухость", "Жирность", "Расширенные поры", "Шрамы", "Веснушки",
+        "Купероз", "Отечность", "Тусклый цвет"
+    ])
+    
+    _seed_procedure_dict(cursor, "procedure_equipment", [
+        "Laser Genesis", "Ulthera", "Thermage", "IPL", "Cryo 6",
+        "DermaPen", "HydraFacial", "EmFace", "Emsculpt", "Accent"
+    ])
+    
+    try:
+        cursor.execute("ALTER TABLE procedures ADD COLUMN IF NOT EXISTS direction VARCHAR(50)")
+    except: pass
+
+    try:
+        cursor.execute("ALTER TABLE procedures ADD COLUMN IF NOT EXISTS method_type VARCHAR(100)")
+    except: pass
+
+    try:
+        cursor.execute("ALTER TABLE procedures ADD COLUMN IF NOT EXISTS duration VARCHAR(50)")
+    except: pass
+
+    try:
+        cursor.execute("ALTER TABLE procedures ADD COLUMN IF NOT EXISTS equipment VARCHAR(255)")
+    except: pass
+
+    try:
+        cursor.execute("ALTER TABLE procedures ADD COLUMN IF NOT EXISTS zones JSONB")
+    except: pass
+
+    try:
+        cursor.execute("ALTER TABLE procedures ADD COLUMN IF NOT EXISTS effects JSONB")
+    except: pass
+
+    try:
+        cursor.execute("ALTER TABLE procedures ADD COLUMN IF NOT EXISTS problems JSONB")
+    except: pass
+
+    try:
+        cursor.execute("ALTER TABLE procedures ADD COLUMN IF NOT EXISTS procedure_about TEXT")
+    except: pass
+
+    try:
+        cursor.execute("ALTER TABLE procedures ADD COLUMN IF NOT EXISTS advantages TEXT")
+    except: pass
+
+    try:
+        cursor.execute("ALTER TABLE procedures ADD COLUMN IF NOT EXISTS indications TEXT")
+    except: pass
+
+    try:
+        cursor.execute("ALTER TABLE procedures ADD COLUMN IF NOT EXISTS principle TEXT")
+    except: pass
+
+    try:
+        cursor.execute("ALTER TABLE procedures ADD COLUMN IF NOT EXISTS how_it_goes TEXT")
+    except: pass
+
+    try:
+        cursor.execute("ALTER TABLE procedures ADD COLUMN IF NOT EXISTS for_whom TEXT")
+    except: pass
+
+    try:
+        cursor.execute("ALTER TABLE procedures ADD COLUMN IF NOT EXISTS problems_solved TEXT")
+    except: pass
+
+    try:
+        cursor.execute("ALTER TABLE procedures ADD COLUMN IF NOT EXISTS contraindications_full TEXT")
+    except: pass
+
+    try:
+        cursor.execute("ALTER TABLE procedures ADD COLUMN IF NOT EXISTS preparation TEXT")
+    except: pass
+
+    try:
+        cursor.execute("ALTER TABLE procedures ADD COLUMN IF NOT EXISTS recommended_course TEXT")
+    except: pass
+
+    try:
+        cursor.execute("ALTER TABLE procedures ADD COLUMN IF NOT EXISTS rehabilitation TEXT")
+    except: pass
+
+    try:
+        cursor.execute("ALTER TABLE procedures ADD COLUMN IF NOT EXISTS post_care TEXT")
+    except: pass
+
+    try:
+        cursor.execute("ALTER TABLE procedures ADD COLUMN IF NOT EXISTS side_effects TEXT")
+    except: pass
+
+    try:
+        cursor.execute("ALTER TABLE procedures ADD COLUMN IF NOT EXISTS photos JSONB")
+    except: pass
+    
     conn.commit()
     cursor.close()
     _connection_pool.putconn(conn)
