@@ -5,10 +5,12 @@ import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import List, Optional, Union
 import asyncpg
 import aiohttp
+import json
 import uuid
 from bs4 import BeautifulSoup
 
@@ -1057,6 +1059,63 @@ async def get_content_images(content_id: int):
 @app.get("/api/content/{content_id}/image-url")
 async def get_content_image_url(content_id: int):
     return {"url": f"/api/content/{content_id}/images"}
+
+
+@app.post("/api/content/{content_id}/card-image")
+async def upload_content_card_image(content_id: int, file: UploadFile = File(...)):
+    async with pool.acquire() as conn:
+        content_item = await conn.fetchrow("SELECT id FROM content WHERE id=$1", content_id)
+        if not content_item:
+            raise HTTPException(status_code=404, detail="Content not found")
+    
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    uploads_dir = os.path.join(base_dir, "content_card_images")
+    os.makedirs(uploads_dir, exist_ok=True)
+    
+    file_ext = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
+    filename = f"{content_id}_{uuid.uuid4()}.{file_ext}"
+    file_path = os.path.join(uploads_dir, filename)
+    
+    content_data = await file.read()
+    with open(file_path, 'wb') as f:
+        f.write(content_data)
+    
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE content SET image_url=$1 WHERE id=$2",
+            f"/api/content/card-image/{filename}",
+            content_id
+        )
+    return {"success": True, "filename": filename, "url": f"/api/content/card-image/{filename}"}
+
+
+@app.get("/api/content/card-image/{filename}")
+async def get_content_card_image(filename: str):
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(base_dir, "content_card_images", filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    with open(file_path, 'rb') as f:
+        content_data = f.read()
+    
+    ext = filename.split('.')[-1]
+    content_type = f"image/{ext}" if ext in ['jpg', 'jpeg', 'png', 'gif', 'webp'] else "image/jpeg"
+    return Response(content=content_data, media_type=content_type)
+
+
+@app.delete("/api/content/{content_id}/card-image")
+async def delete_content_card_image(content_id: int):
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT image_url FROM content WHERE id=$1", content_id)
+        if row and row['image_url'] and row['image_url'].startswith('/api/content/card-image/'):
+            filename = row['image_url'].split('/')[-1]
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            file_path = os.path.join(base_dir, "content_card_images", filename)
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            await conn.execute("UPDATE content SET image_url=NULL WHERE id=$1", content_id)
+    return {"success": True}
 
 
 @app.get("/api/users")

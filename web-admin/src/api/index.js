@@ -174,6 +174,16 @@ export const contentApi = {
   create: (data) => request('/content', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/content/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id) => request(`/content/${id}`, { method: 'DELETE' }),
+  uploadCardImage: async (contentId, file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await fetch(`${API_URL}/content/${contentId}/card-image`, {
+      method: 'POST',
+      body: formData
+    })
+    if (!response.ok) throw new Error('Upload failed')
+    return response.json()
+  },
 }
 
 export const usersApi = {
