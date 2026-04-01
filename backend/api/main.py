@@ -960,6 +960,10 @@ async def create_content(content: ContentCreate):
 @app.put("/api/content/{content_id}")
 async def update_content(content_id: int, content: ContentCreate):
     tags_json = json.dumps(content.tags, ensure_ascii=False) if isinstance(content.tags, list) else content.tags
+
+    def pick(next_value, current_value):
+        return current_value if next_value is None else next_value
+
     async with pool.acquire() as conn:
         existing = await conn.fetchrow("SELECT * FROM content WHERE id=$1", content_id)
         if not existing:
@@ -967,13 +971,13 @@ async def update_content(content_id: int, content: ContentCreate):
         row = await conn.fetchrow(
             """UPDATE content SET title=$1, category=$2, tags=$3, author_id=$4, author_name=$5, 
                body=$6, image_url=$7, published=$8 WHERE id=$9 RETURNING *""",
-            content.title or existing['title'],
-            content.category or existing['category'],
+            pick(content.title, existing['title']),
+            pick(content.category, existing['category']),
             tags_json if content.tags is not None else existing['tags'],
-            content.author_id or existing['author_id'],
-            content.author_name or existing['author_name'],
-            content.body or existing['body'],
-            content.image_url or existing['image_url'],
+            pick(content.author_id, existing['author_id']),
+            pick(content.author_name, existing['author_name']),
+            pick(content.body, existing['body']),
+            pick(content.image_url, existing['image_url']),
             content.published if content.published is not None else existing['published'],
             content_id
         )

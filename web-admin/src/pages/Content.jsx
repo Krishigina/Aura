@@ -30,6 +30,8 @@ export default function Content() {
     image_url: '',
     published: false
   })
+  const [cardImageFile, setCardImageFile] = useState(null)
+  const [cardImageRemoved, setCardImageRemoved] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
 
   const canCreate = hasPermission('content_create')
@@ -78,6 +80,8 @@ export default function Content() {
       image_url: '',
       published: false
     })
+    setCardImageFile(null)
+    setCardImageRemoved(false)
     setShowEditor(true)
   }
 
@@ -105,6 +109,8 @@ export default function Content() {
       image_url: article.image_url || '',
       published: article.published || false
     })
+    setCardImageFile(null)
+    setCardImageRemoved(false)
     setShowEditor(true)
   }
 
@@ -132,11 +138,10 @@ export default function Content() {
 
     setUploadingImage(true)
     try {
-      const reader = new FileReader()
-      reader.onload = () => {
-        setForm(prev => ({ ...prev, image_url: reader.result }))
-      }
-      reader.readAsDataURL(file)
+      const previewUrl = URL.createObjectURL(file)
+      setCardImageFile(file)
+      setCardImageRemoved(false)
+      setForm(prev => ({ ...prev, image_url: previewUrl }))
     } catch (err) {
       console.error('Error uploading image:', err)
     } finally {
@@ -149,9 +154,8 @@ export default function Content() {
 
     const tags = form.tags.split(',').map(t => t.trim()).filter(Boolean)
     
-    // Determine if we have a new image to upload
-    const hasNewImage = form.image_url && form.image_url.startsWith('data:')
-    const existingImageUrl = form.image_url && !form.image_url.startsWith('data:') ? form.image_url : ''
+    const hasNewImage = Boolean(cardImageFile)
+    const existingImageUrl = !hasNewImage && !cardImageRemoved ? (form.image_url || null) : null
     
     const articleData = {
       title: form.title,
@@ -177,12 +181,13 @@ export default function Content() {
       }
       
       // Upload new image if we have one
+      if (cardImageRemoved && editingArticle && !hasNewImage) {
+        await contentApi.deleteCardImage(articleId).catch(() => null)
+      }
+
       if (hasNewImage) {
         try {
-          const response = await fetch(form.image_url)
-          const blob = await response.blob()
-          const file = new File([blob], 'card-image.jpg', { type: 'image/jpeg' })
-          const imgResult = await contentApi.uploadCardImage(articleId, file)
+          const imgResult = await contentApi.uploadCardImage(articleId, cardImageFile)
           // Update article with new image URL
           await contentApi.update(articleId, { ...articleData, image_url: imgResult.url })
         } catch (imgErr) {
@@ -194,6 +199,8 @@ export default function Content() {
       await loadData()
       setShowEditor(false)
       setEditingArticle(null)
+      setCardImageFile(null)
+      setCardImageRemoved(false)
     } catch (err) {
       console.error('Error saving article:', err)
       error('Ошибка сохранения: ' + err.message)
@@ -338,7 +345,15 @@ export default function Content() {
                   {form.image_url ? (
                     <div className="image-preview-container">
                       <img src={form.image_url.startsWith('/api/') ? `http://localhost:3001${form.image_url}` : form.image_url} alt="" className="image-preview" />
-                      <button type="button" className="photo-delete-btn" onClick={() => setForm(prev => ({ ...prev, image_url: '' }))}>
+                      <button
+                        type="button"
+                        className="photo-delete-btn"
+                        onClick={() => {
+                          setForm(prev => ({ ...prev, image_url: '' }))
+                          setCardImageFile(null)
+                          setCardImageRemoved(true)
+                        }}
+                      >
                         <X size={14} />
                       </button>
                     </div>
