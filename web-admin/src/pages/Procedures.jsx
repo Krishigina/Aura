@@ -81,7 +81,7 @@ export default function Procedures() {
 
   const filtered = procedures.filter(p => {
     const matchesSearch = p.name?.toLowerCase().includes(search.toLowerCase())
-    const matchesCategory = category === 'Все' || p.category === category
+    const matchesCategory = category === 'Все' || p.direction === category
     return matchesSearch && matchesCategory
   })
 
