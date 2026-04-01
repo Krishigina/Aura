@@ -59,7 +59,12 @@ export default function ProcedureWizard({ initialData, dictionaries, onSave, onC
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
+    if (name === 'duration') {
+      const numValue = parseInt(value)
+      setFormData(prev => ({ ...prev, [name]: isNaN(numValue) ? value : numValue }))
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }))
+    }
   }
 
   const handleSelectChange = (name, value) => {
@@ -176,6 +181,7 @@ export default function ProcedureWizard({ initialData, dictionaries, onSave, onC
               <div className="form-group">
                 <label>Длительность (минут)</label>
                 <input
+                  type="number"
                   name="duration"
                   value={formData.duration}
                   onChange={handleInputChange}
