@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
-import { Search, Plus, Edit2, Trash2, BookOpen, Tag, Calendar, User, X, ChevronLeft, Image as ImageIcon, Upload } from 'lucide-react'
+import { Search, Plus, Edit2, Trash2, BookOpen, Tag, Calendar, User, X, ChevronLeft, Image as ImageIcon } from 'lucide-react'
 import { contentApi, dictionariesApi, usersApi } from '../api'
 import Select from '../components/Select'
 import AdvancedRichTextEditor from '../components/AdvancedRichTextEditor'
@@ -173,7 +173,7 @@ export default function Content() {
       setEditingArticle(null)
     } catch (err) {
       console.error('Error saving article:', err)
-      error('Ошибка сохранения')
+      error('Ошибка сохранения: ' + err.message)
     }
   }
 
@@ -276,10 +276,6 @@ export default function Content() {
           <div className="content-editor glass-card">
             <div className="editor-header">
               <h3>{editingArticle ? 'Редактирование статьи' : 'Новая статья'}</h3>
-              <div className="editor-actions">
-                <button className="btn btn-ghost" onClick={() => setEditingArticle(null)}>Отмена</button>
-                <button className="btn btn-primary" onClick={handleSave}>Сохранить</button>
-              </div>
             </div>
 
             <div className="editor-form">
@@ -367,6 +363,11 @@ export default function Content() {
                   Опубликовано
                 </label>
               </div>
+            </div>
+
+            <div className="editor-footer">
+              <button className="btn btn-ghost" onClick={() => setShowEditor(false)}>Отмена</button>
+              <button className="btn btn-primary" onClick={handleSave}>Сохранить</button>
             </div>
           </div>
         </>
