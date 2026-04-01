@@ -124,6 +124,13 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT NOW()
             );
 
+            CREATE TABLE IF NOT EXISTS procedure_photos (
+                id SERIAL PRIMARY KEY,
+                procedure_id INTEGER REFERENCES procedures(id) ON DELETE CASCADE,
+                filename VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+
             CREATE TABLE IF NOT EXISTS content (
                 id SERIAL PRIMARY KEY,
                 title VARCHAR(255) NOT NULL,
@@ -766,6 +773,75 @@ async def delete_procedure(procedure_id: int):
     async with pool.acquire() as conn:
         await conn.execute("DELETE FROM procedures WHERE id=$1", procedure_id)
         return {"success": True}
+
+
+@app.post("/api/procedures/{procedure_id:int}/photos")
+async def upload_procedure_photo(procedure_id: int, file: UploadFile = File(...)):
+    async with pool.acquire() as conn:
+        procedure = await conn.fetchrow("SELECT id FROM procedures WHERE id=$1", procedure_id)
+        if not procedure:
+            raise HTTPException(status_code=404, detail="Procedure not found")
+    
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    uploads_dir = os.path.join(base_dir, "procedure_photos")
+    os.makedirs(uploads_dir, exist_ok=True)
+    
+    file_ext = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
+    filename = f"{procedure_id}_{uuid.uuid4()}.{file_ext}"
+    file_path = os.path.join(uploads_dir, filename)
+    
+    content = await file.read()
+    with open(file_path, 'wb') as f:
+        f.write(content)
+    
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "INSERT INTO procedure_photos (procedure_id, filename) VALUES ($1, $2) RETURNING *",
+            procedure_id, filename
+        )
+        return {"id": row["id"], "filename": row["filename"]}
+
+
+@app.delete("/api/procedures/{procedure_id:int}/photos/{photo_id:int}")
+async def delete_procedure_photo(procedure_id: int, photo_id: int):
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT filename FROM procedure_photos WHERE id=$1 AND procedure_id=$2",
+            photo_id, procedure_id
+        )
+        if row:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            file_path = os.path.join(base_dir, "procedure_photos", row["filename"])
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            await conn.execute("DELETE FROM procedure_photos WHERE id=$1", photo_id)
+    return {"success": True}
+
+
+@app.get("/api/procedures/{procedure_id:int}/photos")
+async def get_procedure_photos(procedure_id: int):
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT id, filename FROM procedure_photos WHERE procedure_id=$1 ORDER BY id",
+            procedure_id
+        )
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        photos = []
+        for row in rows:
+            file_path = os.path.join(base_dir, "procedure_photos", row["filename"])
+            if os.path.exists(file_path):
+                with open(file_path, 'rb') as f:
+                    import base64
+                    data = base64.b64encode(f.read()).decode()
+                    ext = row["filename"].split('.')[-1]
+                    content_type = f"image/{ext}" if ext in ['jpg', 'jpeg', 'png', 'gif', 'webp'] else "image/jpeg"
+                    photos.append({
+                        "id": row["id"],
+                        "filename": row["filename"],
+                        "data": data,
+                        "content_type": content_type
+                    })
+        return photos
 
 
 @app.get("/api/procedures/dictionaries/method-types")

@@ -159,6 +159,12 @@ export const proceduresApi = {
     if (!response.ok) throw new Error('Delete failed')
     return response.json()
   },
+
+  getPhotos: async (procedureId) => {
+    const response = await fetch(`${API_URL}/procedures/${procedureId}/photos`)
+    if (!response.ok) return []
+    return response.json()
+  },
   
   getPhotoUrl: (procedureId, photoId) => `${API_URL}/procedures/${procedureId}/photos/${photoId}`,
 }
