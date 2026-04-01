@@ -12,7 +12,9 @@ export default function Select({ label, name, value, onChange, options, required
 
   const filteredOptions = options.filter(opt => {
     const optValue = typeof opt === 'object' ? opt.value : opt
-    return optValue.toLowerCase().includes(search.toLowerCase())
+    const labelValue = typeof opt === 'object' ? opt.label : opt
+    const searchText = `${optValue || ''} ${labelValue || ''}`.toLowerCase()
+    return searchText.includes(search.toLowerCase())
   })
 
   useEffect(() => {
