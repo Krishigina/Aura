@@ -47,7 +47,13 @@ export default function ProcedureWizard({ initialData, dictionaries, onSave, onC
 
   useEffect(() => {
     if (initialData) {
-      setFormData({ ...initialFormData, ...initialData })
+      const merged = { ...initialFormData }
+      for (const key in initialData) {
+        if (initialData[key] !== null && initialData[key] !== undefined) {
+          merged[key] = initialData[key]
+        }
+      }
+      setFormData(merged)
     }
   }, [initialData])
 

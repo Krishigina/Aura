@@ -100,11 +100,27 @@ async def init_db():
             CREATE TABLE IF NOT EXISTS procedures (
                 id SERIAL PRIMARY KEY,
                 name VARCHAR(255) NOT NULL,
-                category VARCHAR(255),
-                duration INTEGER,
-                price DECIMAL(10,2),
+                direction VARCHAR(255),
+                method_type VARCHAR(255),
+                duration VARCHAR(255),
+                equipment VARCHAR(255),
+                zones TEXT,
+                effects TEXT,
+                problems TEXT,
                 description TEXT,
+                procedure_about TEXT,
+                advantages TEXT,
+                indications TEXT,
+                principle TEXT,
+                how_it_goes TEXT,
+                for_whom TEXT,
+                problems_solved TEXT,
                 contraindications TEXT,
+                preparation TEXT,
+                recommended_course TEXT,
+                rehabilitation TEXT,
+                post_care TEXT,
+                side_effects TEXT,
                 created_at TIMESTAMP DEFAULT NOW()
             );
 
@@ -367,11 +383,27 @@ class ProductCreate(BaseModel):
 
 class ProcedureCreate(BaseModel):
     name: str
-    category: Optional[str] = None
-    duration: Optional[int] = None
-    price: Optional[float] = None
+    direction: Optional[str] = None
+    method_type: Optional[str] = None
+    duration: Optional[str] = None
+    equipment: Optional[str] = None
+    zones: Optional[Union[List[str], str]] = None
+    effects: Optional[Union[List[str], str]] = None
+    problems: Optional[Union[List[str], str]] = None
     description: Optional[str] = None
+    procedure_about: Optional[str] = None
+    advantages: Optional[str] = None
+    indications: Optional[str] = None
+    principle: Optional[str] = None
+    how_it_goes: Optional[str] = None
+    for_whom: Optional[str] = None
+    problems_solved: Optional[str] = None
     contraindications: Optional[str] = None
+    preparation: Optional[str] = None
+    recommended_course: Optional[str] = None
+    rehabilitation: Optional[str] = None
+    post_care: Optional[str] = None
+    side_effects: Optional[str] = None
 
 
 class ContentCreate(BaseModel):
@@ -633,27 +665,79 @@ async def get_procedures():
 
 @app.post("/api/procedures")
 async def create_procedure(procedure: ProcedureCreate):
+    def serialize_field(field):
+        if field is None:
+            return None
+        if isinstance(field, list):
+            return json.dumps(field, ensure_ascii=False)
+        return field
+    
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            """INSERT INTO procedures (name, category, duration, price, description, contraindications) 
-               VALUES ($1, $2, $3, $4, $5, $6) RETURNING *""",
-            procedure.name, procedure.category, procedure.duration, procedure.price,
-            procedure.description, procedure.contraindications
+            """INSERT INTO procedures (name, direction, method_type, duration, equipment, 
+               zones, effects, problems, description, procedure_about, advantages, 
+               indications, principle, how_it_goes, for_whom, problems_solved, 
+               contraindications, preparation, recommended_course, rehabilitation, 
+               post_care, side_effects) 
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22) 
+               RETURNING *""",
+            procedure.name, procedure.direction, procedure.method_type, procedure.duration,
+            procedure.equipment, serialize_field(procedure.zones), serialize_field(procedure.effects),
+            serialize_field(procedure.problems), procedure.description, procedure.procedure_about,
+            procedure.advantages, procedure.indications, procedure.principle, procedure.how_it_goes,
+            procedure.for_whom, procedure.problems_solved, procedure.contraindications,
+            procedure.preparation, procedure.recommended_course, procedure.rehabilitation,
+            procedure.post_care, procedure.side_effects
         )
         return dict(row)
 
 
 @app.put("/api/procedures/{procedure_id:int}")
 async def update_procedure(procedure_id: int, procedure: ProcedureCreate):
+    def serialize_field(field):
+        if field is None:
+            return None
+        if isinstance(field, list):
+            return json.dumps(field, ensure_ascii=False)
+        return field
+    
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """UPDATE procedures SET name=$1, category=$2, duration=$3, price=$4, description=$5, contraindications=$6 
-               WHERE id=$7 RETURNING *""",
-            procedure.name, procedure.category, procedure.duration, procedure.price,
-            procedure.description, procedure.contraindications, procedure_id
-        )
-        if not row:
+        existing = await conn.fetchrow("SELECT * FROM procedures WHERE id=$1", procedure_id)
+        if not existing:
             raise HTTPException(status_code=404, detail="Procedure not found")
+        
+        row = await conn.fetchrow(
+            """UPDATE procedures SET 
+               name=$1, direction=$2, method_type=$3, duration=$4, equipment=$5,
+               zones=$6, effects=$7, problems=$8, description=$9, procedure_about=$10,
+               advantages=$11, indications=$12, principle=$13, how_it_goes=$14,
+               for_whom=$15, problems_solved=$16, contraindications=$17, preparation=$18,
+               recommended_course=$19, rehabilitation=$20, post_care=$21, side_effects=$22
+               WHERE id=$23 RETURNING *""",
+            procedure.name,
+            procedure.direction or existing['direction'],
+            procedure.method_type or existing['method_type'],
+            procedure.duration or existing['duration'],
+            procedure.equipment or existing['equipment'],
+            serialize_field(procedure.zones) if procedure.zones is not None else existing['zones'],
+            serialize_field(procedure.effects) if procedure.effects is not None else existing['effects'],
+            serialize_field(procedure.problems) if procedure.problems is not None else existing['problems'],
+            procedure.description or existing['description'],
+            procedure.procedure_about or existing['procedure_about'],
+            procedure.advantages or existing['advantages'],
+            procedure.indications or existing['indications'],
+            procedure.principle or existing['principle'],
+            procedure.how_it_goes or existing['how_it_goes'],
+            procedure.for_whom or existing['for_whom'],
+            procedure.problems_solved or existing['problems_solved'],
+            procedure.contraindications or existing['contraindications'],
+            procedure.preparation or existing['preparation'],
+            procedure.recommended_course or existing['recommended_course'],
+            procedure.rehabilitation or existing['rehabilitation'],
+            procedure.post_care or existing['post_care'],
+            procedure.side_effects or existing['side_effects'],
+            procedure_id
+        )
         return dict(row)
 
 
