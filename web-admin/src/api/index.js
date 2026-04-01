@@ -184,6 +184,7 @@ export const contentApi = {
     if (!response.ok) throw new Error('Upload failed')
     return response.json()
   },
+  deleteCardImage: (contentId) => request(`/content/${contentId}/card-image`, { method: 'DELETE' }),
 }
 
 export const usersApi = {

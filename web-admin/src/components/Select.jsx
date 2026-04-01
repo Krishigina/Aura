@@ -2,18 +2,30 @@ import { useState, useRef, useEffect } from 'react'
 import { ChevronDown, Check, X } from 'lucide-react'
 import './Select.css'
 
-export default function Select({ label, name, value, onChange, options, required, placeholder, multiple = false, searchable = false }) {
+export default function Select({ label, name, value, onChange, options = [], required, placeholder, multiple = false, searchable = false }) {
   const [isOpen, setIsOpen] = useState(false)
   const [search, setSearch] = useState('')
   const wrapperRef = useRef(null)
   const inputRef = useRef(null)
 
   const values = multiple ? (value || []) : [value].filter(Boolean)
+  const normalizedOptions = options.map((opt) => {
+    if (typeof opt === 'object') {
+      return {
+        value: opt.value,
+        label: opt.label ?? String(opt.value ?? ''),
+      }
+    }
+    return { value: opt, label: String(opt) }
+  })
 
-  const filteredOptions = options.filter(opt => {
-    const optValue = typeof opt === 'object' ? opt.value : opt
-    const labelValue = typeof opt === 'object' ? opt.label : opt
-    const searchText = `${optValue || ''} ${labelValue || ''}`.toLowerCase()
+  const getOptionLabel = (optionValue) => {
+    const found = normalizedOptions.find((opt) => opt.value === optionValue)
+    return found ? found.label : String(optionValue ?? '')
+  }
+
+  const filteredOptions = normalizedOptions.filter((opt) => {
+    const searchText = `${String(opt.value || '')} ${String(opt.label || '')}`.toLowerCase()
     return searchText.includes(search.toLowerCase())
   })
 
@@ -56,11 +68,11 @@ export default function Select({ label, name, value, onChange, options, required
   const displayValue = () => {
     if (multiple) {
       if (!values.length) return placeholder || 'Выберите...'
-      if (values.length === 1) return values[0]
+      if (values.length === 1) return getOptionLabel(values[0])
       return `${values.length} выбрано`
     }
-    const displayVal = typeof value === 'object' ? value?.value : value
-    return displayVal || placeholder || 'Выберите...'
+    if (!values.length) return placeholder || 'Выберите...'
+    return getOptionLabel(values[0])
   }
 
   return (
@@ -76,7 +88,7 @@ export default function Select({ label, name, value, onChange, options, required
             <div className="multiple-values">
               {values.slice(0, 2).map(v => (
                 <span key={v} className="multi-tag">
-                  {v}
+                  {getOptionLabel(v)}
                   <X size={12} onClick={(e) => handleRemove(v, e)} />
                 </span>
               ))}
@@ -108,7 +120,7 @@ export default function Select({ label, name, value, onChange, options, required
                 <div className="select-no-results">Ничего не найдено</div>
               ) : (
                 filteredOptions.map((option, idx) => {
-                    const optValue = typeof option === 'object' ? option.value : option
+                    const optValue = option.value
                     return (
                     <button
                       key={idx}
@@ -117,7 +129,7 @@ export default function Select({ label, name, value, onChange, options, required
                       onClick={() => handleSelect(optValue)}
                     >
                       {multiple && <span className={`checkbox ${values.includes(optValue) ? 'checked' : ''}`}></span>}
-                      <span>{optValue}</span>
+                      <span>{option.label}</span>
                       {!multiple && values.includes(optValue) && <Check size={16} className="option-check" />}
                     </button>
                     )
