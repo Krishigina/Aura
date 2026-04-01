@@ -17,6 +17,7 @@ export default function Content() {
   const [contentCategories, setContentCategories] = useState(defaultContentCategories)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [showEditor, setShowEditor] = useState(false)
   const [editingArticle, setEditingArticle] = useState(null)
   const [deleteModal, setDeleteModal] = useState(null)
   const [form, setForm] = useState({ 
@@ -77,6 +78,7 @@ export default function Content() {
       image_url: '',
       published: false
     })
+    setShowEditor(true)
   }
 
   const openEditModal = (article) => {
@@ -103,6 +105,7 @@ export default function Content() {
       image_url: article.image_url || '',
       published: article.published || false
     })
+    setShowEditor(true)
   }
 
   const handleInputChange = (e) => {
@@ -166,6 +169,7 @@ export default function Content() {
         setArticles(prev => [created, ...prev])
         success('Статья создана')
       }
+      setShowEditor(false)
       setEditingArticle(null)
     } catch (err) {
       console.error('Error saving article:', err)
@@ -203,7 +207,7 @@ export default function Content() {
 
   return (
     <div className="content-page">
-      {editingArticle !== null || (form.title === '' && form.body === '' && !editingArticle) ? (
+      {!showEditor ? (
         <>
           <div className="page-header">
             <div>
@@ -264,7 +268,7 @@ export default function Content() {
       ) : (
         <>
           <div className="page-header">
-            <button className="btn btn-ghost" onClick={() => setEditingArticle(null)}>
+            <button className="btn btn-ghost" onClick={() => setShowEditor(false)}>
               <ChevronLeft size={18} />Назад к списку
             </button>
           </div>
