@@ -105,9 +105,45 @@ export const dictionariesApi = {
 
 export const proceduresApi = {
   getAll: () => request('/procedures'),
+  getById: (id) => request(`/procedures/${id}`),
   create: (data) => request('/procedures', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/procedures/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id) => request(`/procedures/${id}`, { method: 'DELETE' }),
+  
+  getMethodTypes: () => request('/procedures/dictionaries/method-types'),
+  getDurations: () => request('/procedures/dictionaries/durations'),
+  getEquipment: () => request('/procedures/dictionaries/equipment'),
+  getZones: () => request('/procedures/dictionaries/zones'),
+  getEffects: () => request('/procedures/dictionaries/effects'),
+  getProblems: () => request('/procedures/dictionaries/problems'),
+  
+  addDictionaryValue: async (dictType, value) => {
+    return request(`/procedures/dictionaries/${dictType}`, { 
+      method: 'POST',
+      body: JSON.stringify({ value })
+    })
+  },
+  
+  uploadPhoto: async (procedureId, file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await fetch(`${API_URL}/procedures/${procedureId}/photos`, {
+      method: 'POST',
+      body: formData
+    })
+    if (!response.ok) throw new Error('Upload failed')
+    return response.json()
+  },
+  
+  deletePhoto: async (procedureId, photoId) => {
+    const response = await fetch(`${API_URL}/procedures/${procedureId}/photos/${photoId}`, {
+      method: 'DELETE'
+    })
+    if (!response.ok) throw new Error('Delete failed')
+    return response.json()
+  },
+  
+  getPhotoUrl: (procedureId, photoId) => `${API_URL}/procedures/${procedureId}/photos/${photoId}`,
 }
 
 export const contentApi = {
