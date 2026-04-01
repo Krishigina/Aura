@@ -120,6 +120,17 @@ class ProcedureService:
             pool.putconn(conn)
 
     @staticmethod
+    def delete_dictionary_value(table_name: str, value: str) -> None:
+        pool = get_pool()
+        conn = pool.getconn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(f"DELETE FROM {table_name} WHERE value=%s", (value,))
+            conn.commit()
+        finally:
+            pool.putconn(conn)
+
+    @staticmethod
     def add_photo(procedure_id: int, filename: str) -> dict:
         pool = get_pool()
         conn = pool.getconn()

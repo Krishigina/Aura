@@ -22,7 +22,14 @@ DICT_TABLE_MAP = {
     "purposes": "purposes",
     "application_times": "application_times",
     "areas": "areas",
-    "countries": "countries"
+    "countries": "countries",
+    # Procedure dictionaries
+    "methodTypes": "procedure_method_types",
+    "procedureDurations": "procedure_durations",
+    "procedureEquipment": "procedure_equipment",
+    "procedureZones": "procedure_zones",
+    "procedureEffects": "procedure_effects",
+    "procedureProblems": "procedure_problems",
 }
 
 

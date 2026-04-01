@@ -65,17 +65,34 @@ def get_problems():
 @router.post("/dictionaries/{dict_type}")
 def add_dictionary_value(dict_type: str, value: str):
     table_map = {
-        "method-types": "procedure_method_types",
-        "durations": "procedure_durations",
-        "equipment": "procedure_equipment",
-        "zones": "procedure_zones",
-        "effects": "procedure_effects",
-        "problems": "procedure_problems",
+        "methodTypes": "procedure_method_types",
+        "procedureDurations": "procedure_durations",
+        "procedureEquipment": "procedure_equipment",
+        "procedureZones": "procedure_zones",
+        "procedureEffects": "procedure_effects",
+        "procedureProblems": "procedure_problems",
     }
     table_name = table_map.get(dict_type)
     if not table_name:
         raise HTTPException(status_code=400, detail="Invalid dictionary type")
     return ProcedureService.add_dictionary_value(table_name, value)
+
+
+@router.delete("/dictionaries/{dict_type}/{value}")
+def delete_dictionary_value(dict_type: str, value: str):
+    table_map = {
+        "methodTypes": "procedure_method_types",
+        "procedureDurations": "procedure_durations",
+        "procedureEquipment": "procedure_equipment",
+        "procedureZones": "procedure_zones",
+        "procedureEffects": "procedure_effects",
+        "procedureProblems": "procedure_problems",
+    }
+    table_name = table_map.get(dict_type)
+    if not table_name:
+        raise HTTPException(status_code=400, detail="Invalid dictionary type")
+    ProcedureService.delete_dictionary_value(table_name, value)
+    return {"success": True}
 
 
 @router.post("/{procedure_id}/photos")
