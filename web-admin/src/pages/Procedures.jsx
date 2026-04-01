@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
-import { Search, Plus, Edit2, Trash2, Clock, DollarSign, Image as ImageIcon } from 'lucide-react'
+import { Search, Plus, Edit2, Trash2, Clock, DollarSign, Image as ImageIcon, Scissors } from 'lucide-react'
 import { proceduresApi, dictionariesApi } from '../api'
 import ProcedureWizard from '../components/ProcedureWizard'
 import './Procedures.css'
@@ -140,8 +140,8 @@ export default function Procedures() {
               {procedure.direction && <span className="direction-badge">{procedure.direction}</span>}
             </div>
             <div className="procedure-meta">
-              <div className="meta-item"><Clock size={16} /><span>{procedure.duration} мин</span></div>
-              <div className="meta-item"><DollarSign size={16} /><span>{parseInt(procedure.price || 0).toLocaleString()} ₽</span></div>
+              {procedure.duration && <div className="meta-item"><Clock size={16} /><span>{procedure.duration}</span></div>}
+              {procedure.method_type && <div className="meta-item"><Scissors size={16} /><span>{procedure.method_type}</span></div>}
             </div>
             {procedure.photos && procedure.photos.length > 0 && (
               <div className="procedure-photos">
@@ -158,11 +158,9 @@ export default function Procedures() {
               </div>
             )}
             <div className="procedure-fields">
-              {procedure.description && <p className="field-line">{procedure.description.substring(0, 80)}{procedure.description.length > 80 ? '...' : ''}</p>}
-              {procedure.indications && <p className="field-line"><strong>Показания:</strong> {procedure.indications.substring(0, 60)}{procedure.indications.length > 60 ? '...' : ''}</p>}
-              {procedure.contraindications_full && <p className="field-line"><strong>Противопоказания:</strong> {procedure.contraindications_full.substring(0, 60)}{procedure.contraindications_full.length > 60 ? '...' : ''}</p>}
+              {procedure.description && <p className="field-line">{procedure.description.substring(0, 100)}{procedure.description.length > 100 ? '...' : ''}</p>}
+              {procedure.indications && <p className="field-line"><strong>Показания:</strong> {procedure.indications.substring(0, 80)}{procedure.indications.length > 80 ? '...' : ''}</p>}
             </div>
-            <div className="procedure-category">{procedure.category}</div>
             {canEdit && (
               <div className="procedure-actions">
                 <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); setEditingProcedure(procedure); setShowWizard(true) }}><Edit2 size={16} /></button>
