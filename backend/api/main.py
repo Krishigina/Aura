@@ -158,8 +158,18 @@ async def init_db():
                 name VARCHAR(255) NOT NULL,
                 email VARCHAR(255) UNIQUE NOT NULL,
                 role VARCHAR(50) DEFAULT 'user',
+                nickname VARCHAR(255),
+                phone VARCHAR(50),
                 avatar VARCHAR(500),
                 created_at TIMESTAMP DEFAULT NOW()
+            );
+
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+                extra_data JSONB DEFAULT '{}'::jsonb,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
             );
 
             CREATE TABLE IF NOT EXISTS brands (
@@ -351,6 +361,9 @@ async def init_db():
             for value in default_countries:
                 await conn.execute("INSERT INTO countries (value) VALUES ($1)", value)
 
+        await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname VARCHAR(255)")
+        await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50)")
+
         print("Database initialized successfully")
 
 
@@ -440,7 +453,71 @@ class UserCreate(BaseModel):
     name: str
     email: str
     role: Optional[str] = "user"
+    nickname: Optional[str] = None
+    phone: Optional[str] = None
     avatar: Optional[str] = None
+
+
+def is_valid_email(email: str) -> bool:
+    return bool(re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$", email or ""))
+
+
+def normalize_login(login: Optional[str]) -> Optional[str]:
+    if not login:
+        return None
+    cleaned = re.sub(r"\s+", "", login.strip())
+    if not cleaned:
+        return None
+    if not cleaned.startswith("@"):
+        cleaned = f"@{cleaned.replace('@', '')}"
+    else:
+        cleaned = "@" + cleaned[1:].replace("@", "")
+    return cleaned.lower()
+
+
+def is_valid_login(login: Optional[str]) -> bool:
+    if not login:
+        return True
+    return bool(re.match(r"^@[a-z0-9_]{3,32}$", login))
+
+
+def normalize_phone(phone: Optional[str]) -> Optional[str]:
+    if not phone:
+        return None
+    digits = re.sub(r"\D", "", phone)
+    if not digits:
+        return None
+    if digits.startswith("8"):
+        digits = "7" + digits[1:]
+    if len(digits) == 10:
+        digits = "7" + digits
+    return digits
+
+
+def is_valid_phone(phone_digits: Optional[str]) -> bool:
+    if not phone_digits:
+        return True
+    return bool(re.match(r"^7\d{10}$", phone_digits))
+
+
+async def ensure_users_columns(conn):
+    await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname VARCHAR(255)")
+    await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50)")
+
+
+async def ensure_unique_login(conn, login: Optional[str], exclude_user_id: Optional[int] = None):
+    if not login:
+        return
+    if exclude_user_id is None:
+        existing = await conn.fetchrow("SELECT id FROM users WHERE LOWER(nickname)=LOWER($1) LIMIT 1", login)
+    else:
+        existing = await conn.fetchrow(
+            "SELECT id FROM users WHERE LOWER(nickname)=LOWER($1) AND id<>$2 LIMIT 1",
+            login,
+            exclude_user_id,
+        )
+    if existing:
+        raise HTTPException(status_code=400, detail="Логин уже занят")
 
 
 class DictionaryValue(BaseModel):
@@ -1123,30 +1200,56 @@ async def delete_content_card_image(content_id: int):
 
 
 @app.get("/api/users")
-async def get_users():
+async def get_users(role: Optional[str] = None):
     async with pool.acquire() as conn:
-        rows = await conn.fetch("SELECT * FROM users ORDER BY id DESC")
+        await ensure_users_columns(conn)
+        if role and role != "all":
+            rows = await conn.fetch("SELECT * FROM users WHERE role=$1 ORDER BY id DESC", role)
+        else:
+            rows = await conn.fetch("SELECT * FROM users ORDER BY id DESC")
         return [dict(row) for row in rows]
 
 
 @app.post("/api/users")
 async def create_user(user: UserCreate):
+    login = normalize_login(user.nickname)
+    phone_digits = normalize_phone(user.phone)
+    if not is_valid_email(user.email):
+        raise HTTPException(status_code=400, detail="Некорректный email")
+    if not is_valid_login(login):
+        raise HTTPException(status_code=400, detail="Логин должен быть в формате @login, только a-z, 0-9 и _")
+    if not is_valid_phone(phone_digits):
+        raise HTTPException(status_code=400, detail="Некорректный телефон")
+
     async with pool.acquire() as conn:
+        await ensure_users_columns(conn)
+        await ensure_unique_login(conn, login)
         row = await conn.fetchrow(
-            """INSERT INTO users (name, email, role, avatar) 
-               VALUES ($1, $2, $3, $4) RETURNING *""",
-            user.name, user.email, user.role, user.avatar
+            """INSERT INTO users (name, email, role, nickname, phone, avatar) 
+               VALUES ($1, $2, $3, $4, $5, $6) RETURNING *""",
+            user.name, user.email, user.role, login, phone_digits, user.avatar
         )
         return dict(row)
 
 
 @app.put("/api/users/{user_id}")
 async def update_user(user_id: int, user: UserCreate):
+    login = normalize_login(user.nickname)
+    phone_digits = normalize_phone(user.phone)
+    if not is_valid_email(user.email):
+        raise HTTPException(status_code=400, detail="Некорректный email")
+    if not is_valid_login(login):
+        raise HTTPException(status_code=400, detail="Логин должен быть в формате @login, только a-z, 0-9 и _")
+    if not is_valid_phone(phone_digits):
+        raise HTTPException(status_code=400, detail="Некорректный телефон")
+
     async with pool.acquire() as conn:
+        await ensure_users_columns(conn)
+        await ensure_unique_login(conn, login, user_id)
         row = await conn.fetchrow(
-            """UPDATE users SET name=$1, email=$2, role=$3, avatar=$4 
-               WHERE id=$5 RETURNING *""",
-            user.name, user.email, user.role, user.avatar, user_id
+            """UPDATE users SET name=$1, email=$2, role=$3, nickname=$4, phone=$5, avatar=$6
+               WHERE id=$7 RETURNING *""",
+            user.name, user.email, user.role, login, phone_digits, user.avatar, user_id
         )
         if not row:
             raise HTTPException(status_code=404, detail="User not found")
