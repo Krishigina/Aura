@@ -6,6 +6,8 @@ class UserBase(BaseModel):
     name: str
     email: EmailStr
     role: Optional[str] = "user"
+    nickname: Optional[str] = None
+    phone: Optional[str] = None
     avatar: Optional[str] = None
 
 

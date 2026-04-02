@@ -47,12 +47,12 @@ export default function Content() {
       setLoading(true)
       const [articlesData, usersData, contentCategoriesData] = await Promise.all([
         contentApi.getAll().catch(() => []),
-        usersApi.getAll().catch(() => []),
+        usersApi.getCosmetologists().catch(() => []),
         dictionariesApi.get('contentCategories').catch(() => defaultContentCategories),
       ])
       setArticles(articlesData)
       setContentCategories(contentCategoriesData)
-      const cosmetologistsList = usersData.filter(u => u.role === 'cosmetologist').map(u => ({
+      const cosmetologistsList = usersData.map(u => ({
         id: u.id,
         name: u.name,
         nickname: u.nickname || u.name

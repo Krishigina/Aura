@@ -188,7 +188,8 @@ export const contentApi = {
 }
 
 export const usersApi = {
-  getAll: () => request('/users'),
+  getAll: () => request('/users?role=all'),
+  getCosmetologists: () => request('/users?role=cosmetologist'),
   create: (data) => request('/users', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id) => request(`/users/${id}`, { method: 'DELETE' }),
