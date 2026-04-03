@@ -24,3 +24,17 @@ gradle/
 node_modules/
 dist/
 .worktrees/
+# Windows reserved names
+nul
+backend/api/nul
+
+# Python cache
+__pycache__/
+*.pyc
+
+# OpenCode system
+.sisyphus/
+
+# AGENTS files (generated)
+AGENTS.md
+**/AGENTS.md
