@@ -132,7 +132,23 @@ export default function Procedures() {
                 if (editingProcedure) {
                   await proceduresApi.update(editingProcedure.id, data)
                 } else {
-                  await proceduresApi.create(data)
+                  const created = await proceduresApi.create(data)
+                  // Upload locally-stored photos after creation
+                  if (created?.id && data.photos?.length > 0) {
+                    for (const photo of data.photos) {
+                      if (photo.data && photo.content_type) {
+                        const byteCharacters = atob(photo.data)
+                        const byteNumbers = new Array(byteCharacters.length)
+                        for (let i = 0; i < byteCharacters.length; i++) {
+                          byteNumbers[i] = byteCharacters.charCodeAt(i)
+                        }
+                        const byteArray = new Uint8Array(byteNumbers)
+                        const blob = new Blob([byteArray], { type: photo.content_type })
+                        const file = new File([blob], photo.filename || 'photo.jpg', { type: photo.content_type })
+                        await proceduresApi.uploadPhoto(created.id, file)
+                      }
+                    }
+                  }
                 }
                 loadData()
                 setShowWizard(false)

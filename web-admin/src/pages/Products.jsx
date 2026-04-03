@@ -329,13 +329,16 @@ export default function Products() {
     try {
       setUploadingPhoto(true)
       const result = await productsApi.uploadPhoto(editingProduct.id, file)
+      // Refetch photos to get full base64 data for display
+      const updatedPhotos = await productsApi.getPhotos(editingProduct.id)
       setFormData(prev => ({
         ...prev,
-        photos: [...prev.photos, result]
+        photos: updatedPhotos
       }))
       success('Фото загружено')
     } catch (err) {
-      error('Ошибка загрузки фото')
+      console.error('Photo upload error:', err)
+      error('Ошибка загрузки фото: ' + err.message)
     } finally {
       setUploadingPhoto(false)
     }
