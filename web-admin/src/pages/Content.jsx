@@ -85,20 +85,15 @@ export default function Content() {
     setShowEditor(true)
   }
 
+  const parseTags = (tags) => {
+    if (!tags) return []
+    if (Array.isArray(tags)) return tags
+    try { return JSON.parse(tags) } catch { return tags.split(',').map(t => t.trim()).filter(Boolean) }
+  }
+
   const openEditModal = (article) => {
     setEditingArticle(article)
-    let parsedTags = ''
-    if (article.tags) {
-      if (typeof article.tags === 'string') {
-        try {
-          parsedTags = JSON.parse(article.tags).join(', ')
-        } catch {
-          parsedTags = article.tags
-        }
-      } else if (Array.isArray(article.tags)) {
-        parsedTags = article.tags.join(', ')
-      }
-    }
+    const parsedTags = parseTags(article.tags).join(', ')
     setForm({
       title: article.title || '',
       category: article.category || '',
@@ -261,7 +256,7 @@ export default function Content() {
               <div key={article.id} className="article-card glass-card clickable" onClick={() => openEditModal(article)}>
                 {article.image_url && (
                   <div className="article-thumbnail">
-                    <img src={article.image_url.startsWith('/api/') ? `http://localhost:3001${article.image_url}` : article.image_url} alt="" />
+                    <img src={article.image_url.startsWith('/api/') ? `http://localhost:3002${article.image_url}` : article.image_url} alt="" />
                   </div>
                 )}
                 <div className="article-content">
@@ -271,13 +266,25 @@ export default function Content() {
                     {article.author_name && <span className="meta-tag"><User size={14} />{article.author_name}</span>}
                     <span className="meta-tag"><Calendar size={14} />{formatDate(article.created_at)}</span>
                   </div>
-                  {article.tags && (
-                    <div className="article-tags">
-                      {(typeof article.tags === 'string' ? JSON.parse(article.tags || '[]') : article.tags || []).map(tag => (
-                        <span key={tag} className="tag">{tag}</span>
-                      ))}
-                    </div>
-                  )}
+                  {article.tags && (() => {
+                    let tagsArray = []
+                    try {
+                      if (Array.isArray(article.tags)) {
+                        tagsArray = article.tags
+                      } else if (typeof article.tags === 'string') {
+                        tagsArray = JSON.parse(article.tags)
+                      }
+                    } catch {
+                      tagsArray = article.tags.split(',').map(t => t.trim()).filter(Boolean)
+                    }
+                    return (
+                      <div className="article-tags">
+                        {tagsArray.map((tag, i) => (
+                          <span key={i} className="tag">{tag}</span>
+                        ))}
+                      </div>
+                    )
+                  })()}
                 </div>
                 {(canEdit || user?.role === 'admin') && (
                   <div className="article-actions">
@@ -328,7 +335,12 @@ export default function Content() {
                     name="author_id" 
                     value={form.author_id} 
                     onChange={handleSelectChange} 
-                    options={cosmetologists.map(c => ({ value: c.id, label: `${c.nickname} (${c.name})` }))} 
+                    options={[
+                      ...cosmetologists.map(c => ({ value: c.id, label: `${c.nickname} (${c.name})` })),
+                      ...(form.author_id && !cosmetologists.find(c => c.id === form.author_id) 
+                        ? [{ value: form.author_id, label: form.author_name || 'Неизвестный автор' }] 
+                        : [])
+                    ]} 
                     placeholder="Выберите автора" 
                   />
                 )}
@@ -344,7 +356,7 @@ export default function Content() {
                 <div className="media-upload-section">
                   {form.image_url ? (
                     <div className="image-preview-container">
-                      <img src={form.image_url.startsWith('/api/') ? `http://localhost:3001${form.image_url}` : form.image_url} alt="" className="image-preview" />
+                      <img src={form.image_url.startsWith('/api/') ? `http://localhost:3002${form.image_url}` : form.image_url} alt="" className="image-preview" />
                       <button
                         type="button"
                         className="photo-delete-btn"

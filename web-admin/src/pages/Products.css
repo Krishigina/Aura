@@ -314,6 +314,13 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
+  width: 100%;
+}
+
+.form-group .input,
+.form-group .textarea {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .form-group label {
@@ -910,6 +917,18 @@
   margin-bottom: var(--spacing-lg);
   padding-bottom: var(--spacing-lg);
   border-bottom: 1px solid var(--color-gray-200);
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
 }
 
 .form-section:last-child {
@@ -982,20 +1001,25 @@
 
 /* Modal wider */
 .modal-wide {
-  max-width: 800px;
+  max-width: 800px !important;
+  width: 95vw !important;
 }
 
 /* Modern Media Upload */
 .media-upload-section {
-  display: flex;
+  display: flex !important;
   flex-direction: column;
   gap: var(--spacing-md);
+  width: 100% !important;
+  max-width: 100% !important;
 }
 
 .photo-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important;
   gap: var(--spacing-md);
+  width: 100% !important;
+  max-width: 100% !important;
 }
 
 .photo-card {
@@ -1204,15 +1228,18 @@
 }
 
 .upload-zone {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  max-width: 100% !important;
   min-height: 140px;
   border: 2px dashed var(--color-gray-300);
   border-radius: var(--radius-xl);
   cursor: pointer;
   transition: all 0.2s ease;
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  box-sizing: border-box;
 }
 
 .upload-zone:hover {

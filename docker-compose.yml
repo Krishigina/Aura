@@ -129,45 +129,45 @@ services:
   #     postgres:
   #       condition: service_healthy
 
-  # AI Service
-  ai-service:
-    build: ./ai-service
-    container_name: aura_ai_service
-    ports:
-      - "9001:9001"
-    environment:
-      - WEAVIATE_URL=http://weaviate:8080
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-    depends_on:
-      weaviate:
-        condition: service_started
+  # AI Service (commented out - requires building)
+  # ai-service:
+  #   build: ./ai-service
+  #   container_name: aura_ai_service
+  #   ports:
+  #     - "9001:9001"
+  #   environment:
+  #     - WEAVIATE_URL=http://weaviate:8080
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+  #   depends_on:
+  #     weaviate:
+  #       condition: service_started
 
-  # Admin API (FastAPI)
-  admin-api:
-    build: ./backend/api
-    container_name: aura_admin_api
-    ports:
-      - "3001:3001"
-    environment:
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=aura
-      - DB_USER=aura_user
-      - DB_PASSWORD=aura_password
-    depends_on:
-      postgres:
-        condition: service_healthy
+  # Admin API (FastAPI - already running locally on port 3002)
+  # admin-api:
+  #   build: ./backend/api
+  #   container_name: aura_admin_api
+  #   ports:
+  #     - "3001:3001"
+  #   environment:
+  #     - DB_HOST=postgres
+  #     - DB_PORT=5432
+  #     - DB_NAME=aura
+  #     - DB_USER=aura_user
+  #     - DB_PASSWORD=aura_password
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
 
-  # Web Admin
-  web-admin:
-    build: ./web-admin
-    container_name: aura_web_admin
-    ports:
-      - "5173:5173"
-    environment:
-      - VITE_API_URL=http://localhost:3001/api
-    depends_on:
-      - admin-api
+  # Web Admin (commented out - requires building)
+  # web-admin:
+  #   build: ./web-admin
+  #   container_name: aura_web_admin
+  #   ports:
+  #     - "5173:5173"
+  #   environment:
+  #     - VITE_API_URL=http://localhost:3001/api
+  #   depends_on:
+  #     - admin-api
 
 volumes:
   postgres_data:

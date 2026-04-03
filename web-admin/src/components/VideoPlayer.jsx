@@ -15,9 +15,12 @@ export default function VideoPlayer({ productId, onDelete }) {
       setVideoSrc(null)
       
       try {
-        const url = `http://localhost:3001/api/products/${productId}/video`
+        const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3002/api'}/products/${productId}/video`
         console.log('Fetching video from:', url)
-        const response = await fetch(url)
+        const token = localStorage.getItem('aura_token')
+        const headers = {}
+        if (token) headers['Authorization'] = `Bearer ${token}`
+        const response = await fetch(url, { headers })
         console.log('Video response status:', response.status)
         
         if (!response.ok) {

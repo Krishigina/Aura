@@ -1,12 +1,24 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002/api'
+
+// Get token from localStorage (set by AuthContext)
+function getToken() {
+  return localStorage.getItem('aura_token')
+}
 
 async function request(endpoint, options = {}) {
+  const token = getToken()
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  }
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+  
   const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers,
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Request failed', detail: response.statusText }))
@@ -25,9 +37,12 @@ export const productsApi = {
   uploadPhoto: async (productId, file) => {
     const formData = new FormData()
     formData.append('file', file)
+    const token = getToken()
+    const headers = { 'Accept': 'application/json' }
+    if (token) headers['Authorization'] = `Bearer ${token}`
     const response = await fetch(`${API_URL}/products/${productId}/photos`, {
       method: 'POST',
-      headers: { 'Accept': 'application/json' },
+      headers,
       body: formData
     })
     if (!response.ok) {
@@ -37,9 +52,12 @@ export const productsApi = {
   },
   
   deletePhoto: async (productId, photoId) => {
+    const token = getToken()
+    const headers = { 'Accept': 'application/json' }
+    if (token) headers['Authorization'] = `Bearer ${token}`
     const response = await fetch(`${API_URL}/products/${productId}/photos/${photoId}`, {
       method: 'DELETE',
-      headers: { 'Accept': 'application/json' }
+      headers
     })
     if (!response.ok) {
       throw new Error('Delete failed')
@@ -48,13 +66,19 @@ export const productsApi = {
   },
 
   getPhotos: async (productId) => {
-    const response = await fetch(`${API_URL}/products/${productId}/photos`)
+    const token = getToken()
+    const headers = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
+    const response = await fetch(`${API_URL}/products/${productId}/photos`, { headers })
     if (!response.ok) return []
     return response.json()
   },
 
   getVideo: async (productId) => {
-    const response = await fetch(`${API_URL}/products/${productId}/video`)
+    const token = getToken()
+    const headers = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
+    const response = await fetch(`${API_URL}/products/${productId}/video`, { headers })
     if (!response.ok) return null
     return response.json()
   },
@@ -62,8 +86,12 @@ export const productsApi = {
   uploadVideo: async (productId, file) => {
     const formData = new FormData()
     formData.append('file', file)
+    const token = getToken()
+    const headers = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
     const response = await fetch(`${API_URL}/products/${productId}/video`, {
       method: 'POST',
+      headers,
       body: formData
     })
     if (!response.ok) {
@@ -74,9 +102,12 @@ export const productsApi = {
   },
   
   deleteVideo: async (productId) => {
+    const token = getToken()
+    const headers = { 'Accept': 'application/json' }
+    if (token) headers['Authorization'] = `Bearer ${token}`
     const response = await fetch(`${API_URL}/products/${productId}/video`, {
       method: 'DELETE',
-      headers: { 'Accept': 'application/json' }
+      headers
     })
     if (!response.ok) {
       throw new Error('Delete failed')
@@ -95,8 +126,12 @@ export const productsApi = {
   import: async (file) => {
     const formData = new FormData()
     formData.append('file', file)
+    const token = getToken()
+    const headers = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
     const response = await fetch(`${API_URL}/products/import`, {
       method: 'POST',
+      headers,
       body: formData
     })
     if (!response.ok) {
@@ -144,8 +179,12 @@ export const proceduresApi = {
   uploadPhoto: async (procedureId, file) => {
     const formData = new FormData()
     formData.append('file', file)
+    const token = getToken()
+    const headers = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
     const response = await fetch(`${API_URL}/procedures/${procedureId}/photos`, {
       method: 'POST',
+      headers,
       body: formData
     })
     if (!response.ok) throw new Error('Upload failed')
@@ -153,15 +192,22 @@ export const proceduresApi = {
   },
   
   deletePhoto: async (procedureId, photoId) => {
+    const token = getToken()
+    const headers = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
     const response = await fetch(`${API_URL}/procedures/${procedureId}/photos/${photoId}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers
     })
     if (!response.ok) throw new Error('Delete failed')
     return response.json()
   },
 
   getPhotos: async (procedureId) => {
-    const response = await fetch(`${API_URL}/procedures/${procedureId}/photos`)
+    const token = getToken()
+    const headers = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
+    const response = await fetch(`${API_URL}/procedures/${procedureId}/photos`, { headers })
     if (!response.ok) return []
     return response.json()
   },
@@ -177,8 +223,12 @@ export const contentApi = {
   uploadCardImage: async (contentId, file) => {
     const formData = new FormData()
     formData.append('file', file)
+    const token = getToken()
+    const headers = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
     const response = await fetch(`${API_URL}/content/${contentId}/card-image`, {
       method: 'POST',
+      headers,
       body: formData
     })
     if (!response.ok) throw new Error('Upload failed')

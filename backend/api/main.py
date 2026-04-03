@@ -3,9 +3,10 @@ import re
 import json
 import asyncio
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import List, Optional, Union
 import asyncpg
@@ -13,9 +14,29 @@ import aiohttp
 import json
 import uuid
 from bs4 import BeautifulSoup
+from datetime import datetime, timedelta
+from passlib.context import CryptContext
+
+# JWT imports
+try:
+    from jose import JWTError, jwt
+except ImportError:
+    jwt = None
+    JWTError = Exception
 
 if os.name == 'nt':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+# JWT Configuration
+JWT_SECRET = os.getenv("JWT_SECRET", "aura-super-secret-key-change-in-production")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24
+
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Security scheme
+security = HTTPBearer()
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
@@ -38,8 +59,8 @@ async def lifespan(app: FastAPI):
         try:
             pool = await asyncpg.create_pool(
                 host=os.getenv("DB_HOST", "localhost"),
-                port=int(os.getenv("DB_PORT", "5432")),
-                database=os.getenv("DB_NAME", "beauty_db"),
+                port=int(os.getenv("DB_PORT", "5433")),
+                database=os.getenv("DB_NAME", "aura"),
                 user=os.getenv("DB_USER", "aura_user"),
                 password=os.getenv("DB_PASSWORD", "aura_password"),
                 command_timeout=60,
@@ -77,7 +98,20 @@ app.add_middleware(
 
 async def init_db():
     async with pool.acquire() as conn:
+        # Create users FIRST (referenced by other tables)
         await conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                email VARCHAR(255) UNIQUE NOT NULL,
+                role VARCHAR(50) DEFAULT 'user',
+                nickname VARCHAR(255),
+                phone VARCHAR(50),
+                avatar VARCHAR(500),
+                password_hash VARCHAR(255),
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+
             CREATE TABLE IF NOT EXISTS products (
                 id SERIAL PRIMARY KEY,
                 name VARCHAR(255) NOT NULL,
@@ -91,6 +125,19 @@ async def init_db():
                 has_video BOOLEAN DEFAULT false,
                 created_at TIMESTAMP DEFAULT NOW()
             );
+
+            -- Add missing columns if table already exists (idempotent)
+            ALTER TABLE products ADD COLUMN IF NOT EXISTS what_is_it VARCHAR(255);
+            ALTER TABLE products ADD COLUMN IF NOT EXISTS product_type VARCHAR(100);
+            ALTER TABLE products ADD COLUMN IF NOT EXISTS for_whom VARCHAR(100);
+            ALTER TABLE products ADD COLUMN IF NOT EXISTS purpose TEXT;
+            ALTER TABLE products ADD COLUMN IF NOT EXISTS skin_type TEXT;
+            ALTER TABLE products ADD COLUMN IF NOT EXISTS application_time VARCHAR(100);
+            ALTER TABLE products ADD COLUMN IF NOT EXISTS area VARCHAR(100);
+            ALTER TABLE products ADD COLUMN IF NOT EXISTS active_ingredient TEXT;
+            ALTER TABLE products ADD COLUMN IF NOT EXISTS composition TEXT;
+            ALTER TABLE products ADD COLUMN IF NOT EXISTS application_info TEXT;
+            ALTER TABLE products ADD COLUMN IF NOT EXISTS country VARCHAR(100);
 
             CREATE TABLE IF NOT EXISTS product_photos (
                 id SERIAL PRIMARY KEY,
@@ -153,17 +200,6 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT NOW()
             );
 
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(255) NOT NULL,
-                email VARCHAR(255) UNIQUE NOT NULL,
-                role VARCHAR(50) DEFAULT 'user',
-                nickname VARCHAR(255),
-                phone VARCHAR(50),
-                avatar VARCHAR(500),
-                created_at TIMESTAMP DEFAULT NOW()
-            );
-
             CREATE TABLE IF NOT EXISTS user_profiles (
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER UNIQUE REFERENCES users(id) ON DELETE CASCADE,
@@ -172,108 +208,88 @@ async def init_db():
                 updated_at TIMESTAMP DEFAULT NOW()
             );
 
+            -- Dictionary tables (referenced by products/procedures/content)
             CREATE TABLE IF NOT EXISTS brands (
                 id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE,
-                description TEXT,
-                country VARCHAR(100),
-                country_origin VARCHAR(100),
-                manufacturer VARCHAR(255)
+                value VARCHAR(255) UNIQUE NOT NULL
             );
-
             CREATE TABLE IF NOT EXISTS categories (
                 id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
+                value VARCHAR(255) UNIQUE NOT NULL
             );
-
             CREATE TABLE IF NOT EXISTS segments (
                 id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
+                value VARCHAR(255) UNIQUE NOT NULL
             );
-
             CREATE TABLE IF NOT EXISTS volumes (
                 id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
+                value VARCHAR(255) UNIQUE NOT NULL
             );
-
             CREATE TABLE IF NOT EXISTS procedure_categories (
                 id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
+                value VARCHAR(255) UNIQUE NOT NULL
             );
-
             CREATE TABLE IF NOT EXISTS content_categories (
                 id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
+                value VARCHAR(255) UNIQUE NOT NULL
             );
-
             CREATE TABLE IF NOT EXISTS user_roles (
                 id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
+                value VARCHAR(255) UNIQUE NOT NULL
             );
-
             CREATE TABLE IF NOT EXISTS skin_types (
                 id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
+                value VARCHAR(255) UNIQUE NOT NULL
             );
-
             CREATE TABLE IF NOT EXISTS product_types (
                 id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
+                value VARCHAR(255) UNIQUE NOT NULL
             );
-
             CREATE TABLE IF NOT EXISTS for_whom (
                 id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
+                value VARCHAR(255) UNIQUE NOT NULL
             );
-
             CREATE TABLE IF NOT EXISTS purposes (
                 id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
+                value VARCHAR(255) UNIQUE NOT NULL
             );
-
             CREATE TABLE IF NOT EXISTS application_times (
                 id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
+                value VARCHAR(255) UNIQUE NOT NULL
             );
-
             CREATE TABLE IF NOT EXISTS areas (
                 id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
+                value VARCHAR(255) UNIQUE NOT NULL
             );
-
             CREATE TABLE IF NOT EXISTS countries (
                 id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
+                value VARCHAR(255) UNIQUE NOT NULL
             );
 
+            -- Procedure dictionary tables
             CREATE TABLE IF NOT EXISTS procedure_method_types (
                 id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
+                value VARCHAR(255) UNIQUE NOT NULL
             );
-
             CREATE TABLE IF NOT EXISTS procedure_durations (
                 id SERIAL PRIMARY KEY,
-                value VARCHAR(100) NOT NULL UNIQUE
+                value VARCHAR(255) UNIQUE NOT NULL
             );
-
-            CREATE TABLE IF NOT EXISTS procedure_equipment (
-                id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
-            );
-
             CREATE TABLE IF NOT EXISTS procedure_zones (
                 id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
+                value VARCHAR(255) UNIQUE NOT NULL
             );
-
+            CREATE TABLE IF NOT EXISTS procedure_equipment (
+                id SERIAL PRIMARY KEY,
+                value VARCHAR(255) UNIQUE NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS procedure_effects (
                 id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
+                value VARCHAR(255) UNIQUE NOT NULL
             );
-
             CREATE TABLE IF NOT EXISTS procedure_problems (
                 id SERIAL PRIMARY KEY,
-                value VARCHAR(255) NOT NULL UNIQUE
+                value VARCHAR(255) UNIQUE NOT NULL
             );
         """)
 
@@ -300,24 +316,6 @@ async def init_db():
             default_volumes = ['15мл', '30мл', '50мл', '75мл', '100мл', '150мл', '200мл', '250мл', '500мл', '1л']
             for value in default_volumes:
                 await conn.execute("INSERT INTO volumes (value) VALUES ($1)", value)
-
-        # Reset procedure categories to new directions
-        await conn.execute("DELETE FROM procedure_categories")
-        default_procedure_categories = ['Аппаратная косметология', 'Инъекционная косметология', 'Эстетическая косметология']
-        for value in default_procedure_categories:
-            await conn.execute("INSERT INTO procedure_categories (value) VALUES ($1)", value)
-
-        content_categories_count = await conn.fetchval("SELECT COUNT(*) FROM content_categories")
-        if content_categories_count == 0:
-            default_content_categories = ['Уход за кожей', 'Ингредиенты', 'Защита', 'Процедуры', 'Питание', 'Образ жизни']
-            for value in default_content_categories:
-                await conn.execute("INSERT INTO content_categories (value) VALUES ($1)", value)
-
-        user_roles_count = await conn.fetchval("SELECT COUNT(*) FROM user_roles")
-        if user_roles_count == 0:
-            default_user_roles = ['Пользователь', 'Косметолог', 'Менеджер', 'Администратор']
-            for value in default_user_roles:
-                await conn.execute("INSERT INTO user_roles (value) VALUES ($1)", value)
 
         skin_types_count = await conn.fetchval("SELECT COUNT(*) FROM skin_types")
         if skin_types_count == 0:
@@ -361,8 +359,116 @@ async def init_db():
             for value in default_countries:
                 await conn.execute("INSERT INTO countries (value) VALUES ($1)", value)
 
-        await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname VARCHAR(255)")
-        await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50)")
+        # Reset procedure categories to new directions
+        await conn.execute("DELETE FROM procedure_categories")
+        default_procedure_categories = ['Аппаратная косметология', 'Инъекционная косметология', 'Эстетическая косметология']
+        for value in default_procedure_categories:
+            await conn.execute("INSERT INTO procedure_categories (value) VALUES ($1)", value)
+
+        content_categories_count = await conn.fetchval("SELECT COUNT(*) FROM content_categories")
+        if content_categories_count == 0:
+            default_content_categories = ['Уход за кожей', 'Ингредиенты', 'Защита', 'Процедуры', 'Питание', 'Образ жизни']
+            for value in default_content_categories:
+                await conn.execute("INSERT INTO content_categories (value) VALUES ($1)", value)
+
+        user_roles_count = await conn.fetchval("SELECT COUNT(*) FROM user_roles")
+        if user_roles_count == 0:
+            default_user_roles = ['Пользователь', 'Косметолог', 'Менеджер', 'Администратор']
+            for value in default_user_roles:
+                await conn.execute("INSERT INTO user_roles (value) VALUES ($1)", value)
+
+        # Fix ownership issue - transfer table ownership to aura_user
+        try:
+            await conn.execute("ALTER TABLE users OWNER TO aura_user")
+        except Exception as e:
+            print(f"Could not change ownership: {e}")
+        
+        # Check and add columns if they don't exist (PostgreSQL 15 compatible)
+        columns_to_add = [
+            ("nickname", "VARCHAR(255)"),
+            ("phone", "VARCHAR(50)"),
+            ("password_hash", "VARCHAR(255)"),
+        ]
+        
+        existing_columns = await conn.fetch(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'users'"
+        )
+        existing_column_names = {row['column_name'] for row in existing_columns}
+        
+        for col_name, col_type in columns_to_add:
+            if col_name not in existing_column_names:
+                try:
+                    await conn.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}")
+                except Exception as e:
+                    print(f"Could not add column {col_name}: {e}")
+        
+        # Create demo users if none exist
+        users_count = await conn.fetchval("SELECT COUNT(*) FROM users")
+        if users_count == 0:
+            demo_users = [
+                ('admin@aura.ru', 'Администратор', 'admin', 'admin123', 'Администратор'),
+                ('manager@aura.ru', 'Менеджер', 'manager', 'manager123', 'Менеджер'),
+                ('cosmetolog@aura.ru', 'Косметолог', 'cosmo', 'cosmo123', 'Косметолог'),
+            ]
+            for email, name, nickname, password, role in demo_users:
+                password_hash = get_password_hash(password)
+                await conn.execute(
+                    """INSERT INTO users (name, email, role, nickname, password_hash) 
+                       VALUES ($1, $2, $3, $4, $5)""",
+                    name, email, role, f'@{nickname}', password_hash
+                )
+            print("Demo users created")
+
+        # Create demo products if none exist
+        products_count = await conn.fetchval("SELECT COUNT(*) FROM products")
+        if products_count == 0:
+            demo_products = [
+                ('La Roche-Posay Effaclar Duo+', 'Очищение', 'Крем для проблемной кожи с ниацинамидом и цинком. Корректирует несовершенства, предотвращает появление новых.', '50мл', 'Космецевтика'),
+                ('Vichy Minéral 89', 'Увлажнение', 'Ежедневный укрепляющий уход. 89% термальной воды Vichy + гиалуроновая кислота.', '50мл', 'Космецевтика'),
+                ('CeraVe Hydrating Cleanser', 'Очищение', 'Увлажняющий очищающий лосьон для нормальной и сухой кожи. С церамидами и гиалуроновой кислотой.', '250мл', 'Космецевтика'),
+                ('The Ordinary Niacinamide 10% + Zinc 1%', 'Сыворотки', 'Сыворотка с высокой концентрацией ниацинамида для сужения пор и контроля жирности.', '30мл', 'Бюджетная'),
+                ('Bioderma Sensibio H2O', 'Очищение', 'Мицеллярная вода для чувствительной кожи. Мягко очищает и успокаивает.', '250мл', 'Космецевтика'),
+                ('Cosrx Advanced Snail 96 Mucin', 'Увлажнение', 'Эссенция с муцином улитки 96%. Интенсивное увлажнение и восстановление кожи.', '100мл', 'Бюджетная'),
+            ]
+            for name, category, description, volume, segment in demo_products:
+                await conn.execute(
+                    """INSERT INTO products (name, category, description, volume, segment) 
+                       VALUES ($1, $2, $3, $4, $5)""",
+                    name, category, description, volume, segment
+                )
+            print("Demo products created")
+
+        # Create demo procedures if none exist
+        procedures_count = await conn.fetchval("SELECT COUNT(*) FROM procedures")
+        if procedures_count == 0:
+            demo_procedures = [
+                ('Пилинг лица', 'Эстетическая косметология', 'Химический', '30-60 мин', 'Не требуется', 'Лицо', 'Глубокое очищение и обновление кожи', 'Процедура химического пилинга для обновления кожи лица.', 'Улучшение текстуры и тона кожи', 'Неровный тон, акне, пигментация', 'Принцип контролируемого повреждения верхних слоёв кожи', 'Очищение, нанесение раствора, нейтрализация', 'Для всех типов кожи', 'Акне, пигментация, неровная текстура', 'Беременность, воспаления, герпес', 'За неделю исключить ретиноиды и кислоты', '3-6 процедур с интервалом 2 недели', 'Избегать солнца, использовать SPF', 'Временное покраснение'),
+                ('Мезотерапия', 'Инъекционная косметология', 'Инъекционный', '45-90 мин', 'Инъекционный аппарат', 'Лицо, шея, декольте', 'Глубокое увлажнение и питание', 'Инъекционное введение витаминных коктейлей.', 'Сияющая увлажнённая кожа', 'Сухость, морщины, тусклый цвет', 'Доставка активных веществ в дерму', 'Консультация, анестезия, инъекции', 'Сухая, возрастная, уставшая кожа', 'Морщины, сухость, потеря тонуса', 'Беременность, аллергия, воспаления', 'Не принимать алкоголь за 2 дня', '4-8 процедур с интервалом 1-2 недели', 'Не посещать сауну 3 дня', 'Отёки, гематомы'),
+                ('RF-лифтинг лица', 'Аппаратная косметология', 'Аппаратный', '30-60 мин', 'RF-аппарат', 'Лицо, шея', 'Подтяжка и омоложение кожи', 'Радиочастотная подтяжка кожи.', 'Видимый лифтинг-эффект', 'Дряблость, морщины, овал', 'Нагрев дермы радиочастотной энергией', 'Очищение, нанесение геля, обработка', 'Возрастная кожа с признаками дряблости', 'Морщины, птоз, потеря упругости', 'Кардиостимулятор, беременность, металл', 'Увлажнять кожу, пить воду', '4-6 процедур с интервалом 2 недели', 'Лёгкое покраснение 1-2 часа', 'Покраснение, тепло'),
+            ]
+            for name, direction, method_type, duration, equipment, zones, effects, description, advantages, problems, principle, how_it_goes, for_whom, problems_solved, contraindications, preparation, recommended_course, rehabilitation, side_effects in demo_procedures:
+                await conn.execute(
+                    """INSERT INTO procedures (name, direction, method_type, duration, equipment, zones, effects, description, advantages, problems, principle, how_it_goes, for_whom, problems_solved, contraindications, preparation, recommended_course, rehabilitation, side_effects) 
+                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)""",
+                    name, direction, method_type, duration, equipment, zones, effects, description, advantages, problems, principle, how_it_goes, for_whom, problems_solved, contraindications, preparation, recommended_course, rehabilitation, side_effects
+                )
+            print("Demo procedures created")
+
+        # Create demo content if none exist
+        content_count = await conn.fetchval("SELECT COUNT(*) FROM content")
+        if content_count == 0:
+            demo_content = [
+                ('Как правильно очищать кожу', 'Уход за кожей', 'очищение, уход, кожа', 'Администратор', 'Правильное очищение — основа здоровой кожи. Разбираем типы средств и технику нанесения.', True),
+                ('Ниацинамид: полный гид', 'Ингредиенты', 'ниацинамид, витамин B3, поры', 'Администратор', 'Ниацинамид — один из самых исследованных ингредиентов. Сужает поры, выравнивает тон, контролирует жирность.', True),
+                ('SPF: зачем и как использовать', 'Защита', 'SPF, защита от солнца, фотостарение', 'Администратор', 'SPF-защита — обязательный шаг в уходе. Разбираем мифы и даём практические рекомендации.', True),
+            ]
+            for title, category, tags, author_name, body, published in demo_content:
+                await conn.execute(
+                    """INSERT INTO content (title, category, tags, author_name, body, published) 
+                       VALUES ($1, $2, $3, $4, $5, $6)""",
+                    title, category, tags, author_name, body, published
+                )
+            print("Demo content created")
 
         print("Database initialized successfully")
 
@@ -452,10 +558,74 @@ class ContentCreate(BaseModel):
 class UserCreate(BaseModel):
     name: str
     email: str
+    password: Optional[str] = None
     role: Optional[str] = "user"
     nickname: Optional[str] = None
     phone: Optional[str] = None
     avatar: Optional[str] = None
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: dict
+
+
+# JWT Functions
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except:
+        return False
+
+
+def get_password_hash(password: str) -> str:
+    return pwd_context.hash(password)
+
+
+# Authentication dependency
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if not jwt:
+        raise HTTPException(status_code=500, detail="JWT library not installed")
+    
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user_id: int = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM users WHERE id=$1", user_id)
+        if not row:
+            raise HTTPException(status_code=401, detail="User not found")
+        return dict(row)
+
+
+async def get_current_user_optional(credentials: Optional[HTTPAuthorizationCredentials] = Depends(None)):
+    if not credentials:
+        return None
+    try:
+        return await get_current_user(credentials)
+    except HTTPException:
+        return None
 
 
 def is_valid_email(email: str) -> bool:
@@ -527,6 +697,102 @@ class DictionaryValue(BaseModel):
 class DictionaryUpdate(BaseModel):
     oldValue: str
     newValue: str
+
+
+@app.get("/api/health")
+async def health_check():
+    return {"status": "ok"}
+
+
+@app.post("/api/auth/login", response_model=TokenResponse)
+async def login(request: LoginRequest):
+    async with pool.acquire() as conn:
+        # Find user by email
+        row = await conn.fetchrow(
+            "SELECT * FROM users WHERE LOWER(email) = LOWER($1)",
+            request.email
+        )
+        
+        if not row:
+            raise HTTPException(status_code=401, detail="Неверный email или пароль")
+        
+        # Check password
+        user_dict = dict(row)
+        stored_password = user_dict.get('password_hash')
+        
+        if not stored_password or not verify_password(request.password, stored_password):
+            raise HTTPException(status_code=401, detail="Неверный email или пароль")
+        
+        # Create token
+        access_token = create_access_token(data={"sub": user_dict['id']})
+        
+        # Return user without password
+        user_dict.pop('password_hash', None)
+        
+        return TokenResponse(
+            access_token=access_token,
+            user=user_dict
+        )
+
+
+@app.post("/api/auth/register", response_model=TokenResponse)
+async def register(user: UserCreate):
+    if not user.password:
+        raise HTTPException(status_code=400, detail="Пароль обязателен")
+    
+    if not is_valid_email(user.email):
+        raise HTTPException(status_code=400, detail="Некорректный email")
+    
+    login = normalize_login(user.nickname)
+    phone_digits = normalize_phone(user.phone)
+    
+    if login and not is_valid_login(login):
+        raise HTTPException(status_code=400, detail="Логин должен быть в формате @login")
+    if phone_digits and not is_valid_phone(phone_digits):
+        raise HTTPException(status_code=400, detail="Некорректный телефон")
+    
+    async with pool.acquire() as conn:
+        await ensure_users_columns(conn)
+        
+        # Check if email exists
+        existing = await conn.fetchrow(
+            "SELECT id FROM users WHERE LOWER(email) = LOWER($1)",
+            user.email
+        )
+        if existing:
+            raise HTTPException(status_code=400, detail="Email уже занят")
+        
+        # Check if login exists
+        if login:
+            await ensure_unique_login(conn, login)
+        
+        # Hash password
+        password_hash = get_password_hash(user.password)
+        
+        # Set default role
+        role = user.role or "Пользователь"
+        
+        row = await conn.fetchrow(
+            """INSERT INTO users (name, email, role, nickname, phone, avatar, password_hash) 
+               VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *""",
+            user.name, user.email, role, login, phone_digits, user.avatar, password_hash
+        )
+        
+        user_dict = dict(row)
+        access_token = create_access_token(data={"sub": user_dict['id']})
+        user_dict.pop('password_hash', None)
+        
+        return TokenResponse(
+            access_token=access_token,
+            user=user_dict
+        )
+
+
+@app.get("/api/auth/me")
+async def get_me(current_user: dict = Depends(get_current_user)):
+    user = current_user.copy()
+    user.pop('password_hash', None)
+    return user
 
 
 @app.get("/api/health")
@@ -614,9 +880,10 @@ async def delete_product(product_id: int):
 
 @app.post("/api/products/{product_id:int}/photos")
 async def upload_product_photo(product_id: int, file: UploadFile = File(...)):
-    product = await get_product_by_id(product_id)
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
+    async with pool.acquire() as conn:
+        product = await conn.fetchrow("SELECT id FROM products WHERE id=$1", product_id)
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
     
     base_dir = os.path.dirname(os.path.abspath(__file__))
     uploads_dir = os.path.join(base_dir, "product_photos")
@@ -652,6 +919,64 @@ async def delete_product_photo(product_id: int, photo_id: int):
                 os.remove(file_path)
             await conn.execute("DELETE FROM product_photos WHERE id=$1", photo_id)
     return {"success": True}
+
+
+@app.get("/api/products/{product_id:int}/photos")
+async def get_product_photos(product_id: int):
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT id, filename FROM product_photos WHERE product_id=$1 ORDER BY id",
+            product_id
+        )
+        photos = []
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        uploads_dir = os.path.join(base_dir, "product_photos")
+        for row in rows:
+            filename = row["filename"]
+            file_path = os.path.join(uploads_dir, filename)
+            if os.path.exists(file_path):
+                with open(file_path, 'rb') as f:
+                    import base64
+                    data = base64.b64encode(f.read()).decode()
+                    ext = filename.split('.')[-1].lower()
+                    content_type_map = {
+                        'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+                        'png': 'image/png', 'webp': 'image/webp', 'gif': 'image/gif'
+                    }
+                    content_type = content_type_map.get(ext, 'image/jpeg')
+                    photos.append({
+                        "id": row["id"],
+                        "filename": filename,
+                        "content_type": content_type,
+                        "data": data
+                    })
+        return photos
+
+
+@app.get("/api/products/{product_id:int}/photos/{photo_id:int}")
+async def serve_product_photo(product_id: int, photo_id: int):
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT filename FROM product_photos WHERE id=$1 AND product_id=$2",
+            photo_id, product_id
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Photo not found")
+    
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(base_dir, "product_photos", row["filename"])
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Photo file not found")
+    
+    ext = row["filename"].split('.')[-1].lower()
+    content_type_map = {
+        'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+        'png': 'image/png', 'webp': 'image/webp', 'gif': 'image/gif'
+    }
+    content_type = content_type_map.get(ext, 'image/jpeg')
+    
+    with open(file_path, 'rb') as f:
+        return Response(content=f.read(), media_type=content_type)
 
 
 @app.post("/api/products/{product_id}/video")
@@ -1216,18 +1541,24 @@ async def create_user(user: UserCreate):
     phone_digits = normalize_phone(user.phone)
     if not is_valid_email(user.email):
         raise HTTPException(status_code=400, detail="Некорректный email")
-    if not is_valid_login(login):
+    if login and not is_valid_login(login):
         raise HTTPException(status_code=400, detail="Логин должен быть в формате @login, только a-z, 0-9 и _")
-    if not is_valid_phone(phone_digits):
+    if phone_digits and not is_valid_phone(phone_digits):
         raise HTTPException(status_code=400, detail="Некорректный телефон")
 
     async with pool.acquire() as conn:
         await ensure_users_columns(conn)
         await ensure_unique_login(conn, login)
+        
+        # Hash password if provided
+        password_hash = None
+        if user.password:
+            password_hash = get_password_hash(user.password)
+        
         row = await conn.fetchrow(
-            """INSERT INTO users (name, email, role, nickname, phone, avatar) 
-               VALUES ($1, $2, $3, $4, $5, $6) RETURNING *""",
-            user.name, user.email, user.role, login, phone_digits, user.avatar
+            """INSERT INTO users (name, email, role, nickname, phone, avatar, password_hash) 
+               VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *""",
+            user.name, user.email, user.role, login, phone_digits, user.avatar, password_hash
         )
         return dict(row)
 
@@ -1449,4 +1780,5 @@ async def parse_product_url(request: ProductParseRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=3001)
+    # Run directly - uvicorn handles the async loop
+    uvicorn.run("main:app", host="127.0.0.1", port=3002, reload=False, loop="asyncio")
