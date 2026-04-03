@@ -173,6 +173,11 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT NOW()
             );
 
+            -- Add missing columns if table already exists (idempotent)
+            ALTER TABLE procedures ADD COLUMN IF NOT EXISTS contraindications_full TEXT;
+            -- Copy data from contraindications if contraindications_full is empty
+            UPDATE procedures SET contraindications_full = contraindications WHERE contraindications_full IS NULL AND contraindications IS NOT NULL;
+
             CREATE TABLE IF NOT EXISTS procedure_photos (
                 id SERIAL PRIMARY KEY,
                 procedure_id INTEGER REFERENCES procedures(id) ON DELETE CASCADE,

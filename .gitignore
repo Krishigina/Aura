@@ -38,3 +38,6 @@ __pycache__/
 # AGENTS files (generated)
 AGENTS.md
 **/AGENTS.md
+
+# External plugin
+oh-my-openagent/
