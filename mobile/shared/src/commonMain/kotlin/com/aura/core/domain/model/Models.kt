@@ -7,8 +7,40 @@ import kotlinx.serialization.Serializable
 @Serializable data class SkinProfile(val id: String, val userId: String, val skinType: String, val ageRange: String? = null, 
     val concerns: List<String> = emptyList(), val allergies: List<String> = emptyList(), val goals: List<String> = emptyList(), val isCompleted: Boolean = false)
 
-@Serializable data class Product(val id: String, val name: String, val brand: String, val categoryId: String? = null, 
-    val description: String? = null, val imageUrl: String? = null, val price: String? = null, val currency: String = "USD")
+@Serializable data class Product(
+    val id: Int = 0,
+    val name: String? = null,
+    val brand: String? = null,
+    val what_is_it: String? = null,
+    val product_type: String? = null,
+    val for_whom: String? = null,
+    val purpose: List<String>? = null,
+    val skin_type: List<String>? = null,
+    val application_time: String? = null,
+    val area: String? = null,
+    val active_ingredient: String? = null,
+    val volume: String? = null,
+    val segment: String? = null,
+    val composition: String? = null,
+    val application_info: String? = null,
+    val country: String? = null,
+    val country_origin: String? = null,
+    val manufacturer: String? = null,
+    val description: String? = null,
+    val photos: List<ProductPhoto>? = null,
+    val imageUrl: String? = null,
+    val price: String? = null,
+    val currency: String? = null,
+    val category: String? = null,
+    val desc: String? = null
+)
+
+@Serializable data class ProductPhoto(
+    val id: String = "",
+    val filename: String = "",
+    val data: String = "",
+    val content_type: String = ""
+)
 
 @Serializable data class ProductIngredient(val id: String, val name: String, val position: Int, val safetyLevel: String)
 
