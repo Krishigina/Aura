@@ -1,932 +1,276 @@
 package com.aura.feature.home
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.aura.core.i18n.StringsRu
+import com.aura.core.data.repository.TokenManager
 import com.aura.core.ui.theme.*
 
-data class RoutineItem(val title: String, val time: String, val isCompleted: Boolean = false, val icon: String = "✨")
-data class SkinMetric(val label: String, val value: String, val color: Color, val icon: ImageVector)
-data class TabItem(val title: String, val selectedIcon: ImageVector, val unselectedIcon: ImageVector)
+// ─── Palette ──────────────────────────────────────────────
+val PrimaryBlue = Color(0xFF197FE6)
+val AuraLavender = Color(0xFFE0C3FC)
+val AuraMint = Color(0xFFA7F3D0)
+val AuraIce = Color(0xFFF4F7FE)
+val SlateBlue = Color(0xFF2D3748)
+val Slate800 = Color(0xFF1E293B)
+val Slate700 = Color(0xFF334155)
+val Slate500 = Color(0xFF64748B)
 
+// ─── Screen ───────────────────────────────────────────────
 @Composable
 fun HomeScreen(
-    onNavigateToProfile: () -> Unit = {},
-    onNavigateToChat: () -> Unit = {},
-    onNavigateToDiagnostics: () -> Unit = {}
+    onNavigateToProduct: (String) -> Unit = {}
 ) {
-    var selectedTab by remember { mutableIntStateOf(0) }
-    
-    val tabs = listOf(
-        TabItem("Главная", Icons.Filled.Home, Icons.Outlined.Home),
-        TabItem("Анализ", Icons.Filled.Analytics, Icons.Outlined.Analytics),
-        TabItem("Для вас", Icons.Filled.AutoAwesome, Icons.Outlined.AutoAwesome),
-        TabItem("Чат", Icons.Filled.Chat, Icons.Outlined.Chat),
-        TabItem("Профиль", Icons.Filled.Person, Icons.Outlined.Person)
-    )
-    
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        bottomBar = {
-            ModernBottomNav(selectedTab = selectedTab, tabs = tabs, onTabSelected = { 
-                selectedTab = it
-                when (it) {
-                    1 -> onNavigateToDiagnostics()
-                    3 -> onNavigateToChat()
-                    4 -> onNavigateToProfile()
-                }
-            })
-        }
-    ) { padding ->
-        when (selectedTab) {
-            0 -> HomeTabContent(Modifier.padding(padding))
-            1 -> AnalysisTabContent(Modifier.padding(padding))
-            2 -> RecommendationsTabContent(Modifier.padding(padding))
-            3 -> ChatTabContent(Modifier.padding(padding))
-            4 -> ProfileTabContent(Modifier.padding(padding))
-        }
-    }
-}
+    val dark = isSystemInDarkTheme() || AppState.isDarkMode
+    val bg = if (dark) Color(0xFF0A0A0A) else AuraIce
+    val glassAlpha = if (dark) 0.08f else 0.45f
+    val glassBorderAlpha = if (dark) 0.15f else 0.6f
+    val textPrimary = if (dark) Color(0xFFF1F5F9) else Slate800
+    val textSecondary = if (dark) Color(0xFF94A3B8) else Slate500
+    val textBody = if (dark) Color(0xFFCBD5E1) else Slate700
+    val userName = TokenManager.getUser()?.name?.takeIf { it.isNotBlank() } ?: StringsRu.Common.userFallback
 
-@Composable
-private fun ModernBottomNav(selectedTab: Int, tabs: List<TabItem>, onTabSelected: (Int) -> Unit) {
     Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(28.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .shadow(8.dp, RoundedCornerShape(28.dp))
+            .fillMaxSize()
+            .background(bg)
     ) {
-        Row(
+        LiquidMeshBackground(dark = dark)
+
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp)
+                .padding(top = 56.dp, bottom = 100.dp)
         ) {
-            tabs.forEachIndexed { index, tab ->
-                val selected = selectedTab == index
-                val scale by animateFloatAsState(if (selected) 1.1f else 1f, label = "scale")
-                
-                Box(
-                    modifier = Modifier
-                        .scale(scale)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(
-                            if (selected) MintGreen.copy(alpha = 0.15f) else Color.Transparent
-                        )
-                        .clickable { onTabSelected(index) }
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (selected) tab.selectedIcon else tab.unselectedIcon,
-                        contentDescription = tab.title,
-                        tint = if (selected) MintGreen else Color.Gray,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
+            HeaderSection(userName = userName, textPrimary = textPrimary, textSecondary = textSecondary, dark = dark)
+            Spacer(modifier = Modifier.height(32.dp))
+            TopWidgetSection(textPrimary = textPrimary, textSecondary = textSecondary, textBody = textBody, glassAlpha = glassAlpha, glassBorderAlpha = glassBorderAlpha, dark = dark)
+            Spacer(modifier = Modifier.height(32.dp))
+            MorningRitualSection(textPrimary = textPrimary, textSecondary = textSecondary, textBody = textBody, glassAlpha = glassAlpha, glassBorderAlpha = glassBorderAlpha, dark = dark)
+            Spacer(modifier = Modifier.height(32.dp))
+            AiInsightsSection(textPrimary = textPrimary, textSecondary = textSecondary, textBody = textBody, glassAlpha = glassAlpha, glassBorderAlpha = glassBorderAlpha, dark = dark)
         }
     }
 }
 
+// ─── Background ───────────────────────────────────────────
 @Composable
-private fun ChatTabContent(modifier: Modifier = Modifier) {
-    com.aura.feature.chat.ChatScreenContent(modifier = modifier)
-}
+private fun LiquidMeshBackground(dark: Boolean) {
+    val lavenderAlpha = if (dark) 0.15f else 0.4f
+    val mintAlpha = if (dark) 0.1f else 0.4f
+    val iceAlpha = if (dark) 0.08f else 0.5f
 
-@Composable
-private fun ProfileTabContent(modifier: Modifier = Modifier) {
-    com.aura.feature.profile.ProfileScreenContent(modifier = modifier)
-}
-
-@Composable
-private fun HomeTabContent(modifier: Modifier = Modifier) {
-    val userName = "Елена"
-    val focusTitle = "Увлажнение и SPF"
-    val focusReason = "Ваш кожный барьер восстанавливается"
-    val progressPercent = 0.75f
-    
-    val skinMetrics = listOf(
-        SkinMetric("Влага", "72%", MintGreen, Icons.Outlined.WaterDrop),
-        SkinMetric("Жирность", "35%", PinkAccent, Icons.Outlined.OilBarrel),
-        SkinMetric("Барьер", "68%", Lavender, Icons.Outlined.Shield)
-    )
-    
-    val morningRoutine = listOf(
-        RoutineItem("Очищение", "07:00", true, "🧴"),
-        RoutineItem("Тоник", "07:05", true, "💧"),
-        RoutineItem("Сыворотка C", "07:10", false, "✨"),
-        RoutineItem("Увлажнение", "07:15", false, "🌸"),
-        RoutineItem("SPF 50+", "07:20", false, "☀️")
-    )
-    
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 100.dp)
-    ) {
-        item {
-            Box(modifier = Modifier.fillMaxWidth()) {
-                AnimatedBackground()
-                Column(modifier = Modifier.padding(20.dp)) {
-                    GreetingSection(userName)
-                    Spacer(modifier = Modifier.height(24.dp))
-                    FocusCard(title = focusTitle, reason = focusReason)
-                    Spacer(modifier = Modifier.height(24.dp))
-                    ProgressSection(progress = progressPercent, metrics = skinMetrics)
-                }
-            }
+    Box(modifier = Modifier.fillMaxSize()) {
+        Canvas(modifier = Modifier.size(400.dp).offset(x = (-50).dp, y = (-50).dp).blur(80.dp)) {
+            drawCircle(color = AuraLavender.copy(alpha = lavenderAlpha))
         }
-        
-        item {
-            Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                SectionHeader("Утренняя рутина", "Сегодня 5 шагов")
-                Spacer(modifier = Modifier.height(16.dp))
-                morningRoutine.forEach { item ->
-                    ModernRoutineItem(item)
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-            }
+        Canvas(modifier = Modifier.size(350.dp).align(Alignment.TopEnd).offset(x = 50.dp, y = 100.dp).blur(80.dp)) {
+            drawCircle(color = AuraMint.copy(alpha = mintAlpha))
+        }
+        Canvas(modifier = Modifier.size(450.dp).align(Alignment.BottomStart).offset(x = (-50).dp, y = 100.dp).blur(80.dp)) {
+            drawCircle(color = Color(0xFFDBEAFE).copy(alpha = iceAlpha))
         }
     }
 }
 
+// ─── Header ───────────────────────────────────────────────
 @Composable
-private fun AnimatedBackground() {
-    val infiniteTransition = rememberInfiniteTransition(label = "bg")
-    val offset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(10000), RepeatMode.Reverse),
-        label = "offset"
-    )
-    
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(400.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(300.dp)
-                .offset(x = (-100).dp, y = (-50 + offset * 30).dp)
-                .blur(80.dp)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(MintGreen.copy(alpha = 0.4f), Color.Transparent)
-                    )
-                )
-        )
-        Box(
-            modifier = Modifier
-                .size(250.dp)
-                .align(Alignment.TopEnd)
-                .offset(x = 50.dp, y = (offset * 50).dp)
-                .blur(100.dp)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(PinkAccent.copy(alpha = 0.3f), Color.Transparent)
-                    )
-                )
-        )
-    }
-}
-
-@Composable
-private fun SectionHeader(title: String, subtitle: String) {
+private fun HeaderSection(userName: String, textPrimary: Color, textSecondary: Color, dark: Boolean) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
+            Text(text = StringsRu.Home.today, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = textSecondary, modifier = Modifier.alpha(0.8f))
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(text = "${StringsRu.Home.goodMorningPrefix},\n$userName", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = textPrimary, lineHeight = 36.sp)
         }
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.bodySmall,
-            color = MintGreen,
-            fontWeight = FontWeight.Medium
-        )
-    }
-}
-
-@Composable
-private fun GreetingSection(userName: String) {
-    Column {
-        Spacer(modifier = Modifier.height(60.dp))
-        Text(
-            text = "Доброе утро 👋",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = userName,
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Как ваша кожа сегодня?",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-        )
-    }
-}
-
-@Composable
-private fun FocusCard(title: String, reason: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(160.dp)
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            MintGreen.copy(alpha = 0.9f),
-                            MintGreen.copy(alpha = 0.6f)
-                        )
-                    )
-                )
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(160.dp)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.2f),
-                            Color.Transparent
-                        )
-                    )
-                )
-        )
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(160.dp)
-                .padding(24.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+                .size(width = 80.dp, height = 96.dp)
+                .glassPanel(RoundedCornerShape(16.dp), dark = dark)
+                .padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.3f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.Star,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Фокус дня",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color.White.copy(alpha = 0.9f),
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            Column {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = reason,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.85f)
-                )
+            Icon(imageVector = Icons.Rounded.WbSunny, contentDescription = StringsRu.Home.weather, tint = Color(0xFFEAB308), modifier = Modifier.size(32.dp))
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(text = "22\u00B0C", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (dark) Color(0xFFCBD5E1) else Slate700)
+            Spacer(modifier = Modifier.height(4.dp))
+            Box(modifier = Modifier.background(Color(0xFFFEE2E2), RoundedCornerShape(percent = 50)).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                Text(text = "UV 6.0", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFFEF4444))
             }
         }
     }
 }
 
+// ─── Top Widget ───────────────────────────────────────────
 @Composable
-private fun ProgressSection(progress: Float, metrics: List<SkinMetric>) {
-    var animatedProgress by remember { mutableFloatStateOf(0f) }
-    val animatedValue by animateFloatAsState(targetValue = animatedProgress, animationSpec = tween(1500, easing = FastOutSlowInEasing), label = "progress")
-    
-    LaunchedEffect(Unit) { animatedProgress = progress }
-    
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .shadow(12.dp, RoundedCornerShape(24.dp))
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Состояние кожи",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = MintGreen.copy(alpha = 0.15f)
-                ) {
-                    Text(
-                        text = "Обновлено сегодня",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MintGreen,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                    )
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(20.dp))
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(110.dp)) {
-                    CircularProgressIndicator(
-                        progress = animatedValue,
-                        modifier = Modifier.size(110.dp),
-                        strokeWidth = 10.dp,
-                        trackColor = Color.Gray.copy(alpha = 0.1f),
-                        color = MintGreen
-                    )
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "${(animatedValue * 100).toInt()}%",
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MintGreen
-                        )
-                        Text(
-                            text = "здоровье",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.Gray
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.width(16.dp))
-                
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    metrics.forEach { metric ->
-                        MetricItem(metric)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MetricItem(metric: SkinMetric) {
+private fun TopWidgetSection(textPrimary: Color, textSecondary: Color, textBody: Color, glassAlpha: Float, glassBorderAlpha: Float, dark: Boolean) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().glassPanel(RoundedCornerShape(24.dp), dark = dark).padding(20.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(metric.color.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = metric.icon,
-                    contentDescription = null,
-                    tint = metric.color,
-                    modifier = Modifier.size(18.dp)
-                )
+            Box(modifier = Modifier.background(Color(0xFFEFF6FF).copy(alpha = 0.5f), RoundedCornerShape(16.dp)).padding(12.dp)) {
+                Icon(imageVector = Icons.Rounded.WaterDrop, contentDescription = null, tint = PrimaryBlue)
             }
-            Spacer(modifier = Modifier.width(10.dp))
-            Text(
-                text = metric.label,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                Text(text = StringsRu.Home.humidity, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = textBody)
+                Text(text = StringsRu.Home.humiditySubtitle, fontSize = 12.sp, color = textSecondary)
+            }
         }
-        Text(
-            text = metric.value,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = metric.color
-        )
-    }
-}
-
-@Composable
-private fun ModernRoutineItem(item: RoutineItem) {
-    val scale by animateFloatAsState(
-        targetValue = if (item.isCompleted) 1f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessLow),
-        label = "scale"
-    )
-    
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .scale(scale)
-            .clip(RoundedCornerShape(20.dp))
-            .background(
-                if (item.isCompleted) 
-                    MaterialTheme.colorScheme.surface 
-                else 
-                    MaterialTheme.colorScheme.surface
-            )
-            .border(
-                width = 1.dp,
-                color = if (item.isCompleted) MintGreen.copy(alpha = 0.3f) else Color.Gray.copy(alpha = 0.1f),
-                shape = RoundedCornerShape(20.dp)
-            )
-            .padding(16.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Box(modifier = Modifier.width(1.dp).height(40.dp).background(Color(0xFFE2E8F0).copy(alpha = 0.5f)))
+        Column(horizontalAlignment = Alignment.End) {
+            Text(text = StringsRu.Home.airQuality, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = textSecondary)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(
-                            if (item.isCompleted) MintGreen.copy(alpha = 0.15f)
-                            else Lavender.copy(alpha = 0.15f)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(item.icon, fontSize = 24.sp)
-                }
-                Spacer(modifier = Modifier.width(14.dp))
-                Column {
-                    Text(
-                        text = item.title,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium,
-                        color = if (item.isCompleted) 
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        else 
-                            MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = item.time,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                    )
-                }
-            }
-            
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (item.isCompleted) MintGreen else Color.Gray.copy(alpha = 0.15f)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (item.isCompleted) Icons.Default.Check else Icons.Default.Schedule,
-                    contentDescription = null,
-                    tint = if (item.isCompleted) Color.White else Color.Gray,
-                    modifier = Modifier.size(18.dp)
-                )
+                Text(text = StringsRu.Home.airGood, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
+                Spacer(modifier = Modifier.width(4.dp))
+                Box(modifier = Modifier.size(8.dp).background(Color(0xFF22C55E), CircleShape))
             }
         }
     }
 }
 
+// ─── Morning Ritual ───────────────────────────────────────
 @Composable
-private fun AnalysisTabContent(modifier: Modifier = Modifier) {
-    val skinMetrics = listOf(
-        SkinMetric("Влага", "72%", MintGreen, Icons.Outlined.WaterDrop),
-        SkinMetric("Жирность", "35%", PinkAccent, Icons.Outlined.OilBarrel),
-        SkinMetric("Барьер", "68%", Lavender, Icons.Outlined.Shield),
-        SkinMetric("pH", "5.5", Color(0xFFFFAB40), Icons.Outlined.Science)
-    )
-    
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item {
-            Spacer(modifier = Modifier.height(40.dp))
-            Text(
-                text = "Анализ кожи",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Детальный анализ состояния вашей кожи",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-            )
-        }
-        
-        item {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(28.dp))
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(MintGreen.copy(alpha = 0.15f), Lavender.copy(alpha = 0.1f))
-                        )
-                    )
-                    .padding(32.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(
-                            progress = 0.72f,
-                            modifier = Modifier.size(180.dp),
-                            strokeWidth = 16.dp,
-                            trackColor = Color.Gray.copy(alpha = 0.1f),
-                            color = MintGreen
-                        )
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("72%", style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Bold, color = MintGreen)
-                            Text("Общее здоровье", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-                        }
-                    }
-                }
-            }
-        }
-        
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                skinMetrics.take(2).forEach { metric ->
-                    MetricCard(metric, Modifier.weight(1f))
-                }
-            }
-        }
-        
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                skinMetrics.drop(2).forEach { metric ->
-                    MetricCard(metric, Modifier.weight(1f))
-                }
-            }
-        }
-        
-        item {
-            Text(
-                text = "Рекомендации",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-        }
-        
-        items(3) { index ->
-            RecommendationCard(index)
-        }
-    }
-}
-
-@Composable
-private fun MetricCard(metric: SkinMetric, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .shadow(8.dp, RoundedCornerShape(20.dp))
-            .padding(16.dp)
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(metric.color.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = metric.icon,
-                    contentDescription = null,
-                    tint = metric.color,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = metric.value,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = metric.color
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = metric.label,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun RecommendationCard(index: Int) {
-    val recommendations = listOf(
-        Triple("Увеличить увлажнение", "Добавьте сыворотку с гиалуроновой кислотой", MintGreen),
-        Triple("Защита от солнца", "Используйте SPF 50 каждый день", PinkAccent),
-        Triple("Восстановление барьера", "Нанесите ceramide крем на ночь", Lavender)
-    )
-    val (title, desc, color) = recommendations[index]
-    
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, color.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
-            .padding(16.dp)
-    ) {
+private fun MorningRitualSection(textPrimary: Color, textSecondary: Color, textBody: Color, glassAlpha: Float, glassBorderAlpha: Float, dark: Boolean) {
+    Column {
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom
         ) {
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(color.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Lightbulb,
-                    contentDescription = null,
-                    tint = color,
-                    modifier = Modifier.size(28.dp)
-                )
+            Text(text = StringsRu.Home.ritual, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = textPrimary)
+            Box(modifier = Modifier.background(PrimaryBlue.copy(alpha = 0.1f), RoundedCornerShape(50)).padding(horizontal = 12.dp, vertical = 4.dp)) {
+                Text(text = StringsRu.Home.ritualStepsLeft, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = PrimaryBlue)
             }
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = desc,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
+        }
+        Box(modifier = Modifier.fillMaxWidth().glassPanel(RoundedCornerShape(32.dp), dark = dark)) {
+            Canvas(modifier = Modifier.size(160.dp).align(Alignment.TopEnd).offset(x = 40.dp, y = (-40).dp).blur(40.dp)) {
+                drawCircle(Brush.radialGradient(listOf(AuraLavender.copy(alpha = 0.3f), AuraMint.copy(alpha = 0.3f))))
+            }
+            Column(modifier = Modifier.padding(24.dp)) {
+                RitualItem(checked = true, title = StringsRu.Home.ritualCleanser, subtitle = StringsRu.Home.ritualCleanserSubtitle, textBody = textBody, textSecondary = textSecondary, dark = dark)
+                Divider(modifier = Modifier.padding(start = 40.dp, top = 16.dp, bottom = 16.dp), color = if (dark) Color.White.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.6f))
+                RitualItem(checked = true, title = StringsRu.Home.ritualVitaminC, subtitle = StringsRu.Home.ritualVitaminCSubtitle, textBody = textBody, textSecondary = textSecondary, dark = dark)
+                Divider(modifier = Modifier.padding(start = 40.dp, top = 16.dp, bottom = 16.dp), color = if (dark) Color.White.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.6f))
+                RitualItem(checked = false, title = StringsRu.Home.ritualGel, subtitle = StringsRu.Home.ritualGelSubtitle, isActive = true, textBody = textBody, textSecondary = textSecondary, dark = dark)
+                Divider(modifier = Modifier.padding(start = 40.dp, top = 16.dp, bottom = 16.dp), color = if (dark) Color.White.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.6f))
+                RitualItem(checked = false, title = StringsRu.Home.ritualSpf, subtitle = StringsRu.Home.ritualSpfSubtitle, isWarning = true, textBody = textBody, textSecondary = textSecondary, dark = dark)
             }
         }
     }
 }
 
 @Composable
-private fun RecommendationsTabContent(modifier: Modifier = Modifier) {
-    val products = listOf(
-        Triple("Hydrating Serum", "Увлажняющая сыворотка", 98f),
-        Triple("Vitamin C Cream", "Антиоксидантный крем", 95f),
-        Triple("Barrier Repair", "Восстановление барьера", 92f),
-        Triple("SPF 50+ Protection", "Защита от солнца", 99f),
-        Triple("Retinol Night", "Ночной ретинол", 88f)
-    )
-    
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item {
-            Spacer(modifier = Modifier.height(40.dp))
-            Text(
-                text = "Рекомендации",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Персонализированные продукты для вас",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-            )
-        }
-        
-        item {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(MintGreen, MintGreen.copy(alpha = 0.7f))
-                        )
-                    )
-                    .padding(24.dp)
-            ) {
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = "Индекс совместимости",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color.White.copy(alpha = 0.9f)
-                            )
-                            Text(
-                                text = "98%",
-                                style = MaterialTheme.typography.displaySmall,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        }
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color.White.copy(alpha = 0.2f))
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                        ) {
-                            Text(
-                                text = "Отлично",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+private fun RitualItem(checked: Boolean, title: String, subtitle: String, isActive: Boolean = false, isWarning: Boolean = false, textBody: Color, textSecondary: Color, dark: Boolean) {
+    var isChecked by remember { mutableStateOf(checked) }
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { isChecked = !isChecked }) {
+        CustomCheckbox(checked = isChecked, dark = dark)
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f).alpha(if (isChecked) 0.5f else 1f)) {
+            Text(text = title, fontSize = if (isActive) 16.sp else 14.sp, fontWeight = if (isActive) FontWeight.Bold else FontWeight.SemiBold, color = textBody, textDecoration = if (isChecked) TextDecoration.LineThrough else TextDecoration.None)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (isActive) {
+                    Icon(Icons.Rounded.Build, contentDescription = null, modifier = Modifier.size(12.dp), tint = PrimaryBlue)
+                    Spacer(modifier = Modifier.width(4.dp))
                 }
+                Text(text = subtitle, fontSize = 12.sp, fontWeight = if (isActive || isWarning) FontWeight.Medium else FontWeight.Normal, color = when {
+                    isWarning -> Color(0xFFF87171)
+                    isActive -> PrimaryBlue
+                    else -> textSecondary
+                })
             }
         }
-        
-        item {
-            Text(
-                text = "Лучшие для вас",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-        }
-        
-        items(products.size) { index ->
-            val (name, desc, match) = products[index]
-            val color = when {
-                match >= 95 -> MintGreen
-                match >= 90 -> PinkAccent
-                else -> Lavender
+        if (isActive) {
+            Box(modifier = Modifier.size(32.dp).background(if (dark) Color.White.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.5f), CircleShape), contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.Star, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(16.dp))
             }
-            
-            ProductCardModern(name = name, desc = desc, match = match, color = color)
         }
-        
-        item { Spacer(modifier = Modifier.height(60.dp)) }
     }
 }
 
 @Composable
-private fun ProductCardModern(name: String, desc: String, match: Float, color: Color) {
+private fun CustomCheckbox(checked: Boolean, dark: Boolean) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .shadow(6.dp, RoundedCornerShape(20.dp))
-            .clickable { }
-            .padding(16.dp)
+        modifier = Modifier.size(24.dp).clip(CircleShape).background(if (checked) PrimaryBlue else if (dark) Color.White.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.5f)).border(1.dp, if (checked) PrimaryBlue else PrimaryBlue.copy(alpha = 0.3f), CircleShape),
+        contentAlignment = Alignment.Center
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(color.copy(alpha = 0.2f), color.copy(alpha = 0.1f))
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("🧴", fontSize = 32.sp)
-            }
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = desc,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(color.copy(alpha = 0.15f))
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = "${match.toInt()}%",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = color
-                    )
-                }
-                Text(
-                    text = "совм.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.Gray
-                )
-            }
+        if (checked) Icon(imageVector = Icons.Rounded.Check, contentDescription = StringsRu.Home.checked, tint = Color.White, modifier = Modifier.size(16.dp))
+    }
+}
+
+// ─── AI Insights ──────────────────────────────────────────
+@Composable
+private fun AiInsightsSection(textPrimary: Color, textSecondary: Color, textBody: Color, glassAlpha: Float, glassBorderAlpha: Float, dark: Boolean) {
+    Column {
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp).padding(bottom = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
+            Text(text = StringsRu.Home.aiInsights, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = textPrimary)
+            Text(text = StringsRu.Home.viewAll, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = PrimaryBlue)
+        }
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            InsightCard(icon = Icons.Rounded.Face, iconTint = PrimaryBlue, bgTint = PrimaryBlue.copy(alpha = 0.1f), title = StringsRu.Home.weeklyScan, subtitle = StringsRu.Home.weeklyScanSubtitle, textBody = textBody, textSecondary = textSecondary, dark = dark)
+            InsightCard(icon = Icons.Rounded.Star, iconTint = Color(0xFF16A34A), bgTint = Color(0xFF22C55E).copy(alpha = 0.1f), title = StringsRu.Home.refresh, subtitle = StringsRu.Home.refreshSubtitle, textBody = textBody, textSecondary = textSecondary, dark = dark)
+            InsightCard(icon = Icons.Rounded.WaterDrop, iconTint = Color(0xFF9333EA), bgTint = Color(0xFFA855F7).copy(alpha = 0.1f), title = StringsRu.Home.hydrationAlert, subtitle = StringsRu.Home.hydrationAlertSubtitle, textBody = textBody, textSecondary = textSecondary, dark = dark)
         }
     }
+}
+
+@Composable
+private fun InsightCard(icon: ImageVector, iconTint: Color, bgTint: Color, title: String, subtitle: String, textBody: Color, textSecondary: Color, dark: Boolean) {
+    Column(
+        modifier = Modifier.width(200.dp).height(128.dp).glassPanel(RoundedCornerShape(16.dp), dark = dark).padding(16.dp),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Box(modifier = Modifier.size(32.dp).background(bgTint, CircleShape), contentAlignment = Alignment.Center) {
+            Icon(imageVector = icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(16.dp))
+        }
+        Column {
+            Text(text = title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = textBody, lineHeight = 16.sp)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(text = subtitle, fontSize = 10.sp, color = textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+// ─── Glass Modifier ───────────────────────────────────────
+fun Modifier.glassPanel(shape: androidx.compose.ui.graphics.Shape, dark: Boolean): Modifier {
+    val bgAlpha = if (dark) 0.08f else 0.45f
+    val borderAlpha = if (dark) 0.15f else 0.6f
+    return this
+        .clip(shape)
+        .background(Color.White.copy(alpha = bgAlpha))
+        .border(1.dp, Color.White.copy(alpha = borderAlpha), shape)
 }
