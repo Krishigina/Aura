@@ -42,14 +42,26 @@ def serialize_purpose(purpose):
 
 
 def deserialize_purpose(purpose):
+    # Return None for null/empty values
     if purpose is None:
         return None
-    if purpose.startswith('['):
+    # Already a list - return as is
+    if isinstance(purpose, list):
+        return purpose
+    # If it's not a string, return None
+    if not isinstance(purpose, str):
+        return None
+    # Empty string
+    if not purpose.strip():
+        return None
+    # Try to parse JSON array
+    if purpose.strip().startswith('['):
         try:
             return json.loads(purpose)
         except:
-            return purpose
-    return purpose
+            return None
+    # Not a JSON array - could be corrupted data, return None
+    return None
 
 
 class ProductService:
@@ -65,10 +77,9 @@ class ProductService:
             results = []
             for row in rows:
                 product = dict(zip(columns, row))
-                if product.get('purpose'):
-                    product['purpose'] = deserialize_purpose(product['purpose'])
-                if product.get('skin_type'):
-                    product['skin_type'] = deserialize_purpose(product['skin_type'])
+                # Always deserialize - the function now handles null/invalid safely
+                product['purpose'] = deserialize_purpose(product.get('purpose'))
+                product['skin_type'] = deserialize_purpose(product.get('skin_type'))
                 if product.get('photos') and isinstance(product['photos'], str):
                     product['photos'] = json.loads(product['photos'])
                 results.append(product)

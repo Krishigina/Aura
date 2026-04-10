@@ -6,6 +6,8 @@
     <application
         android:name=".AuraApplication"
         android:allowBackup="true"
+        android:enableOnBackInvokedCallback="true"
+        android:usesCleartextTraffic="true"
         android:icon="@mipmap/ic_launcher"
         android:label="Aura"
         android:roundIcon="@mipmap/ic_launcher_round"
