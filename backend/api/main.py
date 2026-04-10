@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict
 import asyncpg
 import aiohttp
 import json
@@ -581,6 +581,16 @@ class TokenResponse(BaseModel):
     user: dict
 
 
+class SkinPassportUpdateRequest(BaseModel):
+    answers: Dict[str, List[str]]
+    completed_at_epoch_millis: Optional[int] = None
+
+
+class SkinPassportResponse(BaseModel):
+    completed_at_epoch_millis: Optional[int] = None
+    answers: Dict[str, List[str]] = {}
+
+
 # JWT Functions
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
@@ -798,6 +808,75 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     user = current_user.copy()
     user.pop('password_hash', None)
     return user
+
+
+def _sanitize_skin_passport_answers(raw_answers) -> Dict[str, List[str]]:
+    if not isinstance(raw_answers, dict):
+        return {}
+
+    sanitized: Dict[str, List[str]] = {}
+    for key, value in raw_answers.items():
+        if isinstance(value, list):
+            sanitized[str(key)] = [str(item) for item in value]
+    return sanitized
+
+
+@app.get("/api/profile/skin-passport", response_model=SkinPassportResponse)
+async def get_skin_passport(current_user: dict = Depends(get_current_user)):
+    user_id = current_user.get("id")
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT extra_data FROM user_profiles WHERE user_id=$1", user_id)
+
+    if not row:
+        return SkinPassportResponse(completed_at_epoch_millis=None, answers={})
+
+    extra_data = row["extra_data"]
+    if not isinstance(extra_data, dict):
+        return SkinPassportResponse(completed_at_epoch_millis=None, answers={})
+
+    skin_passport = extra_data.get("skin_passport")
+    if not isinstance(skin_passport, dict):
+        return SkinPassportResponse(completed_at_epoch_millis=None, answers={})
+
+    completed_at = skin_passport.get("completed_at_epoch_millis")
+    try:
+        completed_at = int(completed_at) if completed_at is not None else None
+    except (TypeError, ValueError):
+        completed_at = None
+
+    answers = _sanitize_skin_passport_answers(skin_passport.get("answers"))
+    return SkinPassportResponse(completed_at_epoch_millis=completed_at, answers=answers)
+
+
+@app.put("/api/profile/skin-passport", response_model=SkinPassportResponse)
+async def save_skin_passport(payload: SkinPassportUpdateRequest, current_user: dict = Depends(get_current_user)):
+    user_id = current_user.get("id")
+    completed_at = payload.completed_at_epoch_millis or int(datetime.utcnow().timestamp() * 1000)
+    answers = _sanitize_skin_passport_answers(payload.answers)
+
+    update_blob = {
+        "skin_passport": {
+            "completed_at_epoch_millis": completed_at,
+            "answers": answers,
+        }
+    }
+
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO user_profiles (user_id, extra_data, updated_at)
+            VALUES ($1, $2::jsonb, NOW())
+            ON CONFLICT (user_id)
+            DO UPDATE SET
+                extra_data = COALESCE(user_profiles.extra_data, '{}'::jsonb) || $2::jsonb,
+                updated_at = NOW()
+            """,
+            user_id,
+            json.dumps(update_blob, ensure_ascii=False),
+        )
+
+    return SkinPassportResponse(completed_at_epoch_millis=completed_at, answers=answers)
 
 
 @app.get("/api/health")
