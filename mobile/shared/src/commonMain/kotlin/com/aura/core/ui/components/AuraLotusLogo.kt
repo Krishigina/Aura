@@ -3,65 +3,100 @@ package com.aura.core.ui.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.Stroke
+import com.aura.core.ui.theme.defaultAuraDesignTokens
 
 @Composable
-fun AuraLotusLogo(modifier: Modifier = Modifier) {
+fun AuraLotusLogo(
+    modifier: Modifier = Modifier,
+    colors: List<Color> = defaultAuraDesignTokens().brand.logoGradient,
+    markColor: Color = Color.White,
+    showBackground: Boolean = true,
+    monochromeWhenNoBackground: Boolean = false,
+) {
     Canvas(modifier = modifier) {
-        drawAuraLotusLogo()
+        drawAuraLotusLogo(
+            colors = colors,
+            markColor = markColor,
+            showBackground = showBackground,
+            monochromeWhenNoBackground = monochromeWhenNoBackground,
+        )
     }
 }
 
-private fun DrawScope.drawAuraLotusLogo() {
-    val cx = size.width / 2f
-    val cy = size.height / 2f
-    val petalColors = listOf(
-        Color(0xFFFF9A8B),
-        Color(0xFFFF6A88),
-        Color(0xFFFF99AC),
-        Color(0xFFFFB88C),
-        Color(0xFFFFE0B2)
+private fun DrawScope.drawAuraLotusLogo(
+    colors: List<Color>,
+    markColor: Color,
+    showBackground: Boolean,
+    monochromeWhenNoBackground: Boolean,
+) {
+    val width = size.width
+    val height = size.height
+    val logoGradient = Brush.linearGradient(
+        colors = colors,
+        start = Offset(0f, 0f),
+        end = Offset(width, height),
     )
-    val angles = listOf(0f, -30f, 30f, -55f, 55f)
-    val petalWidths = listOf(0.35f, 0.45f, 0.45f, 0.55f, 0.55f)
-    val petalHeights = listOf(0.9f, 0.75f, 0.75f, 0.6f, 0.6f)
 
-    for (i in angles.indices) {
-        rotate(degrees = angles[i]) {
-            val gradient = Brush.verticalGradient(
-                colors = listOf(petalColors[i], petalColors[i].copy(alpha = 0.6f)),
-                startY = 0f,
-                endY = size.height
-            )
-            drawPetal(
-                cx = cx,
-                cy = cy + size.height * 0.15f,
-                width = size.width * petalWidths[i],
-                height = size.height * petalHeights[i],
-                brush = gradient
-            )
-        }
+    if (showBackground) {
+        drawRoundRect(
+            brush = logoGradient,
+            cornerRadius = CornerRadius(width * 0.2f, height * 0.2f),
+        )
     }
-}
 
-private fun DrawScope.drawPetal(cx: Float, cy: Float, width: Float, height: Float, brush: Brush) {
     val path = Path().apply {
-        moveTo(cx, cy + height * 0.5f)
+        moveTo(width * 0.25f, height * 0.72f)
         cubicTo(
-            cx - width * 0.5f, cy + height * 0.1f,
-            cx - width * 0.5f, cy - height * 0.4f,
-            cx, cy - height * 0.5f
+            width * 0.34f,
+            height * 0.58f,
+            width * 0.43f,
+            height * 0.38f,
+            width * 0.50f,
+            height * 0.27f,
         )
         cubicTo(
-            cx + width * 0.5f, cy - height * 0.4f,
-            cx + width * 0.5f, cy + height * 0.1f,
-            cx, cy + height * 0.5f
+            width * 0.57f,
+            height * 0.38f,
+            width * 0.66f,
+            height * 0.58f,
+            width * 0.75f,
+            height * 0.72f,
         )
-        close()
     }
-    drawPath(path = path, brush = brush, alpha = 0.85f)
+
+    val stroke = Stroke(width = width * 0.12f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    if (showBackground) {
+        drawPath(path = path, color = markColor, style = stroke, alpha = 0.96f)
+        drawCircle(
+            color = markColor,
+            radius = width * 0.055f,
+            center = Offset(width * 0.5f, height * 0.76f),
+            alpha = 0.96f,
+        )
+    } else if (monochromeWhenNoBackground) {
+        drawPath(path = path, color = markColor, style = stroke, alpha = 0.96f)
+        drawCircle(
+            color = markColor,
+            radius = width * 0.055f,
+            center = Offset(width * 0.5f, height * 0.76f),
+            alpha = 0.96f,
+        )
+    } else {
+        drawPath(path = path, brush = logoGradient, style = stroke, alpha = 0.96f)
+        drawCircle(
+            brush = logoGradient,
+            radius = width * 0.055f,
+            center = Offset(width * 0.5f, height * 0.76f),
+            alpha = 0.96f,
+        )
+    }
 }

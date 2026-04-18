@@ -25,7 +25,7 @@ object StringsRu {
         val humiditySubtitle get() = I18n.t("home.humiditySubtitle", "Оптимально для увлажнения")
         val airQuality get() = I18n.t("home.airQuality", "Качество воздуха")
         val airGood get() = I18n.t("home.airGood", "Хорошее")
-        val ritual get() = I18n.t("home.ritual", "Утренний уход")
+        val ritual get() = I18n.t("home.ritual", "Ритуал")
         val ritualStepsLeft get() = I18n.t("home.ritualStepsLeft", "Осталось 3 шага")
         val ritualCleanser get() = I18n.t("home.ritualCleanser", "Мягкое очищение")
         val ritualCleanserSubtitle get() = I18n.t("home.ritualCleanserSubtitle", "Массаж 60 секунд")

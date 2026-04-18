@@ -18,25 +18,25 @@ fun GlassCard(
     modifier: Modifier = Modifier,
     cornerRadius: Dp = 16.dp,
     backgroundColor: Color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
-    content: @Composable BoxScope.() -> Unit
+    content: @Composable BoxScope.() -> Unit,
 ) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(cornerRadius))
             .background(backgroundColor)
             .padding(16.dp),
-        content = content
+        content = content,
     )
 }
 
 @Composable
 fun GlassCardSmall(
     modifier: Modifier = Modifier,
-    content: @Composable BoxScope.() -> Unit
+    content: @Composable BoxScope.() -> Unit,
 ) {
     GlassCard(
         modifier = modifier,
         cornerRadius = 12.dp,
-        content = content
+        content = content,
     )
 }

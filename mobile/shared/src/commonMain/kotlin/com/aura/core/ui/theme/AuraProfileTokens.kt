@@ -1,0 +1,53 @@
+package com.aura.core.ui.theme
+
+import androidx.compose.ui.graphics.Color
+
+data class AuraProfileTokens(
+    val iceBlue: Color,
+    val auraMint: Color,
+    val slate800: Color,
+    val slate700: Color,
+    val slate500: Color,
+    val slate400: Color,
+    val coral500: Color,
+    val coral200: Color,
+    val coralSoft: Color,
+    val mint500: Color,
+    val mint200: Color,
+    val mintSoft: Color,
+    val amber500: Color,
+    val amber200: Color,
+    val amberSoft: Color,
+    val sky500: Color,
+    val sky200: Color,
+    val skySoft: Color,
+    val themePink: Color,
+    val themePinkSoft: Color,
+    val themeLavender: Color,
+    val themeLavenderSoft: Color,
+)
+
+fun defaultAuraProfileTokens() = AuraProfileTokens(
+    iceBlue = auraHex(0xFFF4F7FE),
+    auraMint = auraHex(0xFFA7F3D0),
+    slate800 = auraHex(0xFF1E293B),
+    slate700 = auraHex(0xFF334155),
+    slate500 = auraHex(0xFF64748B),
+    slate400 = auraHex(0xFF94A3B8),
+    coral500 = auraHex(0xFFF97370),
+    coral200 = auraHex(0xFFFECACA),
+    coralSoft = auraHex(0xFFFFF1F0),
+    mint500 = auraHex(0xFF14B8A6),
+    mint200 = auraHex(0xFFA7F3D0),
+    mintSoft = auraHex(0xFFECFEF9),
+    amber500 = auraHex(0xFFF59E0B),
+    amber200 = auraHex(0xFFFDE68A),
+    amberSoft = auraHex(0xFFFFF7E6),
+    sky500 = auraHex(0xFF0EA5E9),
+    sky200 = auraHex(0xFFBAE6FD),
+    skySoft = auraHex(0xFFF0F9FF),
+    themePink = auraHex(0xFFF9A8D4),
+    themePinkSoft = auraHex(0xFFFCE7F3),
+    themeLavender = auraHex(0xFFC4B5FD),
+    themeLavenderSoft = auraHex(0xFFF3E8FF),
+)
