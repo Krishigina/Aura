@@ -43,4 +43,4 @@ android {
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
 }
 
-dependencies { implementation(project(":shared")); implementation("androidx.core:core-ktx:1.12.0"); implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2"); implementation("androidx.activity:activity-compose:1.8.2") }
+dependencies { implementation(project(":shared")); implementation("androidx.core:core-ktx:1.12.0"); implementation("androidx.core:core-splashscreen:1.0.1"); implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2"); implementation("androidx.activity:activity-compose:1.8.2"); implementation("androidx.work:work-runtime-ktx:2.9.1"); testImplementation(kotlin("test-junit")) }

@@ -3,33 +3,35 @@ package com.aura.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.ui.Modifier
-import com.aura.core.data.api.AuraApiClient
-import com.aura.core.navigation.AuraNavigation
-import com.aura.core.ui.theme.AuraTheme
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.aura.app.notifications.configureAndroidNotifications
+import com.aura.app.systemui.configureEdgeToEdgeWindow
+import com.aura.app.systemui.hideSystemBars
+import com.aura.app.ui.AuraAppContent
+import com.aura.core.ui.theme.runtime.AppState
 
 class MainActivity : ComponentActivity() {
-    
-    private val apiClient by lazy {
-        AuraApiClient("http://10.0.2.2:3002")
-    }
-    
     override fun onCreate(savedInstanceState: Bundle?) {
+        AppState.isNavigationReady = false
+        installSplashScreen()
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        configureAndroidNotifications()
+        configureEdgeToEdgeWindow()
+        hideSystemBars()
         setContent {
-            AuraTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    AuraNavigation(apiClient = apiClient)
-                }
-            }
+            AuraAppContent()
         }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            hideSystemBars()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        hideSystemBars()
     }
 }
