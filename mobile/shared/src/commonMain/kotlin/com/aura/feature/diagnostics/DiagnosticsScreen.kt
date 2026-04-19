@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +35,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,89 +45,120 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
+import com.aura.core.data.api.model.DiagnosticsDevice
+import com.aura.core.data.api.model.DiagnosticsMetrics
 import com.aura.core.ui.components.GlassCard
+import com.aura.core.ui.components.SoftPastelBackground
+import com.aura.core.ui.components.SoftPastelVariant
 import com.aura.core.ui.theme.Lavender
 import com.aura.core.ui.theme.MintGreen
 import com.aura.core.ui.theme.PinkAccent
+import com.aura.core.ui.theme.aura
+import com.aura.core.ui.theme.runtime.AppState
+import com.aura.feature.diagnostics.presentation.DiagnosticsViewModel
+import org.koin.compose.koinInject
 
 @Composable
-fun DiagnosticsScreen(onBack: () -> Unit = {}) {
-    Column(
+fun DiagnosticsScreen(
+    onBack: () -> Unit = {},
+    viewModel: DiagnosticsViewModel = koinInject(),
+) {
+    val tokens = MaterialTheme.aura.diagnostics
+    val dark = isSystemInDarkTheme() || AppState.isDarkMode
+    val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.load()
+    }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .background(MaterialTheme.colorScheme.background),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+        SoftPastelBackground(dark = dark, variant = SoftPastelVariant.Diagnostics)
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(tokens.screenPadding),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Назад",
-                    tint = MaterialTheme.colorScheme.onBackground
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Назад",
+                        tint = MaterialTheme.colorScheme.onBackground,
+                    )
+                }
+                Text(
+                    text = "Анализ кожи",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground,
                 )
             }
-            Text(
-                text = "Анализ кожи",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
+
+            Spacer(modifier = Modifier.height(tokens.headerBottomGap))
+
+            Spacer(modifier = Modifier.height(tokens.heroTopGap))
+
+            ScanningSection()
+
+            Spacer(modifier = Modifier.height(tokens.sectionGapLarge))
+
+            MetricsSection(
+                metrics = uiState.metrics,
+                isLoading = uiState.isLoading,
             )
+
+            Spacer(modifier = Modifier.height(tokens.sectionGapMedium))
+            IoTSection(
+                device = uiState.device,
+                isLoading = uiState.isLoading,
+            )
+
+            Spacer(modifier = Modifier.height(tokens.sectionGapMedium))
         }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        ScanningSection()
-        
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        MetricsSection()
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        IoTSection()
-        
-        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
 @Composable
 private fun ScanningSection() {
+    val tokens = MaterialTheme.aura.diagnostics
+
     GlassCard(
         modifier = Modifier.fillMaxWidth(),
-        backgroundColor = MintGreen.copy(alpha = 0.08f)
+        backgroundColor = MintGreen.copy(alpha = tokens.scanCardAlpha),
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             ScanningAnimation()
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
+
+            Spacer(modifier = Modifier.height(tokens.scanTitleGap))
+
             Text(
                 text = "Сканирование...",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Medium,
-                color = MintGreen
+                color = MintGreen,
             )
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
+
+            Spacer(modifier = Modifier.height(tokens.scanSubtitleGap))
+
             Text(
                 text = "Поднесите датчик к коже",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = tokens.secondaryTextAlpha),
             )
         }
     }
@@ -132,63 +166,54 @@ private fun ScanningSection() {
 
 @Composable
 private fun ScanningAnimation() {
+    val tokens = MaterialTheme.aura.diagnostics
     val infiniteTransition = rememberInfiniteTransition(label = "scanning")
-    
+
     val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.8f,
+        initialValue = tokens.scanPulseInitialAlpha,
+        targetValue = tokens.scanPulseTargetAlpha,
         animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
+            animation = tween(tokens.scanPulseDurationMillis, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
         ),
-        label = "pulse"
+        label = "pulse",
     )
-    
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
-    
+
     Box(
         modifier = Modifier
-            .size(180.dp)
-            .padding(16.dp),
-        contentAlignment = Alignment.Center
+            .size(tokens.scanCanvasSize)
+            .padding(tokens.scanCanvasPadding),
+        contentAlignment = Alignment.Center,
     ) {
-        Canvas(modifier = Modifier.size(180.dp)) {
+        Canvas(modifier = Modifier.size(tokens.scanCanvasSize)) {
             val center = Offset(size.width / 2, size.height / 2)
-            val strokeWidth = 4.dp.toPx()
-            val baseRadius = size.minDimension / 2 - 20.dp.toPx()
-            
+            val strokeWidth = tokens.scanStrokeWidth.toPx()
+            val baseRadius = size.minDimension / 2 - tokens.scanBaseRadiusInset.toPx()
+
             for (ring in 0..3) {
-                val radius = baseRadius - ring * 15.dp.toPx()
-                val alpha = (pulseAlpha - ring * 0.15f).coerceAtLeast(0.1f)
+                val radius = baseRadius - ring * tokens.scanRingGap.toPx()
+                val alpha = (pulseAlpha - ring * tokens.scanRingAlphaStep).coerceAtLeast(tokens.scanRingMinAlpha)
                 drawCircle(
                     color = MintGreen.copy(alpha = alpha),
                     radius = radius,
                     center = center,
-                    style = Stroke(width = strokeWidth - ring)
+                    style = Stroke(width = strokeWidth - ring),
                 )
             }
         }
-        
+
         Surface(
-            modifier = Modifier.size(100.dp),
+            modifier = Modifier.size(tokens.scanIconSurfaceSize),
             shape = CircleShape,
-            color = MintGreen.copy(alpha = 0.15f),
-            shadowElevation = 8.dp
+            color = MintGreen.copy(alpha = tokens.scanIconSurfaceAlpha),
+            shadowElevation = tokens.scanIconSurfaceElevation,
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     imageVector = Icons.Default.Sensors,
                     contentDescription = null,
                     tint = MintGreen,
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(tokens.scanIconSize),
                 )
             }
         }
@@ -196,53 +221,71 @@ private fun ScanningAnimation() {
 }
 
 @Composable
-private fun MetricsSection() {
+private fun MetricsSection(
+    metrics: DiagnosticsMetrics,
+    isLoading: Boolean,
+) {
+    val tokens = MaterialTheme.aura.diagnostics
+    val hydration = metrics.hydration.takeIf { it.isNotBlank() } ?: "—"
+    val oiliness = metrics.oiliness.takeIf { it.isNotBlank() } ?: "—"
+    val ph = metrics.ph.takeIf { it.isNotBlank() } ?: "—"
+    val sensitivity = metrics.sensitivity.takeIf { it.isNotBlank() } ?: "—"
+
     Column(
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(tokens.metricsGap),
     ) {
         Text(
             text = "Показатели",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(start = 4.dp)
+            modifier = Modifier.padding(start = tokens.sectionTitleStartPadding),
         )
-        
+
+        if (isLoading) {
+            Text(
+                text = "Загрузка показателей...",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = tokens.loadingTextAlpha),
+                modifier = Modifier.padding(start = tokens.sectionTitleStartPadding),
+            )
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(tokens.metricRowGap),
         ) {
             MetricCard(
                 label = "Влага",
-                value = "45%",
+                value = hydration,
                 color = MintGreen,
                 icon = "💧",
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
             MetricCard(
                 label = "Жирность",
-                value = "20%",
+                value = oiliness,
                 color = PinkAccent,
                 icon = "✨",
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(tokens.metricRowGap),
         ) {
             MetricCard(
                 label = "pH",
-                value = "5.5",
+                value = ph,
                 color = Lavender,
                 icon = "⚖️",
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
             MetricCard(
                 label = "Чувствит.",
-                value = "Средняя",
-                color = Color(0xFFFFAB40),
+                value = sensitivity,
+                color = tokens.sensitivityColor,
                 icon = "🎯",
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
         }
     }
@@ -254,114 +297,133 @@ private fun MetricCard(
     value: String,
     color: Color,
     icon: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
+    val tokens = MaterialTheme.aura.diagnostics
+
     Box(
         modifier = modifier
             .shadow(
-                elevation = 6.dp,
-                shape = RoundedCornerShape(16.dp),
-                ambientColor = color.copy(alpha = 0.1f)
+                elevation = tokens.metricCardShadowElevation,
+                shape = RoundedCornerShape(tokens.metricCardRadius),
+                ambientColor = color.copy(alpha = tokens.metricCardShadowAlpha),
             )
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(tokens.metricCardRadius))
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        color.copy(alpha = 0.12f),
-                        color.copy(alpha = 0.05f)
-                    )
-                )
-            )
+                        color.copy(alpha = tokens.metricCardGradientStartAlpha),
+                        color.copy(alpha = tokens.metricCardGradientEndAlpha),
+                    ),
+                ),
+            ),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier.padding(tokens.metricCardPadding),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
                 text = icon,
-                style = MaterialTheme.typography.titleLarge
+                style = MaterialTheme.typography.titleLarge,
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(tokens.metricIconBottomGap))
             Text(
                 text = value,
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
-                color = color
+                color = color,
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(tokens.metricValueBottomGap))
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = tokens.secondaryTextAlpha),
             )
         }
     }
 }
 
 @Composable
-private fun IoTSection() {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+private fun IoTSection(
+    device: DiagnosticsDevice,
+    isLoading: Boolean,
+) {
+    val tokens = MaterialTheme.aura.diagnostics
+    val deviceName = device.name.takeIf { it.isNotBlank() } ?: "Датчик не найден"
+    val deviceStatus = device.status.takeIf { it.isNotBlank() } ?: "Нет соединения"
+    val battery = device.battery.takeIf { it.isNotBlank() } ?: "—"
+
+    Column(verticalArrangement = Arrangement.spacedBy(tokens.iotGap)) {
         Text(
             text = "Устройства",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(start = 4.dp)
+            modifier = Modifier.padding(start = tokens.sectionTitleStartPadding),
         )
-        
+
+        if (isLoading) {
+            Text(
+                text = "Поиск устройств...",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = tokens.loadingTextAlpha),
+                modifier = Modifier.padding(start = tokens.sectionTitleStartPadding),
+            )
+        }
+
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+            backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = tokens.iotCardSurfaceAlpha),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Surface(
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(tokens.iotIconSurfaceSize),
                     shape = CircleShape,
-                    color = MintGreen.copy(alpha = 0.2f)
+                    color = MintGreen.copy(alpha = tokens.iotIconSurfaceAlpha),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Default.Bluetooth,
                             contentDescription = null,
                             tint = MintGreen,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(tokens.iotIconSize),
                         )
                     }
                 }
-                Spacer(modifier = Modifier.width(16.dp))
+                Spacer(modifier = Modifier.width(tokens.iotContentGap))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "SkinSensor Pro",
+                        text = deviceName,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Default.Check,
                             contentDescription = null,
                             tint = MintGreen,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(tokens.iotStatusIconSize),
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(tokens.iotStatusGap))
                         Text(
-                            text = "Подключено",
+                            text = deviceStatus,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MintGreen
+                            color = MintGreen,
                         )
                     }
                 }
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MintGreen.copy(alpha = 0.2f)
+                    shape = RoundedCornerShape(tokens.batteryRadius),
+                    color = MintGreen.copy(alpha = tokens.batterySurfaceAlpha),
                 ) {
                     Text(
-                        text = "75%",
+                        text = battery,
                         style = MaterialTheme.typography.labelMedium,
                         color = MintGreen,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        modifier = Modifier.padding(horizontal = tokens.batteryHorizontalPadding, vertical = tokens.batteryVerticalPadding),
                     )
                 }
             }
