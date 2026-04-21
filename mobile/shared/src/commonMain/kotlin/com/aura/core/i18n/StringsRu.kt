@@ -20,6 +20,11 @@ object StringsRu {
     object Home {
         val today get() = I18n.t("home.today", "Сегодня")
         val goodMorningPrefix get() = I18n.t("home.goodMorningPrefix", "Доброе утро")
+        val timeOfDayMorning get() = I18n.t("home.timeOfDayMorning", "утро")
+        val timeOfDayDay get() = I18n.t("home.timeOfDayDay", "день")
+        val timeOfDayEvening get() = I18n.t("home.timeOfDayEvening", "вечер")
+        val timeOfDayNight get() = I18n.t("home.timeOfDayNight", "ночь")
+        val timeOfDayNowPrefix get() = I18n.t("home.timeOfDayNowPrefix", "Сейчас")
         val weather get() = I18n.t("home.weather", "Погода")
         val humidity get() = I18n.t("home.humidity", "Уровень влажности")
         val humiditySubtitle get() = I18n.t("home.humiditySubtitle", "Оптимально для увлажнения")
@@ -75,7 +80,6 @@ object StringsRu {
         val registerTitle get() = I18n.t("auth.registerTitle", "Регистрация")
         val nameLabel get() = I18n.t("auth.nameLabel", "ИМЯ")
         val loginLabel get() = I18n.t("auth.loginLabel", "ЛОГИН")
-        val phoneLabel get() = I18n.t("auth.phoneLabel", "ТЕЛЕФОН")
         val emailLabel get() = I18n.t("auth.emailLabel", "ЭЛЕКТРОННАЯ ПОЧТА")
         val passwordLabel get() = I18n.t("auth.passwordLabel", "ПАРОЛЬ")
         val confirmLabel get() = I18n.t("auth.confirmLabel", "ПОДТВЕРЖДЕНИЕ")
@@ -91,7 +95,6 @@ object StringsRu {
         val minName get() = I18n.t("auth.minName", "Имя минимум 2 символа")
         val enterLogin get() = I18n.t("auth.enterLogin", "Введите логин")
         val invalidLogin get() = I18n.t("auth.invalidLogin", "Логин: только латиница, цифры, _")
-        val invalidPhone get() = I18n.t("auth.invalidPhone", "Некорректный телефон")
         val passwordsMismatch get() = I18n.t("auth.passwordsMismatch", "Пароли не совпадают")
     }
 

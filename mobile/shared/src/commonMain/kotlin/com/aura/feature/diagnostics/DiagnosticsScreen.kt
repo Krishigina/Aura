@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.aura.core.ui.components.GlassCard
+import com.aura.core.ui.theme.AuraPalette
 import com.aura.core.ui.theme.Lavender
 import com.aura.core.ui.theme.MintGreen
 import com.aura.core.ui.theme.PinkAccent
@@ -240,7 +241,7 @@ private fun MetricsSection() {
             MetricCard(
                 label = "Чувствит.",
                 value = "Средняя",
-                color = Color(0xFFFFAB40),
+                color = AuraPalette.Warning,
                 icon = "🎯",
                 modifier = Modifier.weight(1f)
             )

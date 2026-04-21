@@ -30,29 +30,39 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.aura.core.data.api.AuraApiClient
 import com.aura.core.i18n.StringsRu
+import com.aura.core.data.repository.TokenManager
 import com.aura.core.ui.theme.*
+import kotlinx.coroutines.launch
 
 // Цветовая палитра
-private val BgLight = Color(0xFFF6F8F7)
-private val PrimaryMint = Color(0xFFA5F3CF)
-private val CoolGrey = Color(0xFF4B5563)
-private val TextGray900 = Color(0xFF111827)
-private val TextGray800 = Color(0xFF1F2937)
-private val TextGray700 = Color(0xFF374151)
-private val TextGray500 = Color(0xFF6B7280)
-private val TextGray400 = Color(0xFF9CA3AF)
-private val BlobBlue = Color(0xFFDBEAFE)
-private val BlobPurple = Color(0xFFF3E8FF)
-private val BlobIndigo = Color(0xFFE0E7FF)
+private val BgLight = AuraPalette.BackgroundLight
+private val PrimaryMint = AuraPalette.BrandMint
+private val CoolGrey = AuraPalette.TextBodyLight
+private val TextGray900 = AuraPalette.TextPrimaryLight
+private val TextGray800 = AuraPalette.TextBodyLight
+private val TextGray700 = AuraPalette.TextBodyLight
+private val TextGray500 = AuraPalette.TextSecondaryLight
+private val TextGray400 = AuraPalette.TextSecondaryDark
+private val BlobBlue = AuraPalette.BlobBlue
+private val BlobPurple = AuraPalette.BlobPurple
+private val BlobIndigo = AuraPalette.BlobIndigo
 
 @Composable
 fun ChatScreen(
+    apiClient: AuraApiClient,
+    pickDocument: (suspend () -> ChatDocumentAttachment?)? = null,
     onBack: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val dark = isSystemInDarkTheme() || AppState.isDarkMode
+    val theme = auraThemeColors(dark)
     var messageText by remember { mutableStateOf("") }
+    var isSending by remember { mutableStateOf(false) }
+    var isUploadingDocument by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     
     val messages = remember {
         mutableStateListOf(
@@ -69,7 +79,7 @@ fun ChatScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(BgLight)
+            .background(theme.background)
     ) {
         // 1. Анимированные фоновые пятна (Blobs)
         BackgroundBlobs()
@@ -80,15 +90,125 @@ fun ChatScreen(
             ChatArea(
                 messages = messages,
                 listState = listState,
+                isSending = isSending,
                 modifier = Modifier.weight(1f)
             )
             ChatInput(
                 value = messageText,
                 onValueChange = { messageText = it },
+                enabled = !isSending && !isUploadingDocument,
+                attachEnabled = !isSending && !isUploadingDocument,
+                onAttach = {
+                    if (isUploadingDocument || isSending) return@ChatInput
+                    val picker = pickDocument
+                    if (picker == null) {
+                        messages.add(
+                            ChatMessage(
+                                text = "Загрузка документов недоступна на этом устройстве.",
+                                isFromUser = false,
+                                timestamp = "Сейчас"
+                            )
+                        )
+                        return@ChatInput
+                    }
+
+                    isUploadingDocument = true
+                    scope.launch {
+                        val token = TokenManager.getToken()
+                        if (token.isNullOrBlank()) {
+                            messages.add(
+                                ChatMessage(
+                                    text = "Сессия истекла. Войдите снова, чтобы загрузить документ.",
+                                    isFromUser = false,
+                                    timestamp = "Сейчас"
+                                )
+                            )
+                            isUploadingDocument = false
+                            return@launch
+                        }
+
+                        val document = runCatching { picker() }.getOrNull()
+                        if (document == null) {
+                            isUploadingDocument = false
+                            return@launch
+                        }
+
+                        runCatching {
+                            apiClient.uploadUserDocument(
+                                token = token,
+                                fileName = document.fileName,
+                                fileBytes = document.bytes,
+                                contentType = document.mimeType
+                            )
+                        }
+                            .onSuccess {
+                                messages.add(
+                                    ChatMessage(
+                                        text = "Документ «${document.fileName}» добавлен в личную базу знаний. Теперь можно задавать вопросы по нему.",
+                                        isFromUser = false,
+                                        timestamp = "Сейчас"
+                                    )
+                                )
+                            }
+                            .onFailure { error ->
+                                messages.add(
+                                    ChatMessage(
+                                        text = error.message?.takeIf { it.isNotBlank() }
+                                            ?: "Не удалось загрузить документ. Попробуйте позже.",
+                                        isFromUser = false,
+                                        timestamp = "Сейчас"
+                                    )
+                                )
+                            }
+
+                        isUploadingDocument = false
+                    }
+                },
                 onSend = {
-                    if (messageText.isNotBlank()) {
-                        messages.add(ChatMessage(messageText, true, "12:30"))
+                    val userMessage = messageText.trim()
+                    if (userMessage.isNotBlank() && !isSending) {
+                        messages.add(ChatMessage(userMessage, true, "Сейчас"))
                         messageText = ""
+                        isSending = true
+
+                        scope.launch {
+                            val token = TokenManager.getToken()
+                            if (token.isNullOrBlank()) {
+                                messages.add(
+                                    ChatMessage(
+                                        text = "Сессия истекла. Войдите снова, чтобы продолжить диалог.",
+                                        isFromUser = false,
+                                        timestamp = "Сейчас"
+                                    )
+                                )
+                                isSending = false
+                                return@launch
+                            }
+
+                            runCatching { apiClient.askAssistant(token = token, message = userMessage) }
+                                .onSuccess { result ->
+                                    messages.add(
+                                        ChatMessage(
+                                            text = result.answer,
+                                            isFromUser = false,
+                                            timestamp = "Сейчас"
+                                        )
+                                    )
+                                }
+                                .onFailure { error ->
+                                    val message = error.message?.takeIf { it.isNotBlank() }
+                                        ?: "Не удалось получить ответ ассистента. Попробуйте позже."
+                                    messages.add(
+                                        ChatMessage(
+                                            text = message,
+                                            isFromUser = false,
+                                            timestamp = "Сейчас"
+                                        )
+                                    )
+                                }
+
+                            isSending = false
+                        }
                     }
                 }
             )
@@ -140,7 +260,7 @@ private fun ChatHeader() {
                 Box(
                     modifier = Modifier
                         .size(10.dp)
-                        .background(Color(0xFF4ADE80), CircleShape)
+                        .background(AuraPalette.SuccessSoft, CircleShape)
                         .border(2.dp, Color.White, CircleShape)
                 )
             }
@@ -169,6 +289,7 @@ private fun ChatHeader() {
 private fun ChatArea(
     messages: List<ChatMessage>,
     listState: androidx.compose.foundation.lazy.LazyListState,
+    isSending: Boolean,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -198,6 +319,12 @@ private fun ChatArea(
                 message.isFromUser -> UserMessage(text = message.text, time = message.timestamp)
                 message.text.contains("Можете загрузить") -> AiMessageWithAction(text = message.text, time = message.timestamp)
                 else -> AiMessage(text = message.text, time = message.timestamp)
+            }
+        }
+
+        if (isSending) {
+            item {
+                AiMessage(text = "Печатаю ответ...", time = "")
             }
         }
     }
@@ -231,8 +358,8 @@ private fun AiMessage(text: String, time: String) {
                 modifier = Modifier
                     .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 2.dp, bottomEnd = 16.dp))
                     .background(Color.White.copy(alpha = 0.85f))
-                    .border(1.dp, Color(0xFF743DF5).copy(alpha = 0.15f), RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 2.dp, bottomEnd = 16.dp))
-                    .shadow(elevation = 4.dp, shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 2.dp, bottomEnd = 16.dp), spotColor = Color(0xFF743DF5).copy(alpha = 0.05f))
+                    .border(1.dp, AuraPalette.PurpleAccent.copy(alpha = 0.15f), RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 2.dp, bottomEnd = 16.dp))
+                    .shadow(elevation = 4.dp, shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 2.dp, bottomEnd = 16.dp), spotColor = AuraPalette.PurpleAccent.copy(alpha = 0.05f))
                     .padding(16.dp)
             ) {
                 Text(text = text, fontSize = 15.sp, color = TextGray700, lineHeight = 22.sp)
@@ -270,8 +397,8 @@ private fun AiMessageWithAction(text: String, time: String) {
                 modifier = Modifier
                     .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 2.dp, bottomEnd = 16.dp))
                     .background(Color.White.copy(alpha = 0.85f))
-                    .border(1.dp, Color(0xFF743DF5).copy(alpha = 0.15f), RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 2.dp, bottomEnd = 16.dp))
-                    .shadow(elevation = 4.dp, shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 2.dp, bottomEnd = 16.dp), spotColor = Color(0xFF743DF5).copy(alpha = 0.05f))
+                    .border(1.dp, AuraPalette.PurpleAccent.copy(alpha = 0.15f), RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 2.dp, bottomEnd = 16.dp))
+                    .shadow(elevation = 4.dp, shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 2.dp, bottomEnd = 16.dp), spotColor = AuraPalette.PurpleAccent.copy(alpha = 0.05f))
                     .padding(16.dp)
             ) {
                 Text(text = text, fontSize = 15.sp, color = TextGray700, lineHeight = 22.sp)
@@ -328,6 +455,9 @@ private fun UserMessage(text: String, time: String) {
 private fun ChatInput(
     value: String,
     onValueChange: (String) -> Unit,
+    enabled: Boolean,
+    attachEnabled: Boolean,
+    onAttach: () -> Unit,
     onSend: () -> Unit
 ) {
     Row(
@@ -348,7 +478,7 @@ private fun ChatInput(
             tint = TextGray400,
             modifier = Modifier
                 .rotate(45f)
-                .clickable { }
+                .clickable(enabled = attachEnabled) { onAttach() }
                 .padding(8.dp)
         )
         
@@ -375,7 +505,7 @@ private fun ChatInput(
                 .size(40.dp)
                 .shadow(4.dp, CircleShape, spotColor = PrimaryMint.copy(alpha = 0.3f))
                 .background(PrimaryMint, CircleShape)
-                .clickable(enabled = value.isNotBlank()) { onSend() },
+                .clickable(enabled = enabled && value.isNotBlank()) { onSend() },
             contentAlignment = Alignment.Center
         ) {
             Icon(Icons.Rounded.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
@@ -387,4 +517,10 @@ data class ChatMessage(
     val text: String,
     val isFromUser: Boolean,
     val timestamp: String = "12:30"
+)
+
+data class ChatDocumentAttachment(
+    val fileName: String,
+    val bytes: ByteArray,
+    val mimeType: String? = null
 )

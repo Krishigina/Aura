@@ -29,13 +29,13 @@ import com.aura.core.data.repository.TokenManager
 import com.aura.core.ui.theme.*
 
 // ─── Palette ──────────────────────────────────────────────
-private val IceBlue = Color(0xFFF4F7FE)
-private val AuraMint = Color(0xFFA7F3D0)
-private val AuraLavender = Color(0xFFE9D5FF)
-private val Slate800 = Color(0xFF1E293B)
-private val Slate700 = Color(0xFF334155)
-private val Slate500 = Color(0xFF64748B)
-private val Slate400 = Color(0xFF94A3B8)
+private val IceBlue = AuraPalette.BackgroundLight
+private val AuraMint = AuraPalette.BrandMint
+private val AuraLavender = AuraPalette.BrandLavender
+private val Slate800 = AuraPalette.TextPrimaryLight
+private val Slate700 = AuraPalette.TextBodyLight
+private val Slate500 = AuraPalette.TextSecondaryLight
+private val Slate400 = AuraPalette.TextSecondaryDark
 
 // ─── Screen ───────────────────────────────────────────────
 @Composable
@@ -65,14 +65,15 @@ private fun AuraProfileScreen(
     onNavigateToSurvey: () -> Unit
 ) {
     val dark = isSystemInDarkTheme() || AppState.isDarkMode
-    val bg = if (dark) Color(0xFF0A0A0A) else IceBlue
+    val theme = auraThemeColors(dark)
+    val bg = theme.background
     val glassAlpha = if (dark) 0.08f else 0.45f
     val glassBorderAlpha = if (dark) 0.15f else 0.6f
-    val textPrimary = if (dark) Color(0xFFF1F5F9) else Slate800
-    val textBody = if (dark) Color(0xFFCBD5E1) else Slate700
-    val textSecondary = if (dark) Color(0xFF94A3B8) else Slate500
-    val textMuted = if (dark) Color(0xFF64748B) else Slate400
-    val cardBg = if (dark) Color.White.copy(alpha = 0.06f) else Color.White
+    val textPrimary = theme.textPrimary
+    val textBody = theme.textBody
+    val textSecondary = theme.textSecondary
+    val textMuted = if (dark) AuraPalette.TextSecondaryLight else Slate400
+    val cardBg = if (dark) AuraPalette.SurfaceCardDark else AuraPalette.SurfaceCardLight
     val cardBorder = if (dark) Color.White.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.6f)
     val iconBoxBg = if (dark) Color.White.copy(alpha = 0.1f) else Color.White
 
@@ -114,7 +115,7 @@ private fun MeshBackground(dark: Boolean) {
         Canvas(modifier = Modifier.fillMaxSize().blur(80.dp)) {
             drawCircle(color = AuraMint.copy(alpha = mintA), radius = 400f, center = Offset(size.width * 0.1f, size.height * 0.1f))
             drawCircle(color = AuraLavender.copy(alpha = lavA), radius = 500f, center = Offset(size.width * 0.9f, size.height * 0.1f))
-            drawCircle(color = if (dark) Color(0xFF1E293B) else IceBlue, radius = 600f, center = Offset(size.width * 0.5f, size.height * 0.5f))
+            drawCircle(color = if (dark) AuraPalette.TextPrimaryLight else IceBlue, radius = 600f, center = Offset(size.width * 0.5f, size.height * 0.5f))
             drawCircle(color = AuraMint.copy(alpha = mintA * 0.8f), radius = 450f, center = Offset(size.width * 0.8f, size.height * 0.9f))
             drawCircle(color = AuraLavender.copy(alpha = lavA * 0.8f), radius = 500f, center = Offset(size.width * 0.1f, size.height * 0.9f))
         }
@@ -146,7 +147,7 @@ private fun ProfileSection(textPrimary: Color, textSecondary: Color, textBody: C
             Box(modifier = Modifier.size(112.dp).clip(CircleShape).background(Color.White.copy(alpha = glassAlpha)).border(1.dp, cardBorder, CircleShape).padding(4.dp).background(if (dark) Color.White.copy(alpha = 0.06f) else Slate400.copy(alpha = 0.2f), CircleShape), contentAlignment = Alignment.Center) {
                 Icon(Icons.Rounded.Person, contentDescription = null, tint = textSecondary, modifier = Modifier.size(48.dp))
             }
-            Box(modifier = Modifier.align(Alignment.BottomEnd).offset(x = (-4).dp, y = (-4).dp).size(32.dp).background(if (dark) Color(0xFF1E293B) else Color.White, CircleShape).border(1.dp, AuraMint, CircleShape).clickable { }, contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.align(Alignment.BottomEnd).offset(x = (-4).dp, y = (-4).dp).size(32.dp).background(if (dark) AuraPalette.TextPrimaryLight else Color.White, CircleShape).border(1.dp, AuraMint, CircleShape).clickable { }, contentAlignment = Alignment.Center) {
                 Icon(Icons.Rounded.Edit, contentDescription = StringsRu.Common.edit, tint = textBody, modifier = Modifier.size(16.dp))
             }
         }
@@ -177,10 +178,10 @@ private fun SkinPassportSection(textBody: Color, textSecondary: Color, glassAlph
         }
         Spacer(modifier = Modifier.height(16.dp))
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            PassportCard(Icons.Rounded.WaterDrop, Color(0xFF60A5FA), Color(0xFFDBEAFE), "\u041A\u043E\u043C\u0431\u0438\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u0430\u044F", "\u0422\u0418\u041F \u041A\u041E\u0416\u0418", glassAlpha, cardBorder, dark)
-            PassportCard(Icons.Rounded.WbSunny, Color(0xFFFB923C), Color(0xFFFFEDD5), "\u0427\u0443\u0432\u0441\u0442\u0432\u0438\u0442\u0435\u043B\u044C\u043D\u0430\u044F", "\u0420\u0415\u0410\u041A\u0426\u0418\u042F \u041D\u0410 \u0421\u041E\u041B\u041D\u0426\u0415", glassAlpha, cardBorder, dark)
-            PassportCard(Icons.Rounded.BubbleChart, Color(0xFFF87171), Color(0xFFFEE2E2), "\u0410\u043A\u043D\u0435", "\u041F\u0420\u041E\u0411\u041B\u0415\u041C\u0410", glassAlpha, cardBorder, dark)
-            PassportCard(Icons.Rounded.Face, Color(0xFFA855F7), Color(0xFFF3E8FF), "\u0425\u043E\u0440\u043E\u0448\u0430\u044F", "\u042D\u041B\u0410\u0421\u0422\u0418\u0427\u041D\u041E\u0421\u0422\u042C", glassAlpha, cardBorder, dark)
+            PassportCard(Icons.Rounded.WaterDrop, AuraPalette.Info, AuraPalette.BlobBlue, "\u041A\u043E\u043C\u0431\u0438\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u0430\u044F", "\u0422\u0418\u041F \u041A\u041E\u0416\u0418", glassAlpha, cardBorder, dark)
+            PassportCard(Icons.Rounded.WbSunny, AuraPalette.Warning, AuraPalette.SurfaceSoftLavender, "\u0427\u0443\u0432\u0441\u0442\u0432\u0438\u0442\u0435\u043B\u044C\u043D\u0430\u044F", "\u0420\u0415\u0410\u041A\u0426\u0418\u042F \u041D\u0410 \u0421\u041E\u041B\u041D\u0426\u0415", glassAlpha, cardBorder, dark)
+            PassportCard(Icons.Rounded.BubbleChart, AuraPalette.Error, AuraPalette.SurfaceSoftLavender, "\u0410\u043A\u043D\u0435", "\u041F\u0420\u041E\u0411\u041B\u0415\u041C\u0410", glassAlpha, cardBorder, dark)
+            PassportCard(Icons.Rounded.Face, AuraPalette.PurpleAccent, AuraPalette.SurfaceSoftLavender, "\u0425\u043E\u0440\u043E\u0448\u0430\u044F", "\u042D\u041B\u0410\u0421\u0422\u0418\u0427\u041D\u041E\u0421\u0422\u042C", glassAlpha, cardBorder, dark)
         }
     }
 }
@@ -192,8 +193,8 @@ private fun PassportCard(icon: ImageVector, color: Color, bgColor: Color, title:
             Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (dark) Color(0xFFCBD5E1) else Slate700)
-            Text(text = subtitle, fontSize = 10.sp, color = if (dark) Color(0xFF94A3B8) else Slate500, letterSpacing = 1.sp)
+            Text(text = title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (dark) AuraPalette.TextBodyDark else Slate700)
+            Text(text = subtitle, fontSize = 10.sp, color = if (dark) AuraPalette.TextSecondaryDark else Slate500, letterSpacing = 1.sp)
         }
     }
 }
@@ -230,14 +231,14 @@ private fun SkinPassportSection(
             modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            PassportCard(Icons.Rounded.WaterDrop, Color(0xFF60A5FA), Color(0xFFDBEAFE), skinType, "ТИП КОЖИ", glassAlpha, cardBorder, dark)
-            PassportCard(Icons.Rounded.BubbleChart, Color(0xFFF87171), Color(0xFFFEE2E2), mainIssue, "КЛЮЧЕВАЯ ПРОБЛЕМА", glassAlpha, cardBorder, dark)
-            PassportCard(Icons.Rounded.WbSunny, Color(0xFFFB923C), Color(0xFFFFEDD5), sensitivity, "ЧУВСТВИТЕЛЬНОСТЬ", glassAlpha, cardBorder, dark)
-            PassportCard(Icons.Rounded.Face, Color(0xFFA855F7), Color(0xFFF3E8FF), goal, "ЦЕЛЬ УХОДА", glassAlpha, cardBorder, dark)
+            PassportCard(Icons.Rounded.WaterDrop, AuraPalette.Info, AuraPalette.BlobBlue, skinType, "ТИП КОЖИ", glassAlpha, cardBorder, dark)
+            PassportCard(Icons.Rounded.BubbleChart, AuraPalette.Error, AuraPalette.SurfaceSoftLavender, mainIssue, "КЛЮЧЕВАЯ ПРОБЛЕМА", glassAlpha, cardBorder, dark)
+            PassportCard(Icons.Rounded.WbSunny, AuraPalette.Warning, AuraPalette.SurfaceSoftLavender, sensitivity, "ЧУВСТВИТЕЛЬНОСТЬ", glassAlpha, cardBorder, dark)
+            PassportCard(Icons.Rounded.Face, AuraPalette.PurpleAccent, AuraPalette.SurfaceSoftLavender, goal, "ЦЕЛЬ УХОДА", glassAlpha, cardBorder, dark)
             PassportCard(
                 icon = Icons.Rounded.Assignment,
-                color = Color(0xFF059669),
-                bgColor = Color(0xFFD1FAE5),
+                color = AuraPalette.Success,
+                bgColor = AuraPalette.SurfaceSoftMint,
                 title = actionTitle,
                 subtitle = actionSubtitle,
                 glassAlpha = glassAlpha,
@@ -278,8 +279,8 @@ private fun PassportCard(
             Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (dark) Color(0xFFCBD5E1) else Slate700)
-            Text(text = subtitle, fontSize = 10.sp, color = if (dark) Color(0xFF94A3B8) else Slate500, letterSpacing = 1.sp)
+            Text(text = title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (dark) AuraPalette.TextBodyDark else Slate700)
+            Text(text = subtitle, fontSize = 10.sp, color = if (dark) AuraPalette.TextSecondaryDark else Slate500, letterSpacing = 1.sp)
         }
     }
 }
@@ -297,14 +298,14 @@ private fun HydrationJourneySection(textPrimary: Color, textSecondary: Color, te
                 Column(modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = glassAlpha)).border(1.dp, cardBorder, RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 4.dp), horizontalAlignment = Alignment.End) {
                     Text(text = "72%", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = textPrimary)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.TrendingUp, contentDescription = null, tint = Color(0xFF16A34A), modifier = Modifier.size(12.dp))
+                        Icon(Icons.Rounded.TrendingUp, contentDescription = null, tint = AuraPalette.Success, modifier = Modifier.size(12.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "+4%", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFF16A34A))
+                        Text(text = "+4%", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = AuraPalette.Success)
                     }
                 }
             }
             Spacer(modifier = Modifier.height(24.dp))
-            HydrationChart(textSecondary = textSecondary, textMuted = if (dark) Color(0xFF64748B) else Slate400, dark = dark)
+            HydrationChart(textSecondary = textSecondary, textMuted = if (dark) AuraPalette.TextSecondaryLight else Slate400, dark = dark)
         }
     }
 }
@@ -325,11 +326,11 @@ private fun HydrationChart(textSecondary: Color, textMuted: Color, dark: Boolean
                 cubicTo(size.width * 0.9f, size.height * 0.38f, size.width, size.height * 0.25f, size.width, size.height * 0.25f)
             }
             val fillPath = Path().apply { addPath(chartPath); lineTo(size.width, size.height); lineTo(0f, size.height); close() }
-            drawPath(path = fillPath, brush = Brush.verticalGradient(colors = listOf(Color(0xFF34D399).copy(alpha = 0.5f), Color(0xFF34D399).copy(alpha = 0.0f))))
-            drawPath(path = chartPath, color = Color(0xFF34D399), style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+            drawPath(path = fillPath, brush = Brush.verticalGradient(colors = listOf(AuraPalette.SuccessSoft.copy(alpha = 0.5f), AuraPalette.SuccessSoft.copy(alpha = 0.0f))))
+            drawPath(path = chartPath, color = AuraPalette.SuccessSoft, style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
             drawCircle(color = Color.White, radius = 5.dp.toPx(), center = Offset(size.width * 0.4f, size.height * 0.45f))
-            drawCircle(color = Color(0xFF34D399), radius = 4.dp.toPx(), center = Offset(size.width * 0.4f, size.height * 0.45f), style = Stroke(2.dp.toPx()))
-            drawCircle(color = Color(0xFF34D399), radius = 5.dp.toPx(), center = Offset(size.width * 0.8f, size.height * 0.3f))
+            drawCircle(color = AuraPalette.SuccessSoft, radius = 4.dp.toPx(), center = Offset(size.width * 0.4f, size.height * 0.45f), style = Stroke(2.dp.toPx()))
+            drawCircle(color = AuraPalette.SuccessSoft, radius = 5.dp.toPx(), center = Offset(size.width * 0.8f, size.height * 0.3f))
             drawCircle(color = Color.White, radius = 5.dp.toPx(), center = Offset(size.width * 0.8f, size.height * 0.3f), style = Stroke(2.dp.toPx()))
         }
         Row(modifier = Modifier.fillMaxWidth().align(Alignment.BottomCenter).offset(y = 20.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -349,7 +350,7 @@ private fun MenuListSection(textBody: Color, textSecondary: Color, textMuted: Co
         MenuItem(icon = Icons.Rounded.Notifications, title = "\u0423\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F", hasNotification = true, textBody = textBody, textMuted = textMuted, glassAlpha = glassAlpha, cardBorder = cardBorder, iconBoxBg = iconBoxBg, dark = dark)
         MenuItem(icon = Icons.Rounded.Star, title = "\u041F\u043E\u0434\u043F\u0438\u0441\u043A\u0430", isPro = true, textBody = textBody, textMuted = textMuted, glassAlpha = glassAlpha, cardBorder = cardBorder, iconBoxBg = iconBoxBg, dark = dark)
         Spacer(modifier = Modifier.height(8.dp))
-        Button(onClick = { }, modifier = Modifier.fillMaxWidth().height(48.dp), colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color(0xFFF87171)), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Color(0xFFFEE2E2))) {
+        Button(onClick = { }, modifier = Modifier.fillMaxWidth().height(48.dp), colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = AuraPalette.Error), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, AuraPalette.SurfaceSoftLavender)) {
             Text("\u0412\u044B\u0439\u0442\u0438", fontSize = 14.sp)
         }
     }
@@ -367,11 +368,11 @@ private fun MenuItem(icon: ImageVector, title: String, hasNotification: Boolean 
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (hasNotification) {
-                Box(modifier = Modifier.size(8.dp).background(Color(0xFFF87171), CircleShape))
+                Box(modifier = Modifier.size(8.dp).background(AuraPalette.Error, CircleShape))
                 Spacer(modifier = Modifier.width(8.dp))
             }
             if (isPro) {
-                Box(modifier = Modifier.background(Brush.horizontalGradient(listOf(AuraMint, Color(0xFF93C5FD))), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) {
+                Box(modifier = Modifier.background(Brush.horizontalGradient(listOf(AuraMint, AuraPalette.BlobBlue)), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) {
                     Text("PRO", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             } else {

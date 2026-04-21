@@ -28,12 +28,14 @@ kotlin {
                 implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
                 implementation("io.insert-koin:koin-core:3.5.3")
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
+                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")
                 implementation("androidx.datastore:datastore-preferences:1.0.0")
             }
         }
         val androidMain by getting {
             dependencies {
                 implementation("io.insert-koin:koin-android:3.5.3")
+                implementation("io.coil-kt:coil-compose:2.5.0")
             }
         }
     }

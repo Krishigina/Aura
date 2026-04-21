@@ -8,6 +8,92 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 
+/**
+ * Centralized semantic palette for feature screens.
+ * Screen code should consume these tokens instead of raw Color(...) literals.
+ */
+object AuraPalette {
+    // Brand
+    val BrandPrimaryBlue = Color(0xFF197FE6)
+    val BrandMint = Color(0xFFA7F3D0)
+    val BrandLavender = Color(0xFFE0C3FC)
+    val BrandPink = Color(0xFFFB6FE8)
+    val BrandRose = Color(0xFFE8A5B8)
+
+    // Backgrounds
+    val BackgroundLight = Color(0xFFF4F7FE)
+    val BackgroundDark = Color(0xFF0A0A0A)
+
+    // Typography
+    val TextPrimaryLight = Color(0xFF1E293B)
+    val TextPrimaryDark = Color(0xFFF1F5F9)
+    val TextBodyLight = Color(0xFF334155)
+    val TextBodyDark = Color(0xFFCBD5E1)
+    val TextSecondaryLight = Color(0xFF64748B)
+    val TextSecondaryDark = Color(0xFF94A3B8)
+
+    // Glass system
+    val GlassSurfaceLight = Color.White.copy(alpha = 0.45f)
+    val GlassSurfaceDark = Color.White.copy(alpha = 0.08f)
+    val GlassBorderLight = Color.White.copy(alpha = 0.6f)
+    val GlassBorderDark = Color.White.copy(alpha = 0.15f)
+
+    // Surfaces
+    val SurfaceCardLight = Color.White
+    val SurfaceCardDark = Color.White.copy(alpha = 0.06f)
+    val SurfaceSoftBlue = Color(0xFFEFF6FF)
+    val SurfaceSoftLavender = Color(0xFFF3E8FF)
+    val SurfaceSoftMint = Color(0xFFD1FAE5)
+
+    // Status and accents
+    val Success = Color(0xFF16A34A)
+    val SuccessSoft = Color(0xFF22C55E)
+    val Warning = Color(0xFFFB923C)
+    val Error = Color(0xFFEF4444)
+    val Info = Color(0xFF60A5FA)
+    val PurpleAccent = Color(0xFFA855F7)
+
+    // Blobs
+    val BlobBlue = Color(0xFFDBEAFE)
+    val BlobPurple = Color(0xFFF3E8FF)
+    val BlobIndigo = Color(0xFFE0E7FF)
+    val BlobPink = Color(0xFFFBCFE8)
+}
+
+data class AuraThemeColors(
+    val background: Color,
+    val textPrimary: Color,
+    val textBody: Color,
+    val textSecondary: Color,
+    val glassSurface: Color,
+    val glassBorder: Color,
+    val cardSurface: Color
+)
+
+fun auraThemeColors(dark: Boolean): AuraThemeColors {
+    return if (dark) {
+        AuraThemeColors(
+            background = AuraPalette.BackgroundDark,
+            textPrimary = AuraPalette.TextPrimaryDark,
+            textBody = AuraPalette.TextBodyDark,
+            textSecondary = AuraPalette.TextSecondaryDark,
+            glassSurface = AuraPalette.GlassSurfaceDark,
+            glassBorder = AuraPalette.GlassBorderDark,
+            cardSurface = AuraPalette.SurfaceCardDark
+        )
+    } else {
+        AuraThemeColors(
+            background = AuraPalette.BackgroundLight,
+            textPrimary = AuraPalette.TextPrimaryLight,
+            textBody = AuraPalette.TextBodyLight,
+            textSecondary = AuraPalette.TextSecondaryLight,
+            glassSurface = AuraPalette.GlassSurfaceLight,
+            glassBorder = AuraPalette.GlassBorderLight,
+            cardSurface = AuraPalette.SurfaceCardLight
+        )
+    }
+}
+
 val MintGreen = Color(0xFFA7F3D0)
 val MintGreenDark = Color(0xFF017D1A)
 val OnMintGreen = Color(0xFF1A3D2A)

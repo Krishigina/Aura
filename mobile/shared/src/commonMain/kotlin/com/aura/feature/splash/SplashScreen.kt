@@ -32,12 +32,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aura.core.i18n.StringsRu
 import com.aura.core.ui.components.AuraLotusLogo
+import com.aura.core.ui.theme.AuraPalette
 
-private val BgColor = Color(0xFFF4F7FE)
-private val OnSurface = Color(0xFF2D3648)
-private val BlobPurple = Color(0xFFE0C3FC)
-private val BlobMint = Color(0xFFA7F3D0)
-private val BlobPink = Color(0xFFFBCFE8)
+private val BgColor = AuraPalette.BackgroundLight
+private val OnSurface = AuraPalette.TextBodyLight
+private val BlobPurple = AuraPalette.BrandLavender
+private val BlobMint = AuraPalette.BrandMint
+private val BlobPink = AuraPalette.BlobPink
 
 @Composable
 fun AuraSplashScreen() {
@@ -118,8 +119,8 @@ private fun LogoSection() {
                 .shadow(
                     elevation = 32.dp,
                     shape = CircleShape,
-                    spotColor = Color(0xFF1F2687).copy(alpha = 0.15f),
-                    ambientColor = Color(0xFF1F2687).copy(alpha = 0.1f)
+                    spotColor = AuraPalette.BrandPrimaryBlue.copy(alpha = 0.15f),
+                    ambientColor = AuraPalette.BrandPrimaryBlue.copy(alpha = 0.1f)
                 )
                 .glassmorphism(shape = CircleShape, alpha = 0.4f, borderAlpha = 0.5f),
             contentAlignment = Alignment.Center

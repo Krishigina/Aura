@@ -27,6 +27,10 @@ import kotlinx.serialization.Serializable
     val country_origin: String? = null,
     val manufacturer: String? = null,
     val description: String? = null,
+    val images: List<String>? = null,
+    val video: String? = null,
+    val has_video: Boolean? = false,
+    val created_at: String? = null,
     val photos: List<ProductPhoto>? = null,
     val imageUrl: String? = null,
     val price: String? = null,
@@ -40,6 +44,19 @@ import kotlinx.serialization.Serializable
     val filename: String = "",
     val data: String = "",
     val content_type: String = ""
+)
+
+@Serializable
+data class GeoLocation(
+    val latitude: Double,
+    val longitude: Double
+)
+
+@Serializable
+data class WeatherSnapshot(
+    val temperatureCelsius: Double? = null,
+    val uvIndex: Double? = null,
+    val isDay: Boolean? = null
 )
 
 @Serializable data class ProductIngredient(val id: String, val name: String, val position: Int, val safetyLevel: String)

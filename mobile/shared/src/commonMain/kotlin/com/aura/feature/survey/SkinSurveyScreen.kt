@@ -38,7 +38,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -57,23 +56,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aura.core.data.api.AuraApiClient
 import com.aura.core.i18n.StringsRu
-import com.aura.core.data.repository.TokenManager
-import com.aura.core.data.repository.SkinPassportManager
+import com.aura.core.ui.theme.AuraPalette
+import com.aura.feature.survey.mvi.SurveyEffect
+import com.aura.feature.survey.mvi.SurveyIntent
+import com.aura.feature.survey.mvi.SurveyStore
 import kotlinx.coroutines.launch
 
-private val MeshBgColor = Color(0xFFE0F2F1)
-private val DustyRose = Color(0xFFE8A5B8)
-private val VibrantPink = Color(0xFFF472B6)
-private val Slate800 = Color(0xFF1E293B)
-private val Slate700 = Color(0xFF334155)
-private val Slate500 = Color(0xFF64748B)
-private val Slate300 = Color(0xFFCBD5E1)
-private val Emerald50 = Color(0xFFECFDF5)
-private val Emerald100 = Color(0xFFD1FAE5)
-private val Emerald500 = Color(0xFF10B981)
-private val Emerald600 = Color(0xFF059669)
-private val Emerald700 = Color(0xFF047857)
-private val Emerald800 = Color(0xFF065F46)
+private val MeshBgColor = AuraPalette.BackgroundLight
+private val DustyRose = AuraPalette.BrandRose
+private val VibrantPink = AuraPalette.BrandPink
+private val Slate800 = AuraPalette.TextPrimaryLight
+private val Slate700 = AuraPalette.TextBodyLight
+private val Slate500 = AuraPalette.TextSecondaryLight
+private val Slate300 = AuraPalette.TextSecondaryDark
+private val Emerald50 = AuraPalette.SurfaceSoftMint
+private val Emerald100 = AuraPalette.SurfaceSoftMint
+private val Emerald500 = AuraPalette.SuccessSoft
+private val Emerald600 = AuraPalette.Success
+private val Emerald700 = AuraPalette.Success
+private val Emerald800 = AuraPalette.Success
 
 private data class SurveyQuestion(
     val id: String,
@@ -167,36 +168,17 @@ fun AuraSkinSurveyScreen(
     onBack: () -> Unit,
     onComplete: () -> Unit
 ) {
-    var sectionIndex by remember { mutableStateOf(0) }
-    val answers = remember { mutableStateMapOf<String, MutableSet<String>>() }
-    var isSaving by remember { mutableStateOf(false) }
+    val store = remember(apiClient) { SurveyStore(apiClient) }
+    var uiState by remember { mutableStateOf(store.currentState()) }
+    var saveErrorMessage by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
 
-    fun applyAnswers(input: Map<String, List<String>>) {
-        answers.clear()
-        input.forEach { (key, value) ->
-            answers[key] = value.toMutableSet()
-        }
-    }
-
     LaunchedEffect(Unit) {
-        SkinPassportManager.passport?.let { applyAnswers(it.answers) }
-
-        val token = TokenManager.getToken()
-        if (!token.isNullOrBlank()) {
-            runCatching { apiClient.getSkinPassport(token) }
-                .getOrNull()
-                ?.let { serverPassport ->
-                    if (serverPassport.answers.isNotEmpty()) {
-                        applyAnswers(serverPassport.answers)
-                        SkinPassportManager.save(serverPassport.answers)
-                    }
-                }
-        }
+        uiState = store.preload()
     }
 
-    val currentSection = surveySections[sectionIndex]
-    val progress = (sectionIndex + 1).toFloat() / surveySections.size
+    val currentSection = surveySections[uiState.sectionIndex]
+    val progress = (uiState.sectionIndex + 1).toFloat() / surveySections.size
 
     Box(modifier = Modifier.fillMaxSize().background(MeshBgColor)) {
         SurveyMeshBackground()
@@ -214,68 +196,74 @@ fun AuraSkinSurveyScreen(
             currentSection.questions.forEach { question ->
                 SurveyQuestionCard(
                     question = question,
-                    selected = answers[question.id] ?: mutableSetOf(),
+                    selected = uiState.answers[question.id] ?: emptySet(),
                     onSelect = { option ->
-                        val current = answers[question.id] ?: mutableSetOf()
-                        if (question.multiChoice) {
-                            if (current.contains(option)) current.remove(option) else current.add(option)
-                        } else {
-                            current.clear()
-                            current.add(option)
-                        }
-                        answers[question.id] = current
+                        saveErrorMessage = null
+                        uiState = store.dispatch(
+                            SurveyIntent.SelectOption(
+                                questionId = question.id,
+                                option = option,
+                                multiChoice = question.multiChoice
+                            )
+                        )
                     }
                 )
             }
         }
 
         SurveyHeader(
-            sectionIndex = sectionIndex,
+            sectionIndex = uiState.sectionIndex,
             sectionCount = surveySections.size,
             progress = progress,
             allowSkip = allowSkip,
             onSkip = onSkip,
             onBack = {
-                if (sectionIndex == 0) onBack() else sectionIndex -= 1
+                if (uiState.sectionIndex == 0) {
+                    onBack()
+                } else {
+                    uiState = store.dispatch(SurveyIntent.PreviousSection)
+                }
             },
             modifier = Modifier.align(Alignment.TopCenter)
         )
 
         SurveyFooter(
-            isLast = sectionIndex == surveySections.lastIndex,
-            isLoading = isSaving,
+            isLast = uiState.sectionIndex == surveySections.lastIndex,
+            isLoading = uiState.isSaving,
             modifier = Modifier.align(Alignment.BottomCenter),
             onContinue = {
-                if (isSaving) return@SurveyFooter
-
-                if (sectionIndex == surveySections.lastIndex) {
-                    val normalizedAnswers = answers.mapValues { it.value.toList() }
-                    SkinPassportManager.save(
-                        answers = normalizedAnswers
-                    )
-
-                    val token = TokenManager.getToken()
-                    if (token.isNullOrBlank()) {
-                        onComplete()
-                        return@SurveyFooter
-                    }
-
-                    isSaving = true
-                    coroutineScope.launch {
-                        runCatching {
-                            apiClient.saveSkinPassport(
-                                token = token,
-                                answers = normalizedAnswers
-                            )
+                if (uiState.isSaving) return@SurveyFooter
+                saveErrorMessage = null
+                coroutineScope.launch {
+                    when (val effect = store.continueOrComplete(surveySections.size)) {
+                        SurveyEffect.Completed -> onComplete()
+                        is SurveyEffect.SaveFailed -> {
+                            saveErrorMessage = effect.message
                         }
-                        isSaving = false
-                        onComplete()
+                        SurveyEffect.MovedNext -> Unit
                     }
-                } else {
-                    sectionIndex += 1
+                    uiState = store.currentState()
                 }
             }
         )
+
+        if (saveErrorMessage != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 24.dp, vertical = 96.dp)
+                    .background(Color.White.copy(alpha = 0.92f), RoundedCornerShape(12.dp))
+                    .border(1.dp, AuraPalette.Error.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+            ) {
+                Text(
+                    text = saveErrorMessage ?: "",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = AuraPalette.Error
+                )
+            }
+        }
     }
 }
 
@@ -284,10 +272,10 @@ private fun SurveyMeshBackground() {
     Canvas(modifier = Modifier.fillMaxSize().blur(80.dp)) {
         val width = size.width
         val height = size.height
-        drawCircle(color = Color(0xFFA7F3D0).copy(alpha = 0.5f), radius = width * 0.5f, center = Offset(0f, 0f))
-        drawCircle(color = Color(0xFFE0C3FC).copy(alpha = 0.6f), radius = width * 0.5f, center = Offset(width, 0f))
-        drawCircle(color = Color(0xFFA7F3D0).copy(alpha = 0.5f), radius = width * 0.5f, center = Offset(width, height))
-        drawCircle(color = Color(0xFFBFDBFE).copy(alpha = 0.6f), radius = width * 0.5f, center = Offset(0f, height))
+        drawCircle(color = AuraPalette.BrandMint.copy(alpha = 0.5f), radius = width * 0.5f, center = Offset(0f, 0f))
+        drawCircle(color = AuraPalette.BrandLavender.copy(alpha = 0.6f), radius = width * 0.5f, center = Offset(width, 0f))
+        drawCircle(color = AuraPalette.BrandMint.copy(alpha = 0.5f), radius = width * 0.5f, center = Offset(width, height))
+        drawCircle(color = AuraPalette.BlobBlue.copy(alpha = 0.6f), radius = width * 0.5f, center = Offset(0f, height))
     }
 }
 
@@ -482,7 +470,7 @@ private fun SurveyFooter(
 
 private fun Modifier.surveyGlassCard(isSelected: Boolean = false): Modifier {
     val bgColor = if (isSelected) Emerald50.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.45f)
-    val borderColor = if (isSelected) Color(0xFF6EE7B7).copy(alpha = 0.5f) else Color.White.copy(alpha = 0.5f)
+    val borderColor = if (isSelected) AuraPalette.SuccessSoft.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.5f)
     return this
         .clip(RoundedCornerShape(24.dp))
         .background(bgColor)

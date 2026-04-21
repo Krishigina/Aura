@@ -1,17 +1,24 @@
 package com.aura.core.data.api
 
 import com.aura.core.domain.model.AuthResponse
+import com.aura.core.domain.model.AssistantChatRequest
+import com.aura.core.domain.model.AssistantChatResponse
 import com.aura.core.domain.model.BackendUser
 import com.aura.core.domain.model.LoginRequest
 import com.aura.core.domain.model.Product
+import com.aura.core.domain.model.ProductPhoto
 import com.aura.core.domain.model.RegisterRequest
 import com.aura.core.domain.model.SkinPassportRequest
 import com.aura.core.domain.model.SkinPassportResponse
+import com.aura.core.domain.model.UserDocumentUploadResponse
+import com.aura.core.domain.model.WeatherSnapshot
 import io.ktor.client.*
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
+import io.ktor.client.request.forms.MultiPartFormDataContent
+import io.ktor.client.request.forms.formData
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
@@ -91,6 +98,15 @@ class AuraApiClient(private val baseUrl: String) {
                                 country_origin = item["country_origin"]?.jsonPrimitive?.content,
                                 manufacturer = item["manufacturer"]?.jsonPrimitive?.content,
                                 description = item["description"]?.jsonPrimitive?.content,
+                                images = item["images"]?.let {
+                                    if (it is JsonArray) {
+                                        it.mapNotNull { image -> image.jsonPrimitive.contentOrNull }
+                                    } else null
+                                },
+                                video = item["video"]?.jsonPrimitive?.contentOrNull,
+                                has_video = item["has_video"]?.jsonPrimitive?.contentOrNull?.toBooleanStrictOrNull()
+                                    ?: item["has_video"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()?.let { numeric -> numeric != 0 },
+                                created_at = item["created_at"]?.jsonPrimitive?.contentOrNull,
                                 imageUrl = item["imageUrl"]?.jsonPrimitive?.content,
                                 price = item["price"]?.jsonPrimitive?.content,
                                 currency = item["currency"]?.jsonPrimitive?.content,
@@ -122,10 +138,10 @@ class AuraApiClient(private val baseUrl: String) {
         return parseAuthResponse(responseText)
     }
 
-    suspend fun register(name: String, email: String, password: String, nickname: String = "", phone: String? = null): AuthResponse {
+    suspend fun register(name: String, email: String, password: String, nickname: String = ""): AuthResponse {
         val response = httpClient.post("$baseUrl/api/auth/register") {
             contentType(ContentType.Application.Json)
-            setBody(RegisterRequest(name, email, password, nickname = nickname, phone = phone))
+            setBody(RegisterRequest(name, email, password, nickname = nickname))
         }
 
         val responseText = response.bodyAsText()
@@ -182,6 +198,134 @@ class AuraApiClient(private val baseUrl: String) {
         return json.decodeFromString<SkinPassportResponse>(responseText)
     }
 
+    suspend fun askAssistant(
+        token: String,
+        message: String,
+        maxResults: Int = 5
+    ): AssistantChatResponse {
+        val response = httpClient.post("$baseUrl/api/assistant/chat") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+            contentType(ContentType.Application.Json)
+            setBody(
+                AssistantChatRequest(
+                    message = message,
+                    max_results = maxResults
+                )
+            )
+        }
+
+        val responseText = response.bodyAsText()
+        if (!response.status.isSuccess()) {
+            throw IllegalStateException(
+                extractErrorMessage(
+                    responseText,
+                    response.status,
+                    "Ошибка ассистента (${response.status.value})"
+                )
+            )
+        }
+
+        return json.decodeFromString<AssistantChatResponse>(responseText)
+    }
+
+    suspend fun getProductPhotos(productId: Int): List<ProductPhoto> {
+        return runCatching {
+            val response = httpClient.get("$baseUrl/api/products/$productId/photos")
+            val responseText = response.bodyAsText()
+            if (!response.status.isSuccess()) return emptyList()
+
+            val element = json.parseToJsonElement(responseText)
+            if (element !is JsonArray) return emptyList()
+
+            element.mapNotNull { item ->
+                val obj = item as? JsonObject ?: return@mapNotNull null
+                val id = obj["id"]?.jsonPrimitive?.contentOrNull
+                    ?: obj["id"]?.jsonPrimitive?.content?.toIntOrNull()?.toString()
+                    ?: return@mapNotNull null
+
+                ProductPhoto(
+                    id = id,
+                    filename = obj["filename"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+                    data = obj["data"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+                    content_type = obj["content_type"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                )
+            }
+        }.getOrElse { emptyList() }
+    }
+
+    fun getProductPhotoUrl(productId: Int, photoId: String): String {
+        return "$baseUrl/api/products/$productId/photos/$photoId"
+    }
+
+    suspend fun getWeatherByCoordinates(latitude: Double, longitude: Double): WeatherSnapshot? {
+        return runCatching {
+            val weatherUrl = buildString {
+                append("https://api.open-meteo.com/v1/forecast")
+                append("?latitude=")
+                append(latitude)
+                append("&longitude=")
+                append(longitude)
+                append("&current=temperature_2m,uv_index,is_day")
+                append("&timezone=auto")
+            }
+
+            val response = httpClient.get(weatherUrl)
+            if (!response.status.isSuccess()) return null
+
+            val root = json.parseToJsonElement(response.bodyAsText()) as? JsonObject ?: return null
+            val current = root["current"] as? JsonObject ?: return null
+
+            WeatherSnapshot(
+                temperatureCelsius = current["temperature_2m"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull(),
+                uvIndex = current["uv_index"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull(),
+                isDay = current["is_day"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()?.let { it == 1 }
+            )
+        }.getOrNull()
+    }
+
+    suspend fun uploadUserDocument(
+        token: String,
+        fileName: String,
+        fileBytes: ByteArray,
+        contentType: String? = null
+    ): UserDocumentUploadResponse {
+        val response = httpClient.post("$baseUrl/api/assistant/knowledge/user-documents") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+            setBody(
+                MultiPartFormDataContent(
+                    formData {
+                        append(
+                            key = "file",
+                            value = fileBytes,
+                            headers = Headers.build {
+                                append(
+                                    HttpHeaders.ContentDisposition,
+                                    "form-data; name=\"file\"; filename=\"$fileName\""
+                                )
+                                if (!contentType.isNullOrBlank()) {
+                                    append(HttpHeaders.ContentType, contentType)
+                                }
+                            }
+                        )
+                    }
+                )
+            )
+        }
+
+        val responseText = response.bodyAsText()
+        if (!response.status.isSuccess()) {
+            throw IllegalStateException(
+                extractErrorMessage(
+                    responseText,
+                    response.status,
+                    "Ошибка загрузки документа (${response.status.value})"
+                )
+            )
+        }
+
+        return json.decodeFromString<UserDocumentUploadResponse>(responseText)
+    }
+
     private fun parseAuthResponse(responseText: String): AuthResponse {
         val root = json.decodeFromString<JsonElement>(responseText).jsonObject
         val data = root["data"]?.jsonObject
@@ -201,13 +345,17 @@ class AuraApiClient(private val baseUrl: String) {
         return AuthResponse(access_token = token, token_type = tokenType, user = user)
     }
 
-    private fun extractErrorMessage(responseText: String, status: HttpStatusCode): String {
+    private fun extractErrorMessage(
+        responseText: String,
+        status: HttpStatusCode,
+        defaultMessage: String = "Ошибка авторизации (${status.value})"
+    ): String {
         val detail = runCatching {
             val root = json.decodeFromString<JsonElement>(responseText).jsonObject
             root["detail"]?.jsonPrimitive?.contentOrNull
                 ?: root["message"]?.jsonPrimitive?.contentOrNull
         }.getOrNull()
 
-        return detail ?: "Ошибка авторизации (${status.value})"
+        return detail ?: defaultMessage
     }
 }
