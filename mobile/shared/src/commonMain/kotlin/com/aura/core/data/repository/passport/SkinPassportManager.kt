@@ -1,4 +1,4 @@
-package com.aura.core.data.repository
+package com.aura.core.data.repository.passport
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -6,7 +6,7 @@ import androidx.compose.runtime.setValue
 
 data class SkinPassport(
     val completedAtEpochMillis: Long,
-    val answers: Map<String, List<String>>
+    val answers: Map<String, List<String>>,
 )
 
 object SkinPassportManager {
@@ -16,7 +16,7 @@ object SkinPassportManager {
     fun save(answers: Map<String, List<String>>) {
         passport = SkinPassport(
             completedAtEpochMillis = System.currentTimeMillis(),
-            answers = answers
+            answers = answers,
         )
     }
 
