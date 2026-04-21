@@ -12,6 +12,7 @@ import Users from './pages/Users'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
 import Dictionaries from './pages/Dictionaries'
+import KnowledgeSources from './pages/KnowledgeSources'
 import { useAuth } from './context/AuthContext'
 
 function ProtectedRoute({ children }) {
@@ -44,6 +45,7 @@ function AppRoutes() {
         <Route path="users" element={<Users />} />
         <Route path="reports" element={<Reports />} />
         <Route path="dictionaries" element={<Dictionaries />} />
+        <Route path="knowledge-sources" element={<KnowledgeSources />} />
         <Route path="settings" element={<Settings />} />
       </Route>
     </Routes>

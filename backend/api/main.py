@@ -1,14 +1,16 @@
 import os
+import io
 import re
 import json
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from typing import List, Optional, Union, Dict
+from typing import List, Optional, Union, Dict, Any
 import asyncpg
 import aiohttp
 import json
@@ -44,6 +46,7 @@ DATABASE_URL = os.getenv(
 )
 
 pool: asyncpg.Pool = None
+auth_logger = logging.getLogger("aura.auth")
 
 
 async def get_db():
@@ -106,7 +109,6 @@ async def init_db():
                 email VARCHAR(255) UNIQUE NOT NULL,
                 role VARCHAR(50) DEFAULT 'user',
                 nickname VARCHAR(255),
-                phone VARCHAR(50),
                 avatar VARCHAR(500),
                 password_hash VARCHAR(255),
                 created_at TIMESTAMP DEFAULT NOW()
@@ -204,6 +206,48 @@ async def init_db():
                 filename VARCHAR(255) NOT NULL,
                 created_at TIMESTAMP DEFAULT NOW()
             );
+
+            CREATE TABLE IF NOT EXISTS knowledge_sources (
+                id SERIAL PRIMARY KEY,
+                source_type VARCHAR(50) NOT NULL,
+                source_ref_id INTEGER,
+                owner_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                title VARCHAR(500) NOT NULL,
+                category VARCHAR(255),
+                content_text TEXT,
+                file_path VARCHAR(1000),
+                mime_type VARCHAR(255),
+                scope VARCHAR(30) DEFAULT 'both',
+                weight DOUBLE PRECISION DEFAULT 1.0,
+                enabled BOOLEAN DEFAULT true,
+                metadata JSONB DEFAULT '{}'::jsonb,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_knowledge_sources_owner ON knowledge_sources(owner_user_id);
+            CREATE INDEX IF NOT EXISTS idx_knowledge_sources_type_ref ON knowledge_sources(source_type, source_ref_id);
+            CREATE INDEX IF NOT EXISTS idx_knowledge_sources_enabled_scope ON knowledge_sources(enabled, scope);
+
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_knowledge_source_product ON knowledge_sources(source_ref_id)
+                WHERE source_type='product' AND owner_user_id IS NULL;
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_knowledge_source_procedure ON knowledge_sources(source_ref_id)
+                WHERE source_type='procedure' AND owner_user_id IS NULL;
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_knowledge_source_content ON knowledge_sources(source_ref_id)
+                WHERE source_type='content' AND owner_user_id IS NULL;
+
+            CREATE TABLE IF NOT EXISTS admin_journal (
+                id SERIAL PRIMARY KEY,
+                event_type VARCHAR(100) NOT NULL,
+                severity VARCHAR(20) NOT NULL DEFAULT 'info',
+                message TEXT NOT NULL,
+                user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                context JSONB DEFAULT '{}'::jsonb,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_admin_journal_created_at ON admin_journal(created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_admin_journal_event_type ON admin_journal(event_type);
 
             CREATE TABLE IF NOT EXISTS user_profiles (
                 id SERIAL PRIMARY KEY,
@@ -391,7 +435,6 @@ async def init_db():
         # Check and add columns if they don't exist (PostgreSQL 15 compatible)
         columns_to_add = [
             ("nickname", "VARCHAR(255)"),
-            ("phone", "VARCHAR(50)"),
             ("password_hash", "VARCHAR(255)"),
         ]
         
@@ -566,7 +609,6 @@ class UserCreate(BaseModel):
     password: Optional[str] = None
     role: Optional[str] = "user"
     nickname: Optional[str] = None
-    phone: Optional[str] = None
     avatar: Optional[str] = None
 
 
@@ -591,9 +633,69 @@ class SkinPassportResponse(BaseModel):
     answers: Dict[str, List[str]] = {}
 
 
+class AssistantChatRequest(BaseModel):
+    message: str
+    max_results: int = 5
+
+
+class AssistantSource(BaseModel):
+    id: Optional[str] = None
+    title: str = ""
+    content: str = ""
+    relevance: Optional[float] = None
+
+
+class AssistantChatResponse(BaseModel):
+    answer: str
+    sources: List[AssistantSource] = []
+
+
+class AssistantReindexResponse(BaseModel):
+    status: str
+    indexed_count: int = 0
+    products_count: int = 0
+    procedures_count: int = 0
+    content_count: int = 0
+
+
+class KnowledgeSourceUpdateRequest(BaseModel):
+    enabled: Optional[bool] = None
+    scope: Optional[str] = None
+    weight: Optional[float] = None
+
+
+class KnowledgeSourceItem(BaseModel):
+    id: int
+    source_type: str
+    source_ref_id: Optional[int] = None
+    owner_user_id: Optional[int] = None
+    title: str
+    category: Optional[str] = None
+    scope: str = "both"
+    weight: float = 1.0
+    enabled: bool = True
+    mime_type: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class KnowledgeSourceListResponse(BaseModel):
+    items: List[KnowledgeSourceItem] = []
+    total: int = 0
+
+
+class UserDocumentUploadResponse(BaseModel):
+    status: str
+    source_id: int
+    title: str
+
+
 # JWT Functions
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
+    subject = to_encode.get("sub")
+    if subject is not None and not isinstance(subject, str):
+        to_encode["sub"] = str(subject)
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
@@ -621,9 +723,14 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     try:
         token = credentials.credentials
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        user_id: int = payload.get("sub")
-        if user_id is None:
+        raw_user_id = payload.get("sub")
+        if raw_user_id is None:
             raise HTTPException(status_code=401, detail="Invalid token")
+        user_id = int(raw_user_id)
+        if user_id <= 0:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
     
@@ -666,28 +773,296 @@ def is_valid_login(login: Optional[str]) -> bool:
     return bool(re.match(r"^@[a-z0-9_]{3,32}$", login))
 
 
-def normalize_phone(phone: Optional[str]) -> Optional[str]:
-    if not phone:
+def _extract_upstream_error(response_text: str) -> Optional[str]:
+    if not response_text:
         return None
-    digits = re.sub(r"\D", "", phone)
-    if not digits:
+
+    try:
+        payload = json.loads(response_text)
+    except (TypeError, ValueError, json.JSONDecodeError):
         return None
-    if digits.startswith("8"):
-        digits = "7" + digits[1:]
-    if len(digits) == 10:
-        digits = "7" + digits
-    return digits
+
+    if isinstance(payload, dict):
+        detail = payload.get("detail") or payload.get("message")
+        if detail:
+            return str(detail)
+
+    return None
 
 
-def is_valid_phone(phone_digits: Optional[str]) -> bool:
-    if not phone_digits:
-        return True
-    return bool(re.match(r"^7\d{10}$", phone_digits))
+def _is_admin_role(role: Optional[str]) -> bool:
+    role_value = (role or "").strip().lower()
+    return role_value in {"admin", "administrator", "администратор", "админ"}
+
+
+def _normalize_scope(scope: Optional[str], default: str = "both") -> str:
+    value = (scope or default).strip().lower()
+    if value not in {"rag", "recommendations", "both"}:
+        raise HTTPException(status_code=400, detail="scope должен быть одним из: rag, recommendations, both")
+    return value
+
+
+def _normalize_weight(weight: Optional[float], default: float = 1.0) -> float:
+    if weight is None:
+        return default
+    try:
+        value = float(weight)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="weight должен быть числом")
+    if value < 0 or value > 10:
+        raise HTTPException(status_code=400, detail="weight должен быть в диапазоне 0..10")
+    return value
+
+
+async def _upsert_global_knowledge_source(
+    conn: asyncpg.Connection,
+    source_type: str,
+    source_ref_id: int,
+    title: str,
+    category: Optional[str],
+    content_text: str,
+) -> None:
+    existing = await conn.fetchrow(
+        """
+        SELECT id, enabled, scope, weight
+        FROM knowledge_sources
+        WHERE source_type=$1 AND source_ref_id=$2 AND owner_user_id IS NULL
+        LIMIT 1
+        """,
+        source_type,
+        source_ref_id,
+    )
+
+    if existing:
+        await conn.execute(
+            """
+            UPDATE knowledge_sources
+            SET title=$1, category=$2, content_text=$3, updated_at=NOW()
+            WHERE id=$4
+            """,
+            title,
+            category,
+            content_text,
+            existing["id"],
+        )
+        return
+
+    await conn.execute(
+        """
+        INSERT INTO knowledge_sources (
+            source_type, source_ref_id, owner_user_id,
+            title, category, content_text,
+            scope, weight, enabled, metadata
+        )
+        VALUES ($1, $2, NULL, $3, $4, $5, 'both', 1.0, true, '{}'::jsonb)
+        """,
+        source_type,
+        source_ref_id,
+        title,
+        category,
+        content_text,
+    )
+
+
+async def _sync_global_knowledge_registry(conn: asyncpg.Connection) -> None:
+    products_rows = await conn.fetch("SELECT * FROM products")
+    procedures_rows = await conn.fetch("SELECT * FROM procedures")
+    content_rows = await conn.fetch("SELECT * FROM content")
+
+    for doc in _build_products_knowledge_docs(products_rows):
+        source_id = doc.get("source_id")
+        if source_id is None:
+            continue
+        await _upsert_global_knowledge_source(
+            conn,
+            source_type="product",
+            source_ref_id=int(source_id),
+            title=str(doc.get("title") or "Продукт"),
+            category=doc.get("category"),
+            content_text=str(doc.get("content") or ""),
+        )
+
+    for doc in _build_procedures_knowledge_docs(procedures_rows):
+        source_id = doc.get("source_id")
+        if source_id is None:
+            continue
+        await _upsert_global_knowledge_source(
+            conn,
+            source_type="procedure",
+            source_ref_id=int(source_id),
+            title=str(doc.get("title") or "Процедура"),
+            category=doc.get("category"),
+            content_text=str(doc.get("content") or ""),
+        )
+
+    for doc in _build_content_knowledge_docs(content_rows):
+        source_id = doc.get("source_id")
+        if source_id is None:
+            continue
+        await _upsert_global_knowledge_source(
+            conn,
+            source_type="content",
+            source_ref_id=int(source_id),
+            title=str(doc.get("title") or "Контент"),
+            category=doc.get("category"),
+            content_text=str(doc.get("content") or ""),
+        )
+
+
+def _extract_text_from_document(filename: str, content_type: Optional[str], content_bytes: bytes) -> str:
+    if not content_bytes:
+        return ""
+
+    lower_name = (filename or "").lower()
+    mime = (content_type or "").lower()
+
+    is_pdf = lower_name.endswith(".pdf") or "pdf" in mime
+    if is_pdf:
+        try:
+            from pypdf import PdfReader
+
+            reader = PdfReader(io.BytesIO(content_bytes))
+            pages = []
+            for page in reader.pages:
+                text = page.extract_text() or ""
+                if text.strip():
+                    pages.append(text.strip())
+            return "\n\n".join(pages)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Не удалось прочитать PDF: {exc}")
+
+    try:
+        return content_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        return content_bytes.decode("utf-8", errors="ignore")
+
+
+async def _ingest_docs_to_ai_service(
+    docs: List[Dict[str, Any]],
+    ai_service_url: str,
+    clear_global_first: bool = False,
+) -> None:
+    if not docs:
+        return
+
+    timeout = aiohttp.ClientTimeout(total=90)
+    try:
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            if clear_global_first:
+                await session.delete(f"{ai_service_url}/api/v1/rag/knowledge")
+            async with session.post(f"{ai_service_url}/api/v1/rag/ingest", json=docs) as response:
+                response_text = await response.text()
+                if response.status >= 400:
+                    detail = _extract_upstream_error(response_text) or f"AI service error ({response.status})"
+                    raise HTTPException(status_code=502, detail=detail)
+    except aiohttp.ClientError:
+        raise HTTPException(status_code=503, detail="AI сервис недоступен.")
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="AI сервис не ответил вовремя.")
+
+
+def _stringify_for_knowledge(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (int, float, bool)):
+        return str(value)
+    if isinstance(value, list):
+        return ", ".join(_stringify_for_knowledge(item) for item in value if item is not None)
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False)
+    return str(value)
+
+
+def _build_products_knowledge_docs(rows: List[asyncpg.Record]) -> List[Dict[str, Any]]:
+    docs: List[Dict[str, Any]] = []
+    for row in rows:
+        data = dict(row)
+        title = _stringify_for_knowledge(data.get("name")) or "Продукт"
+        category = _stringify_for_knowledge(data.get("category")) or "products"
+        content_parts = [
+            f"Бренд: {_stringify_for_knowledge(data.get('brand'))}",
+            f"Тип: {_stringify_for_knowledge(data.get('product_type') or data.get('what_is_it'))}",
+            f"Для кого: {_stringify_for_knowledge(data.get('for_whom'))}",
+            f"Назначение: {_stringify_for_knowledge(data.get('purpose'))}",
+            f"Тип кожи: {_stringify_for_knowledge(data.get('skin_type'))}",
+            f"Активные ингредиенты: {_stringify_for_knowledge(data.get('active_ingredient'))}",
+            f"Описание: {_stringify_for_knowledge(data.get('description'))}",
+            f"Состав: {_stringify_for_knowledge(data.get('composition'))}",
+            f"Применение: {_stringify_for_knowledge(data.get('application_info'))}",
+        ]
+        content = "\n".join(part for part in content_parts if not part.endswith(": "))
+        docs.append(
+            {
+                "title": title,
+                "content": content,
+                "category": category,
+                "source_type": "product",
+                "source_id": data.get("id"),
+            }
+        )
+    return docs
+
+
+def _build_procedures_knowledge_docs(rows: List[asyncpg.Record]) -> List[Dict[str, Any]]:
+    docs: List[Dict[str, Any]] = []
+    for row in rows:
+        data = dict(row)
+        title = _stringify_for_knowledge(data.get("name")) or "Процедура"
+        category = _stringify_for_knowledge(data.get("direction") or data.get("method_type")) or "procedures"
+        content_parts = [
+            f"Направление: {_stringify_for_knowledge(data.get('direction'))}",
+            f"Тип метода: {_stringify_for_knowledge(data.get('method_type'))}",
+            f"Описание: {_stringify_for_knowledge(data.get('description') or data.get('procedure_about'))}",
+            f"Преимущества: {_stringify_for_knowledge(data.get('advantages'))}",
+            f"Показания: {_stringify_for_knowledge(data.get('indications'))}",
+            f"Для кого: {_stringify_for_knowledge(data.get('for_whom'))}",
+            f"Противопоказания: {_stringify_for_knowledge(data.get('contraindications_full') or data.get('contraindications'))}",
+            f"Реабилитация: {_stringify_for_knowledge(data.get('rehabilitation'))}",
+        ]
+        content = "\n".join(part for part in content_parts if not part.endswith(": "))
+        docs.append(
+            {
+                "title": title,
+                "content": content,
+                "category": category,
+                "source_type": "procedure",
+                "source_id": data.get("id"),
+            }
+        )
+    return docs
+
+
+def _build_content_knowledge_docs(rows: List[asyncpg.Record]) -> List[Dict[str, Any]]:
+    docs: List[Dict[str, Any]] = []
+    for row in rows:
+        data = dict(row)
+        title = _stringify_for_knowledge(data.get("title")) or "Контент"
+        category = _stringify_for_knowledge(data.get("category")) or "content"
+        body = _stringify_for_knowledge(data.get("body"))
+        tags = _stringify_for_knowledge(data.get("tags"))
+        author = _stringify_for_knowledge(data.get("author_name"))
+        content_parts = [
+            f"Автор: {author}",
+            f"Теги: {tags}",
+            f"Текст: {body}",
+        ]
+        content = "\n".join(part for part in content_parts if not part.endswith(": "))
+        docs.append(
+            {
+                "title": title,
+                "content": content,
+                "category": category,
+                "source_type": "content",
+                "source_id": data.get("id"),
+            }
+        )
+    return docs
 
 
 async def ensure_users_columns(conn):
     await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname VARCHAR(255)")
-    await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50)")
 
 
 async def ensure_unique_login(conn, login: Optional[str], exclude_user_id: Optional[int] = None):
@@ -703,6 +1078,33 @@ async def ensure_unique_login(conn, login: Optional[str], exclude_user_id: Optio
         )
     if existing:
         raise HTTPException(status_code=400, detail="Логин уже занят")
+
+
+async def write_admin_journal(
+    event_type: str,
+    message: str,
+    severity: str = "info",
+    user_id: Optional[int] = None,
+    context: Optional[Dict[str, Any]] = None,
+):
+    if pool is None:
+        return
+
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO admin_journal (event_type, severity, message, user_id, context)
+                VALUES ($1, $2, $3, $4, $5::jsonb)
+                """,
+                event_type,
+                severity,
+                message,
+                user_id,
+                json.dumps(context or {}, ensure_ascii=False),
+            )
+    except Exception as exc:
+        auth_logger.warning("admin_journal_write_failed event_type=%s error=%s", event_type, exc)
 
 
 class DictionaryValue(BaseModel):
@@ -721,6 +1123,7 @@ async def health_check():
 
 @app.post("/api/auth/login", response_model=TokenResponse)
 async def login(request: LoginRequest):
+    auth_logger.info("auth_login_attempt email=%s", request.email.lower().strip())
     async with pool.acquire() as conn:
         # Find user by email
         row = await conn.fetchrow(
@@ -729,6 +1132,13 @@ async def login(request: LoginRequest):
         )
         
         if not row:
+            auth_logger.warning("auth_login_failed reason=email_not_found email=%s", request.email.lower().strip())
+            await write_admin_journal(
+                event_type="auth_login_failed",
+                severity="warning",
+                message="Неуспешный вход: email не найден",
+                context={"email": request.email.lower().strip(), "reason": "email_not_found"},
+            )
             raise HTTPException(status_code=401, detail="Неверный email или пароль")
         
         # Check password
@@ -736,6 +1146,14 @@ async def login(request: LoginRequest):
         stored_password = user_dict.get('password_hash')
         
         if not stored_password or not verify_password(request.password, stored_password):
+            auth_logger.warning("auth_login_failed reason=bad_password email=%s", request.email.lower().strip())
+            await write_admin_journal(
+                event_type="auth_login_failed",
+                severity="warning",
+                message="Неуспешный вход: неверный пароль",
+                user_id=user_dict.get("id"),
+                context={"email": request.email.lower().strip(), "reason": "bad_password"},
+            )
             raise HTTPException(status_code=401, detail="Неверный email или пароль")
         
         # Create token
@@ -743,6 +1161,14 @@ async def login(request: LoginRequest):
         
         # Return user without password
         user_dict.pop('password_hash', None)
+        auth_logger.info("auth_login_success user_id=%s email=%s", user_dict.get("id"), user_dict.get("email"))
+        await write_admin_journal(
+            event_type="auth_login_success",
+            severity="info",
+            message="Успешный вход пользователя",
+            user_id=user_dict.get("id"),
+            context={"email": user_dict.get("email")},
+        )
         
         return TokenResponse(
             access_token=access_token,
@@ -752,19 +1178,38 @@ async def login(request: LoginRequest):
 
 @app.post("/api/auth/register", response_model=TokenResponse)
 async def register(user: UserCreate):
+    auth_logger.info("auth_register_attempt email=%s", user.email.lower().strip())
     if not user.password:
+        auth_logger.warning("auth_register_failed reason=missing_password email=%s", user.email.lower().strip())
+        await write_admin_journal(
+            event_type="auth_register_failed",
+            severity="warning",
+            message="Неуспешная регистрация: отсутствует пароль",
+            context={"email": user.email.lower().strip(), "reason": "missing_password"},
+        )
         raise HTTPException(status_code=400, detail="Пароль обязателен")
     
     if not is_valid_email(user.email):
+        auth_logger.warning("auth_register_failed reason=invalid_email email=%s", user.email.lower().strip())
+        await write_admin_journal(
+            event_type="auth_register_failed",
+            severity="warning",
+            message="Неуспешная регистрация: некорректный email",
+            context={"email": user.email.lower().strip(), "reason": "invalid_email"},
+        )
         raise HTTPException(status_code=400, detail="Некорректный email")
     
     login = normalize_login(user.nickname)
-    phone_digits = normalize_phone(user.phone)
     
     if login and not is_valid_login(login):
+        auth_logger.warning("auth_register_failed reason=invalid_login email=%s login=%s", user.email.lower().strip(), login)
+        await write_admin_journal(
+            event_type="auth_register_failed",
+            severity="warning",
+            message="Неуспешная регистрация: некорректный логин",
+            context={"email": user.email.lower().strip(), "reason": "invalid_login", "login": login},
+        )
         raise HTTPException(status_code=400, detail="Логин должен быть в формате @login")
-    if phone_digits and not is_valid_phone(phone_digits):
-        raise HTTPException(status_code=400, detail="Некорректный телефон")
     
     async with pool.acquire() as conn:
         await ensure_users_columns(conn)
@@ -775,6 +1220,13 @@ async def register(user: UserCreate):
             user.email
         )
         if existing:
+            auth_logger.warning("auth_register_failed reason=email_exists email=%s", user.email.lower().strip())
+            await write_admin_journal(
+                event_type="auth_register_failed",
+                severity="warning",
+                message="Неуспешная регистрация: email уже занят",
+                context={"email": user.email.lower().strip(), "reason": "email_exists"},
+            )
             raise HTTPException(status_code=400, detail="Email уже занят")
         
         # Check if login exists
@@ -788,14 +1240,27 @@ async def register(user: UserCreate):
         role = user.role or "Пользователь"
         
         row = await conn.fetchrow(
-            """INSERT INTO users (name, email, role, nickname, phone, avatar, password_hash) 
-               VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *""",
-            user.name, user.email, role, login, phone_digits, user.avatar, password_hash
+            """INSERT INTO users (name, email, role, nickname, avatar, password_hash) 
+               VALUES ($1, $2, $3, $4, $5, $6) RETURNING *""",
+            user.name, user.email, role, login, user.avatar, password_hash
         )
         
         user_dict = dict(row)
         access_token = create_access_token(data={"sub": user_dict['id']})
         user_dict.pop('password_hash', None)
+        auth_logger.info(
+            "auth_register_success user_id=%s email=%s role=%s",
+            user_dict.get("id"),
+            user_dict.get("email"),
+            user_dict.get("role")
+        )
+        await write_admin_journal(
+            event_type="auth_register_success",
+            severity="info",
+            message="Успешная регистрация пользователя",
+            user_id=user_dict.get("id"),
+            context={"email": user_dict.get("email"), "role": user_dict.get("role")},
+        )
         
         return TokenResponse(
             access_token=access_token,
@@ -808,6 +1273,29 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     user = current_user.copy()
     user.pop('password_hash', None)
     return user
+
+
+@app.get("/api/admin/journal")
+async def get_admin_journal(
+    limit: int = 100,
+    current_user: dict = Depends(get_current_user)
+):
+    if not _is_admin_role(current_user.get("role")):
+        raise HTTPException(status_code=403, detail="Только администратор может просматривать журнал")
+
+    safe_limit = max(1, min(limit, 500))
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, event_type, severity, message, user_id, context, created_at
+            FROM admin_journal
+            ORDER BY created_at DESC
+            LIMIT $1
+            """,
+            safe_limit,
+        )
+
+    return [dict(row) for row in rows]
 
 
 def _sanitize_skin_passport_answers(raw_answers) -> Dict[str, List[str]]:
@@ -877,6 +1365,383 @@ async def save_skin_passport(payload: SkinPassportUpdateRequest, current_user: d
         )
 
     return SkinPassportResponse(completed_at_epoch_millis=completed_at, answers=answers)
+
+
+@app.post("/api/assistant/chat", response_model=AssistantChatResponse)
+async def assistant_chat(payload: AssistantChatRequest, current_user: dict = Depends(get_current_user)):
+    message = (payload.message or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Сообщение не может быть пустым")
+
+    max_results = max(1, min(payload.max_results, 10))
+    ai_service_url = os.getenv("AI_SERVICE_URL", "http://localhost:9001").rstrip("/")
+    upstream_payload = {
+        "query": message,
+        "user_id": str(current_user.get("id")),
+        "max_results": max_results,
+    }
+
+    try:
+        timeout = aiohttp.ClientTimeout(total=25)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(f"{ai_service_url}/api/v1/rag/query", json=upstream_payload) as response:
+                response_text = await response.text()
+
+                if response.status >= 400:
+                    detail = _extract_upstream_error(response_text) or f"AI service error ({response.status})"
+                    raise HTTPException(status_code=502, detail=detail)
+
+    except aiohttp.ClientError:
+        raise HTTPException(status_code=503, detail="AI сервис недоступен. Попробуйте позже.")
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="AI сервис не ответил вовремя. Попробуйте позже.")
+
+    try:
+        data = json.loads(response_text) if response_text else {}
+    except (TypeError, ValueError, json.JSONDecodeError):
+        raise HTTPException(status_code=502, detail="Некорректный ответ AI сервиса")
+
+    answer = ""
+    if isinstance(data, dict):
+        answer = str(data.get("answer") or "").strip()
+
+    if not answer:
+        answer = "Не удалось получить ответ ассистента. Попробуйте переформулировать вопрос."
+
+    sources: List[AssistantSource] = []
+    raw_sources = data.get("sources") if isinstance(data, dict) else []
+    if isinstance(raw_sources, list):
+        for raw_source in raw_sources:
+            if not isinstance(raw_source, dict):
+                continue
+
+            relevance = raw_source.get("relevance", raw_source.get("score"))
+            relevance_value: Optional[float] = None
+            if relevance is not None:
+                try:
+                    relevance_value = float(relevance)
+                except (TypeError, ValueError):
+                    relevance_value = None
+
+            source_id = raw_source.get("id")
+            sources.append(
+                AssistantSource(
+                    id=str(source_id) if source_id is not None else None,
+                    title=str(raw_source.get("title") or ""),
+                    content=str(raw_source.get("content") or ""),
+                    relevance=relevance_value,
+                )
+            )
+
+    return AssistantChatResponse(answer=answer, sources=sources)
+
+
+@app.post("/api/assistant/knowledge/reindex", response_model=AssistantReindexResponse)
+async def assistant_reindex_knowledge(current_user: dict = Depends(get_current_user)):
+    if not _is_admin_role(current_user.get("role")):
+        raise HTTPException(status_code=403, detail="Только администратор может запускать переиндексацию")
+
+    ai_service_url = os.getenv("AI_SERVICE_URL", "http://localhost:9001").rstrip("/")
+
+    async with pool.acquire() as conn:
+        await _sync_global_knowledge_registry(conn)
+
+        rows = await conn.fetch(
+            """
+            SELECT *
+            FROM knowledge_sources
+            WHERE owner_user_id IS NULL
+              AND enabled = true
+              AND scope IN ('both', 'rag')
+            ORDER BY id DESC
+            """
+        )
+
+    docs: List[Dict[str, Any]] = []
+    products_count = 0
+    procedures_count = 0
+    content_count = 0
+
+    for row in rows:
+        data = dict(row)
+        source_type = str(data.get("source_type") or "")
+        if source_type == "product":
+            products_count += 1
+        elif source_type == "procedure":
+            procedures_count += 1
+        elif source_type == "content":
+            content_count += 1
+
+        docs.append(
+            {
+                "title": str(data.get("title") or "Источник"),
+                "content": str(data.get("content_text") or ""),
+                "category": data.get("category"),
+                "source_type": source_type,
+                "source_id": data.get("source_ref_id") if data.get("source_ref_id") is not None else data.get("id"),
+                "source_scope": "global",
+                "owner_user_id": None,
+                "weight": float(data.get("weight") or 1.0),
+            }
+        )
+
+    if not docs:
+        return AssistantReindexResponse(status="success", indexed_count=0)
+
+    await _ingest_docs_to_ai_service(docs, ai_service_url, clear_global_first=True)
+
+    return AssistantReindexResponse(
+        status="success",
+        indexed_count=len(docs),
+        products_count=products_count,
+        procedures_count=procedures_count,
+        content_count=content_count,
+    )
+
+
+@app.get("/api/assistant/knowledge/sources", response_model=KnowledgeSourceListResponse)
+async def list_knowledge_sources(current_user: dict = Depends(get_current_user)):
+    if not _is_admin_role(current_user.get("role")):
+        raise HTTPException(status_code=403, detail="Только администратор может просматривать источники")
+
+    async with pool.acquire() as conn:
+        await _sync_global_knowledge_registry(conn)
+        rows = await conn.fetch(
+            """
+            SELECT id, source_type, source_ref_id, owner_user_id, title, category,
+                   scope, weight, enabled, mime_type, created_at, updated_at
+            FROM knowledge_sources
+            ORDER BY owner_user_id NULLS FIRST, id DESC
+            """
+        )
+
+    items = [
+        KnowledgeSourceItem(
+            id=row["id"],
+            source_type=row["source_type"],
+            source_ref_id=row["source_ref_id"],
+            owner_user_id=row["owner_user_id"],
+            title=row["title"],
+            category=row["category"],
+            scope=row["scope"] or "both",
+            weight=float(row["weight"] or 1.0),
+            enabled=bool(row["enabled"]),
+            mime_type=row["mime_type"],
+            created_at=str(row["created_at"]) if row["created_at"] is not None else None,
+            updated_at=str(row["updated_at"]) if row["updated_at"] is not None else None,
+        )
+        for row in rows
+    ]
+
+    return KnowledgeSourceListResponse(items=items, total=len(items))
+
+
+@app.patch("/api/assistant/knowledge/sources/{source_id}", response_model=KnowledgeSourceItem)
+async def update_knowledge_source(
+    source_id: int,
+    payload: KnowledgeSourceUpdateRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    if not _is_admin_role(current_user.get("role")):
+        raise HTTPException(status_code=403, detail="Только администратор может менять источники")
+
+    updates: List[str] = []
+    values: List[Any] = []
+    idx = 1
+
+    if payload.enabled is not None:
+        updates.append(f"enabled=${idx}")
+        values.append(bool(payload.enabled))
+        idx += 1
+
+    if payload.scope is not None:
+        updates.append(f"scope=${idx}")
+        values.append(_normalize_scope(payload.scope))
+        idx += 1
+
+    if payload.weight is not None:
+        updates.append(f"weight=${idx}")
+        values.append(_normalize_weight(payload.weight))
+        idx += 1
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="Нет полей для обновления")
+
+    updates.append("updated_at=NOW()")
+    values.append(source_id)
+
+    query = f"""
+        UPDATE knowledge_sources
+        SET {', '.join(updates)}
+        WHERE id=${idx}
+        RETURNING id, source_type, source_ref_id, owner_user_id, title, category,
+                  scope, weight, enabled, mime_type, created_at, updated_at
+    """
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(query, *values)
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Источник не найден")
+
+    return KnowledgeSourceItem(
+        id=row["id"],
+        source_type=row["source_type"],
+        source_ref_id=row["source_ref_id"],
+        owner_user_id=row["owner_user_id"],
+        title=row["title"],
+        category=row["category"],
+        scope=row["scope"] or "both",
+        weight=float(row["weight"] or 1.0),
+        enabled=bool(row["enabled"]),
+        mime_type=row["mime_type"],
+        created_at=str(row["created_at"]) if row["created_at"] is not None else None,
+        updated_at=str(row["updated_at"]) if row["updated_at"] is not None else None,
+    )
+
+
+@app.post("/api/assistant/knowledge/user-documents", response_model=UserDocumentUploadResponse)
+async def upload_user_document(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    filename = file.filename or "document"
+    content_bytes = await file.read()
+    if not content_bytes:
+        raise HTTPException(status_code=400, detail="Файл пустой")
+
+    text = _extract_text_from_document(filename, file.content_type, content_bytes).strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Не удалось извлечь текст из документа")
+
+    upload_dir = os.path.join(os.path.dirname(__file__), "uploads", "knowledge", "user")
+    os.makedirs(upload_dir, exist_ok=True)
+    stored_name = f"{uuid.uuid4()}_{os.path.basename(filename)}"
+    stored_path = os.path.join(upload_dir, stored_name)
+    with open(stored_path, "wb") as output_file:
+        output_file.write(content_bytes)
+
+    scope = "both"
+    weight = 1.0
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO knowledge_sources (
+                source_type, source_ref_id, owner_user_id,
+                title, category, content_text, file_path, mime_type,
+                scope, weight, enabled, metadata
+            )
+            VALUES (
+                'user_document', NULL, $1,
+                $2, NULL, $3, $4, $5,
+                $6, $7, true, '{}'::jsonb
+            )
+            RETURNING id
+            """,
+            current_user.get("id"),
+            filename,
+            text,
+            stored_path,
+            file.content_type,
+            scope,
+            weight,
+        )
+
+    source_id = row["id"]
+    ai_service_url = os.getenv("AI_SERVICE_URL", "http://localhost:9001").rstrip("/")
+    await _ingest_docs_to_ai_service(
+        docs=[
+            {
+                "title": filename,
+                "content": text,
+                "category": "user_documents",
+                "source_type": "user_document",
+                "source_id": source_id,
+                "source_scope": "user",
+                "owner_user_id": str(current_user.get("id")),
+                "weight": weight,
+            }
+        ],
+        ai_service_url=ai_service_url,
+        clear_global_first=False,
+    )
+
+    return UserDocumentUploadResponse(status="success", source_id=source_id, title=filename)
+
+
+@app.post("/api/assistant/knowledge/admin-documents", response_model=UserDocumentUploadResponse)
+async def upload_admin_document(
+    file: UploadFile = File(...),
+    scope: str = "both",
+    weight: float = 1.0,
+    current_user: dict = Depends(get_current_user),
+):
+    if not _is_admin_role(current_user.get("role")):
+        raise HTTPException(status_code=403, detail="Только администратор может загружать global документы")
+
+    normalized_scope = _normalize_scope(scope)
+    normalized_weight = _normalize_weight(weight)
+
+    filename = file.filename or "document"
+    content_bytes = await file.read()
+    if not content_bytes:
+        raise HTTPException(status_code=400, detail="Файл пустой")
+
+    text = _extract_text_from_document(filename, file.content_type, content_bytes).strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Не удалось извлечь текст из документа")
+
+    upload_dir = os.path.join(os.path.dirname(__file__), "uploads", "knowledge", "admin")
+    os.makedirs(upload_dir, exist_ok=True)
+    stored_name = f"{uuid.uuid4()}_{os.path.basename(filename)}"
+    stored_path = os.path.join(upload_dir, stored_name)
+    with open(stored_path, "wb") as output_file:
+        output_file.write(content_bytes)
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO knowledge_sources (
+                source_type, source_ref_id, owner_user_id,
+                title, category, content_text, file_path, mime_type,
+                scope, weight, enabled, metadata
+            )
+            VALUES (
+                'admin_document', NULL, NULL,
+                $1, 'scientific_publication', $2, $3, $4,
+                $5, $6, true, '{}'::jsonb
+            )
+            RETURNING id
+            """,
+            filename,
+            text,
+            stored_path,
+            file.content_type,
+            normalized_scope,
+            normalized_weight,
+        )
+
+    source_id = row["id"]
+    ai_service_url = os.getenv("AI_SERVICE_URL", "http://localhost:9001").rstrip("/")
+    await _ingest_docs_to_ai_service(
+        docs=[
+            {
+                "title": filename,
+                "content": text,
+                "category": "scientific_publication",
+                "source_type": "admin_document",
+                "source_id": source_id,
+                "source_scope": "global",
+                "owner_user_id": None,
+                "weight": normalized_weight,
+            }
+        ],
+        ai_service_url=ai_service_url,
+        clear_global_first=False,
+    )
+
+    return UserDocumentUploadResponse(status="success", source_id=source_id, title=filename)
 
 
 @app.get("/api/health")
@@ -1622,13 +2487,10 @@ async def get_users(role: Optional[str] = None):
 @app.post("/api/users")
 async def create_user(user: UserCreate):
     login = normalize_login(user.nickname)
-    phone_digits = normalize_phone(user.phone)
     if not is_valid_email(user.email):
         raise HTTPException(status_code=400, detail="Некорректный email")
     if login and not is_valid_login(login):
         raise HTTPException(status_code=400, detail="Логин должен быть в формате @login, только a-z, 0-9 и _")
-    if phone_digits and not is_valid_phone(phone_digits):
-        raise HTTPException(status_code=400, detail="Некорректный телефон")
 
     async with pool.acquire() as conn:
         await ensure_users_columns(conn)
@@ -1640,9 +2502,9 @@ async def create_user(user: UserCreate):
             password_hash = get_password_hash(user.password)
         
         row = await conn.fetchrow(
-            """INSERT INTO users (name, email, role, nickname, phone, avatar, password_hash) 
-               VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *""",
-            user.name, user.email, user.role, login, phone_digits, user.avatar, password_hash
+            """INSERT INTO users (name, email, role, nickname, avatar, password_hash) 
+               VALUES ($1, $2, $3, $4, $5, $6) RETURNING *""",
+            user.name, user.email, user.role, login, user.avatar, password_hash
         )
         return dict(row)
 
@@ -1650,21 +2512,18 @@ async def create_user(user: UserCreate):
 @app.put("/api/users/{user_id}")
 async def update_user(user_id: int, user: UserCreate):
     login = normalize_login(user.nickname)
-    phone_digits = normalize_phone(user.phone)
     if not is_valid_email(user.email):
         raise HTTPException(status_code=400, detail="Некорректный email")
     if not is_valid_login(login):
         raise HTTPException(status_code=400, detail="Логин должен быть в формате @login, только a-z, 0-9 и _")
-    if not is_valid_phone(phone_digits):
-        raise HTTPException(status_code=400, detail="Некорректный телефон")
 
     async with pool.acquire() as conn:
         await ensure_users_columns(conn)
         await ensure_unique_login(conn, login, user_id)
         row = await conn.fetchrow(
-            """UPDATE users SET name=$1, email=$2, role=$3, nickname=$4, phone=$5, avatar=$6
-               WHERE id=$7 RETURNING *""",
-            user.name, user.email, user.role, login, phone_digits, user.avatar, user_id
+            """UPDATE users SET name=$1, email=$2, role=$3, nickname=$4, avatar=$5
+               WHERE id=$6 RETURNING *""",
+            user.name, user.email, user.role, login, user.avatar, user_id
         )
         if not row:
             raise HTTPException(status_code=404, detail="User not found")

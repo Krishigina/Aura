@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { Users, Package, TrendingUp, Activity, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
+import { usersApi, productsApi, proceduresApi, contentApi } from '../api'
 import './Dashboard.css'
 
 // Mock data
@@ -21,15 +23,49 @@ const recentActivity = [
   { id: 5, user: 'user5@example.com', action: 'Ошибка API', time: '23.03.2026 14:10', status: 'error' },
 ]
 
-const stats = [
-  { label: 'Всего пользователей', value: '1,234', change: '+12%', positive: true, icon: Users },
-  { label: 'Всего продуктов', value: '567', change: '+5%', positive: true, icon: Package },
-  { label: 'Рекомендаций', value: '8,901', change: '+23%', positive: true, icon: TrendingUp },
-  { label: 'Активных пользователей', value: '456', change: '+8%', positive: true, icon: Activity },
-]
-
 export default function Dashboard() {
   const { user } = useAuth()
+  const [stats, setStats] = useState([
+    { label: 'Все пользователи', value: 0, icon: Users },
+    { label: 'Продукты', value: 0, icon: Package },
+    { label: 'Процедуры', value: 0, icon: TrendingUp },
+    { label: 'Контент', value: 0, icon: Activity },
+  ])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadStats = async () => {
+      const [usersResult, productsResult, proceduresResult, contentResult] = await Promise.allSettled([
+        usersApi.getAll(),
+        productsApi.getAll(),
+        proceduresApi.getAll(),
+        contentApi.getAll(),
+      ])
+
+      const getCount = (result) => {
+        if (result.status === 'fulfilled' && Array.isArray(result.value)) {
+          return result.value.length
+        }
+        return 0
+      }
+
+      if (!isMounted) return
+
+      setStats([
+        { label: 'Все пользователи', value: getCount(usersResult), icon: Users },
+        { label: 'Продукты', value: getCount(productsResult), icon: Package },
+        { label: 'Процедуры', value: getCount(proceduresResult), icon: TrendingUp },
+        { label: 'Контент', value: getCount(contentResult), icon: Activity },
+      ])
+    }
+
+    loadStats()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -53,11 +89,8 @@ export default function Dashboard() {
           <div key={index} className="stat-card glass-card">
             <div className="stat-header">
               <stat.icon className="stat-icon" />
-              <span className={`stat-change ${stat.positive ? 'positive' : 'negative'}`}>
-                {stat.change}
-              </span>
             </div>
-            <div className="stat-value">{stat.value}</div>
+            <div className="stat-value">{new Intl.NumberFormat('ru-RU').format(stat.value)}</div>
             <div className="stat-label">{stat.label}</div>
           </div>
         ))}

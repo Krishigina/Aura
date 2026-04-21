@@ -244,3 +244,52 @@ export const usersApi = {
   update: (id, data) => request(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id) => request(`/users/${id}`, { method: 'DELETE' }),
 }
+
+export const knowledgeApi = {
+  listSources: () => request('/assistant/knowledge/sources'),
+  updateSource: (id, data) => request(`/assistant/knowledge/sources/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  reindex: () => request('/assistant/knowledge/reindex', { method: 'POST' }),
+
+  uploadAdminDocument: async (file, { scope = 'both', weight = 1.0 } = {}) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const token = getToken()
+    const headers = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
+
+    const query = new URLSearchParams({ scope, weight: String(weight) })
+    const response = await fetch(`${API_URL}/assistant/knowledge/admin-documents?${query.toString()}`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Upload failed' }))
+      throw new Error(error.detail || 'Upload failed')
+    }
+
+    return response.json()
+  },
+
+  uploadUserDocument: async (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const token = getToken()
+    const headers = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
+
+    const response = await fetch(`${API_URL}/assistant/knowledge/user-documents`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Upload failed' }))
+      throw new Error(error.detail || 'Upload failed')
+    }
+
+    return response.json()
+  },
+}

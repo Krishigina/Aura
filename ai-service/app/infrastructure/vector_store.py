@@ -28,12 +28,36 @@ class VectorStore:
         )
         logger.info(f"Created collection: {name}")
     
-    def add_documents(self, collection_name: str, documents: List[Dict[str, Any]], texts: List[str]):
+    def add_documents(self, collection_name: str, documents: List[Dict[str, Any]], texts: List[str]) -> int:
         collection = self.client.collections.get(collection_name)
         vectors = self.embedder.embed_batch(texts)
-        objects = [{"**doc": doc, "_vector": vector} for doc, vector in zip(documents, vectors)]
-        collection.data.insert_many(objects)
-        logger.info(f"Added {len(documents)} documents to {collection_name}")
+        indexed_count = 0
+
+        for doc, vector in zip(documents, vectors):
+            title = str(doc.get("title") or doc.get("name") or "Untitled")
+            content = str(doc.get("content") or doc.get("text") or "")
+            description = str(doc.get("description") or "")
+            category = str(doc.get("category") or "")
+
+            metadata = {
+                k: v
+                for k, v in doc.items()
+                if k not in {"title", "name", "content", "text", "description", "category"}
+            }
+
+            properties = {
+                "text": content or description or title,
+                "name": title,
+                "description": description,
+                "category": category,
+                "metadata": metadata,
+            }
+
+            collection.data.insert(properties=properties, vector=vector)
+            indexed_count += 1
+
+        logger.info(f"Added {indexed_count} documents to {collection_name}")
+        return indexed_count
     
     def search(self, collection_name: str, query: str, limit: int = 5) -> List[Dict[str, Any]]:
         collection = self.client.collections.get(collection_name)
@@ -43,6 +67,13 @@ class VectorStore:
         for obj in search.objects:
             results.append({"id": obj.uuid, "score": obj.metadata.score, "properties": obj.properties})
         return results
+
+    def delete_collection(self, collection_name: str) -> bool:
+        if not self.client.collections.exists(collection_name):
+            return False
+        self.client.collections.delete(collection_name)
+        logger.info(f"Deleted collection: {collection_name}")
+        return True
 
 _vector_store: Optional[VectorStore] = None
 

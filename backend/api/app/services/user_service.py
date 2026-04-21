@@ -25,25 +25,6 @@ def _is_valid_login(login: Optional[str]) -> bool:
     return bool(re.match(r"^@[a-z0-9_]{3,32}$", login))
 
 
-def _normalize_phone(phone: Optional[str]) -> Optional[str]:
-    if not phone:
-        return None
-    digits = re.sub(r"\D", "", phone)
-    if not digits:
-        return None
-    if digits.startswith("8"):
-        digits = "7" + digits[1:]
-    if len(digits) == 10:
-        digits = "7" + digits
-    return digits
-
-
-def _is_valid_phone(phone_digits: Optional[str]) -> bool:
-    if not phone_digits:
-        return True
-    return bool(re.match(r"^7\d{10}$", phone_digits))
-
-
 class UserService:
     @staticmethod
     def get_all(role: Optional[str] = None) -> List[dict]:
@@ -73,19 +54,15 @@ class UserService:
             if not _is_valid_login(login):
                 raise ValueError("Логин должен быть в формате @login, только a-z, 0-9 и _")
 
-            phone = _normalize_phone(data.phone)
-            if not _is_valid_phone(phone):
-                raise ValueError("Некорректный телефон")
-
             cursor = conn.cursor()
             cursor.execute("SELECT id FROM users WHERE LOWER(nickname)=LOWER(%s) LIMIT 1", (login,))
             if login and cursor.fetchone():
                 raise ValueError("Логин уже занят")
 
             cursor.execute(
-                """INSERT INTO users (name, email, role, nickname, phone, avatar) 
-                   VALUES (%s, %s, %s, %s, %s, %s) RETURNING *""",
-                (data.name, data.email, data.role, login, phone, data.avatar)
+                """INSERT INTO users (name, email, role, nickname, avatar) 
+                   VALUES (%s, %s, %s, %s, %s) RETURNING *""",
+                (data.name, data.email, data.role, login, data.avatar)
             )
             row = cursor.fetchone()
             conn.commit()
@@ -106,10 +83,6 @@ class UserService:
             if not _is_valid_login(login):
                 raise ValueError("Логин должен быть в формате @login, только a-z, 0-9 и _")
 
-            phone = _normalize_phone(data.phone)
-            if not _is_valid_phone(phone):
-                raise ValueError("Некорректный телефон")
-
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT id FROM users WHERE LOWER(nickname)=LOWER(%s) AND id<>%s LIMIT 1",
@@ -119,9 +92,9 @@ class UserService:
                 raise ValueError("Логин уже занят")
 
             cursor.execute(
-                """UPDATE users SET name=%s, email=%s, role=%s, nickname=%s, phone=%s, avatar=%s 
+                """UPDATE users SET name=%s, email=%s, role=%s, nickname=%s, avatar=%s 
                    WHERE id=%s RETURNING *""",
-                (data.name, data.email, data.role, login, phone, data.avatar, user_id)
+                (data.name, data.email, data.role, login, data.avatar, user_id)
             )
             row = cursor.fetchone()
             conn.commit()
