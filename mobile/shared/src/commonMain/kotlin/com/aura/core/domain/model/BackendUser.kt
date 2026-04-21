@@ -9,7 +9,6 @@ data class BackendUser(
     val email: String,
     val role: String = "user",
     val nickname: String? = null,
-    val phone: String? = null,
     val avatar: String? = null,
     val created_at: String? = null
 )
@@ -34,7 +33,6 @@ data class RegisterRequest(
     val password: String,
     val role: String = "user",
     val nickname: String = "",
-    val phone: String? = null,
     val avatar: String? = null
 )
 
@@ -48,4 +46,31 @@ data class SkinPassportRequest(
 data class SkinPassportResponse(
     val completed_at_epoch_millis: Long? = null,
     val answers: Map<String, List<String>> = emptyMap()
+)
+
+@Serializable
+data class AssistantChatRequest(
+    val message: String,
+    val max_results: Int = 5
+)
+
+@Serializable
+data class AssistantSource(
+    val id: String? = null,
+    val title: String = "",
+    val content: String = "",
+    val relevance: Double? = null
+)
+
+@Serializable
+data class AssistantChatResponse(
+    val answer: String,
+    val sources: List<AssistantSource> = emptyList()
+)
+
+@Serializable
+data class UserDocumentUploadResponse(
+    val status: String,
+    val source_id: Int,
+    val title: String
 )

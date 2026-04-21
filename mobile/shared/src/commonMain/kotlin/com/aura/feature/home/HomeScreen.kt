@@ -28,33 +28,46 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.aura.core.data.api.AuraApiClient
+import com.aura.core.domain.model.GeoLocation
+import com.aura.core.domain.model.WeatherSnapshot
 import com.aura.core.i18n.StringsRu
 import com.aura.core.data.repository.TokenManager
 import com.aura.core.ui.theme.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.round
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 // ─── Palette ──────────────────────────────────────────────
-val PrimaryBlue = Color(0xFF197FE6)
-val AuraLavender = Color(0xFFE0C3FC)
-val AuraMint = Color(0xFFA7F3D0)
-val AuraIce = Color(0xFFF4F7FE)
-val SlateBlue = Color(0xFF2D3748)
-val Slate800 = Color(0xFF1E293B)
-val Slate700 = Color(0xFF334155)
-val Slate500 = Color(0xFF64748B)
+val PrimaryBlue = AuraPalette.BrandPrimaryBlue
+val AuraLavender = AuraPalette.BrandLavender
+val AuraMint = AuraPalette.BrandMint
+val AuraIce = AuraPalette.BackgroundLight
+val Slate800 = AuraPalette.TextPrimaryLight
+val Slate700 = AuraPalette.TextBodyLight
+val Slate500 = AuraPalette.TextSecondaryLight
 
 // ─── Screen ───────────────────────────────────────────────
 @Composable
 fun HomeScreen(
+    apiClient: AuraApiClient,
+    requestUserLocation: (suspend () -> GeoLocation?)? = null,
     onNavigateToProduct: (String) -> Unit = {}
 ) {
     val dark = isSystemInDarkTheme() || AppState.isDarkMode
-    val bg = if (dark) Color(0xFF0A0A0A) else AuraIce
+    val theme = auraThemeColors(dark)
+    val bg = theme.background
     val glassAlpha = if (dark) 0.08f else 0.45f
     val glassBorderAlpha = if (dark) 0.15f else 0.6f
-    val textPrimary = if (dark) Color(0xFFF1F5F9) else Slate800
-    val textSecondary = if (dark) Color(0xFF94A3B8) else Slate500
-    val textBody = if (dark) Color(0xFFCBD5E1) else Slate700
+    val textPrimary = theme.textPrimary
+    val textSecondary = theme.textSecondary
+    val textBody = theme.textBody
     val userName = TokenManager.getUser()?.name?.takeIf { it.isNotBlank() } ?: StringsRu.Common.userFallback
+    val timeOfDay = rememberTimeOfDayContext()
+    val weatherState = rememberWeatherState(apiClient = apiClient, requestUserLocation = requestUserLocation)
 
     Box(
         modifier = Modifier
@@ -70,7 +83,14 @@ fun HomeScreen(
                 .padding(horizontal = 24.dp)
                 .padding(top = 56.dp, bottom = 100.dp)
         ) {
-            HeaderSection(userName = userName, textPrimary = textPrimary, textSecondary = textSecondary, dark = dark)
+            HeaderSection(
+                userName = userName,
+                greetingPrefix = timeOfDay.greetingPrefix,
+                weatherSnapshot = weatherState,
+                textPrimary = textPrimary,
+                textSecondary = textSecondary,
+                dark = dark,
+            )
             Spacer(modifier = Modifier.height(32.dp))
             TopWidgetSection(textPrimary = textPrimary, textSecondary = textSecondary, textBody = textBody, glassAlpha = glassAlpha, glassBorderAlpha = glassBorderAlpha, dark = dark)
             Spacer(modifier = Modifier.height(32.dp))
@@ -96,23 +116,33 @@ private fun LiquidMeshBackground(dark: Boolean) {
             drawCircle(color = AuraMint.copy(alpha = mintAlpha))
         }
         Canvas(modifier = Modifier.size(450.dp).align(Alignment.BottomStart).offset(x = (-50).dp, y = 100.dp).blur(80.dp)) {
-            drawCircle(color = Color(0xFFDBEAFE).copy(alpha = iceAlpha))
+            drawCircle(color = AuraPalette.BlobBlue.copy(alpha = iceAlpha))
         }
     }
 }
 
 // ─── Header ───────────────────────────────────────────────
 @Composable
-private fun HeaderSection(userName: String, textPrimary: Color, textSecondary: Color, dark: Boolean) {
+private fun HeaderSection(
+    userName: String,
+    greetingPrefix: String,
+    weatherSnapshot: WeatherSnapshot?,
+    textPrimary: Color,
+    textSecondary: Color,
+    dark: Boolean,
+) {
+    val weatherIcon = if (weatherSnapshot?.isDay == false) Icons.Rounded.NightsStay else Icons.Rounded.WbSunny
+    val weatherTint = if (weatherSnapshot?.isDay == false) AuraPalette.PurpleAccent else AuraPalette.Warning
+    val temperatureText = weatherSnapshot?.temperatureCelsius?.let { "${it.toInt()}°C" } ?: "--°C"
+    val uvText = weatherSnapshot?.uvIndex?.let { "UV ${round(it * 10.0) / 10.0}" } ?: "UV --"
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column {
-            Text(text = StringsRu.Home.today, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = textSecondary, modifier = Modifier.alpha(0.8f))
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(text = "${StringsRu.Home.goodMorningPrefix},\n$userName", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = textPrimary, lineHeight = 36.sp)
+            Text(text = "$greetingPrefix,\n$userName", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = textPrimary, lineHeight = 36.sp)
         }
         Column(
             modifier = Modifier
@@ -122,15 +152,69 @@ private fun HeaderSection(userName: String, textPrimary: Color, textSecondary: C
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Icon(imageVector = Icons.Rounded.WbSunny, contentDescription = StringsRu.Home.weather, tint = Color(0xFFEAB308), modifier = Modifier.size(32.dp))
+            Icon(imageVector = weatherIcon, contentDescription = StringsRu.Home.weather, tint = weatherTint, modifier = Modifier.size(32.dp))
             Spacer(modifier = Modifier.height(4.dp))
-            Text(text = "22\u00B0C", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (dark) Color(0xFFCBD5E1) else Slate700)
+            Text(text = temperatureText, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (dark) AuraPalette.TextBodyDark else Slate700)
             Spacer(modifier = Modifier.height(4.dp))
-            Box(modifier = Modifier.background(Color(0xFFFEE2E2), RoundedCornerShape(percent = 50)).padding(horizontal = 6.dp, vertical = 2.dp)) {
-                Text(text = "UV 6.0", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFFEF4444))
+            Box(modifier = Modifier.background(AuraPalette.SurfaceSoftLavender.copy(alpha = 0.6f), RoundedCornerShape(percent = 50)).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                Text(text = uvText, fontSize = 10.sp, fontWeight = FontWeight.Medium, color = AuraPalette.Error)
             }
         }
     }
+}
+
+private data class TimeOfDayContext(
+    val greetingPrefix: String,
+)
+
+@Composable
+private fun rememberWeatherState(
+    apiClient: AuraApiClient,
+    requestUserLocation: (suspend () -> GeoLocation?)? = null,
+): WeatherSnapshot? {
+    val initialWeather by produceState<WeatherSnapshot?>(initialValue = null, apiClient, requestUserLocation) {
+        delay(1200)
+
+        val location = withTimeoutOrNull(2_500) {
+            runCatching { requestUserLocation?.invoke() }.getOrNull()
+        } ?: return@produceState
+
+        value = withTimeoutOrNull(3_500) {
+            apiClient.getWeatherByCoordinates(location.latitude, location.longitude)
+        }
+    }
+
+    return initialWeather
+}
+
+@Composable
+private fun rememberTimeOfDayContext(): TimeOfDayContext {
+    val timeZone = remember { TimeZone.currentSystemDefault() }
+    val currentHour by produceState(initialValue = currentLocalHour(timeZone), timeZone) {
+        while (true) {
+            value = currentLocalHour(timeZone)
+            delay(60_000)
+        }
+    }
+
+    return when (currentHour) {
+        in 6..11 -> TimeOfDayContext(
+            greetingPrefix = StringsRu.Home.goodMorningPrefix,
+        )
+        in 12..17 -> TimeOfDayContext(
+            greetingPrefix = "Добрый день",
+        )
+        in 18..22 -> TimeOfDayContext(
+            greetingPrefix = "Добрый вечер",
+        )
+        else -> TimeOfDayContext(
+            greetingPrefix = "Доброй ночи",
+        )
+    }
+}
+
+private fun currentLocalHour(timeZone: TimeZone): Int {
+    return Clock.System.now().toLocalDateTime(timeZone).hour
 }
 
 // ─── Top Widget ───────────────────────────────────────────
@@ -142,7 +226,7 @@ private fun TopWidgetSection(textPrimary: Color, textSecondary: Color, textBody:
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.background(Color(0xFFEFF6FF).copy(alpha = 0.5f), RoundedCornerShape(16.dp)).padding(12.dp)) {
+            Box(modifier = Modifier.background(AuraPalette.SurfaceSoftBlue.copy(alpha = 0.5f), RoundedCornerShape(16.dp)).padding(12.dp)) {
                 Icon(imageVector = Icons.Rounded.WaterDrop, contentDescription = null, tint = PrimaryBlue)
             }
             Spacer(modifier = Modifier.width(16.dp))
@@ -151,13 +235,13 @@ private fun TopWidgetSection(textPrimary: Color, textSecondary: Color, textBody:
                 Text(text = StringsRu.Home.humiditySubtitle, fontSize = 12.sp, color = textSecondary)
             }
         }
-        Box(modifier = Modifier.width(1.dp).height(40.dp).background(Color(0xFFE2E8F0).copy(alpha = 0.5f)))
+        Box(modifier = Modifier.width(1.dp).height(40.dp).background(Color.White.copy(alpha = 0.5f)))
         Column(horizontalAlignment = Alignment.End) {
             Text(text = StringsRu.Home.airQuality, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = textSecondary)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = StringsRu.Home.airGood, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
+                Text(text = StringsRu.Home.airGood, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = AuraPalette.Success)
                 Spacer(modifier = Modifier.width(4.dp))
-                Box(modifier = Modifier.size(8.dp).background(Color(0xFF22C55E), CircleShape))
+                Box(modifier = Modifier.size(8.dp).background(AuraPalette.SuccessSoft, CircleShape))
             }
         }
     }
@@ -208,7 +292,7 @@ private fun RitualItem(checked: Boolean, title: String, subtitle: String, isActi
                     Spacer(modifier = Modifier.width(4.dp))
                 }
                 Text(text = subtitle, fontSize = 12.sp, fontWeight = if (isActive || isWarning) FontWeight.Medium else FontWeight.Normal, color = when {
-                    isWarning -> Color(0xFFF87171)
+                    isWarning -> AuraPalette.Error
                     isActive -> PrimaryBlue
                     else -> textSecondary
                 })
@@ -242,8 +326,8 @@ private fun AiInsightsSection(textPrimary: Color, textSecondary: Color, textBody
         }
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             InsightCard(icon = Icons.Rounded.Face, iconTint = PrimaryBlue, bgTint = PrimaryBlue.copy(alpha = 0.1f), title = StringsRu.Home.weeklyScan, subtitle = StringsRu.Home.weeklyScanSubtitle, textBody = textBody, textSecondary = textSecondary, dark = dark)
-            InsightCard(icon = Icons.Rounded.Star, iconTint = Color(0xFF16A34A), bgTint = Color(0xFF22C55E).copy(alpha = 0.1f), title = StringsRu.Home.refresh, subtitle = StringsRu.Home.refreshSubtitle, textBody = textBody, textSecondary = textSecondary, dark = dark)
-            InsightCard(icon = Icons.Rounded.WaterDrop, iconTint = Color(0xFF9333EA), bgTint = Color(0xFFA855F7).copy(alpha = 0.1f), title = StringsRu.Home.hydrationAlert, subtitle = StringsRu.Home.hydrationAlertSubtitle, textBody = textBody, textSecondary = textSecondary, dark = dark)
+            InsightCard(icon = Icons.Rounded.Star, iconTint = AuraPalette.Success, bgTint = AuraPalette.SuccessSoft.copy(alpha = 0.1f), title = StringsRu.Home.refresh, subtitle = StringsRu.Home.refreshSubtitle, textBody = textBody, textSecondary = textSecondary, dark = dark)
+            InsightCard(icon = Icons.Rounded.WaterDrop, iconTint = AuraPalette.PurpleAccent, bgTint = AuraPalette.PurpleAccent.copy(alpha = 0.1f), title = StringsRu.Home.hydrationAlert, subtitle = StringsRu.Home.hydrationAlertSubtitle, textBody = textBody, textSecondary = textSecondary, dark = dark)
         }
     }
 }

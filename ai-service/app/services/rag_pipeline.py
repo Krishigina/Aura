@@ -2,6 +2,7 @@ from typing import List, Dict, Any, Optional
 import logging
 from app.infrastructure.vector_store import get_vector_store
 from app.infrastructure.embedder import get_embedder
+from app.infrastructure.llm_client import get_llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -18,54 +19,118 @@ class RAGPipeline:
     def __init__(self):
         self.vector_store = get_vector_store()
         self.embedder = get_embedder()
+        self.llm_client = get_llm_client()
+
+    def _user_collection_name(self, owner_user_id: str) -> str:
+        from app.core.config import settings
+        safe_user_id = str(owner_user_id).strip().replace("/", "_").replace(" ", "_")
+        return f"{settings.collection_knowledge_user_prefix}{safe_user_id}"
     
     def ingest_documents(self, documents: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Ingest documents into the knowledge base
         """
+        from app.core.config import settings
+
         logger.info(f"Ingesting {len(documents)} documents")
-        
-        # Extract text for embedding
-        texts = []
+        if not documents:
+            return {"status": "success", "indexed_count": 0}
+
+        global_docs: List[Dict[str, Any]] = []
+        user_docs_by_collection: Dict[str, List[Dict[str, Any]]] = {}
+
         for doc in documents:
-            text = f"{doc.get('title', '')} {doc.get('content', '')} {doc.get('description', '')}"
-            texts.append(text)
-        
-        # Create embeddings
-        embeddings = self.embedder.embed_batch(texts)
-        
-        # Store in vector DB
-        for i, (doc, embedding) in enumerate(zip(documents, embeddings)):
-            doc_with_vector = {
-                **doc,
-                "_vector": embedding
-            }
-            # In production, would use vector_store.add_documents()
-            logger.info(f"Indexed document: {doc.get('title', 'Untitled')}")
-        
+            scope = str(doc.get("source_scope") or "global").lower()
+            owner_user_id = doc.get("owner_user_id")
+            if scope == "user" and owner_user_id:
+                collection = self._user_collection_name(str(owner_user_id))
+                user_docs_by_collection.setdefault(collection, []).append(doc)
+            else:
+                global_docs.append(doc)
+
+        indexed_count = 0
+        indexed_collections: List[str] = []
+
+        if global_docs:
+            global_texts = [
+                f"{doc.get('title', '')} {doc.get('content', '')} {doc.get('description', '')}".strip() or str(doc)
+                for doc in global_docs
+            ]
+            self.vector_store.create_collection(settings.collection_knowledge, self.embedder.dimension)
+            indexed_count += self.vector_store.add_documents(settings.collection_knowledge, global_docs, global_texts)
+            indexed_collections.append(settings.collection_knowledge)
+
+        for collection_name, docs_chunk in user_docs_by_collection.items():
+            chunk_texts = [
+                f"{doc.get('title', '')} {doc.get('content', '')} {doc.get('description', '')}".strip() or str(doc)
+                for doc in docs_chunk
+            ]
+            self.vector_store.create_collection(collection_name, self.embedder.dimension)
+            indexed_count += self.vector_store.add_documents(collection_name, docs_chunk, chunk_texts)
+            indexed_collections.append(collection_name)
+
         return {
             "status": "success",
-            "indexed_count": len(documents)
+            "indexed_count": indexed_count,
+            "collections": indexed_collections,
         }
     
     def query(self, user_query: str, user_context: Optional[Dict[str, Any]] = None, max_results: int = 5) -> Dict[str, Any]:
         """
         Query the RAG system
         """
+        from app.core.config import settings
+
         logger.info(f"Query: {user_query}")
-        
-        # 1. Create embedding for query
-        query_embedding = self.embedder.embed(user_query)
-        
-        # 2. Retrieve relevant documents (simulated)
-        # In production: results = self.vector_store.search(collection="knowledge", vector=query_embedding, limit=max_results)
-        results = self._simulated_search(user_query, max_results)
+
+        retrieval_source = "vector"
+        results: List[Dict[str, Any]] = []
+
+        user_id = None
+        if isinstance(user_context, dict):
+            user_id = user_context.get("user_id")
+
+        # 1) Search global collection
+        try:
+            raw_global = self.vector_store.search(
+                collection_name=settings.collection_knowledge,
+                query=user_query,
+                limit=max_results,
+            )
+            results.extend(self._normalize_vector_results(raw_global, scope="global", owner_user_id=None))
+        except Exception as exc:
+            logger.warning(f"Global vector retrieval failed: {exc}")
+
+        # 2) Search personal collection for current user (if present)
+        if user_id is not None:
+            user_collection = self._user_collection_name(str(user_id))
+            try:
+                raw_personal = self.vector_store.search(
+                    collection_name=user_collection,
+                    query=user_query,
+                    limit=max_results,
+                )
+                results.extend(
+                    self._normalize_vector_results(raw_personal, scope="user", owner_user_id=str(user_id))
+                )
+            except Exception as exc:
+                logger.info(f"Personal retrieval skipped ({user_collection}): {exc}")
+
+        if results:
+            results.sort(key=lambda x: x.get("score", 0), reverse=True)
+            results = results[:max_results]
+
+        # 2) Safe fallback for local/dev mode
+        if not results:
+            retrieval_source = "simulated"
+            results = self._simulated_search(user_query, max_results)
         
         if not results:
             return {
                 "answer": "Извините, я не нашёл релевантной информации по вашему вопросу. Попробуйте переформулировать вопрос.",
                 "sources": [],
-                "query": user_query
+                "query": user_query,
+                "retrieval_source": retrieval_source,
             }
         
         # 3. Generate context from results
@@ -88,8 +153,51 @@ class RAGPipeline:
         return {
             "answer": answer,
             "sources": sources,
-            "query": user_query
+            "query": user_query,
+            "retrieval_source": retrieval_source,
         }
+
+    def _normalize_vector_results(
+        self,
+        raw_results: List[Dict[str, Any]],
+        scope: str,
+        owner_user_id: Optional[str],
+    ) -> List[Dict[str, Any]]:
+        normalized: List[Dict[str, Any]] = []
+
+        for item in raw_results:
+            if not isinstance(item, dict):
+                continue
+
+            props = item.get("properties") or {}
+            if not isinstance(props, dict):
+                props = {}
+
+            title = str(props.get("name") or props.get("title") or "Без названия")
+            content = str(props.get("text") or props.get("content") or props.get("description") or "")
+
+            if not content:
+                continue
+
+            score = item.get("score")
+            try:
+                score_value = float(score) if score is not None else 0.0
+            except (TypeError, ValueError):
+                score_value = 0.0
+
+            normalized.append(
+                {
+                    "id": str(item.get("id") or ""),
+                    "title": title,
+                    "content": content,
+                    "category": str(props.get("category") or ""),
+                    "score": score_value,
+                    "scope": scope,
+                    "owner_user_id": owner_user_id,
+                }
+            )
+
+        return normalized
     
     def _simulated_search(self, query: str, limit: int) -> List[Dict[str, Any]]:
         """Simulated search for demo"""
@@ -164,9 +272,16 @@ class RAGPipeline:
     
     def _generate_answer(self, query: str, context: str, user_context: Optional[Dict[str, Any]]) -> str:
         """Generate answer based on context"""
+
+        llm_answer = self.llm_client.generate_with_context(
+            query=query,
+            context=context,
+            user_context=user_context,
+        )
+        if llm_answer:
+            return llm_answer
         
-        # Simple rule-based generation for demo
-        # In production: would use LLM (OpenAI, Claude)
+        # Fallback rule-based generation when LLM is unavailable
         
         query_lower = query.lower()
         
@@ -224,8 +339,11 @@ class RAGPipeline:
     
     def delete_knowledge_base(self) -> Dict[str, Any]:
         """Delete all documents from knowledge base"""
-        logger.info("Deleting knowledge base")
-        return {"status": "success", "deleted_count": 0}
+        from app.core.config import settings
+
+        logger.info("Deleting global knowledge base collection")
+        deleted = self.vector_store.delete_collection(settings.collection_knowledge)
+        return {"status": "success", "deleted": bool(deleted), "collection": settings.collection_knowledge}
 
 
 # Singleton

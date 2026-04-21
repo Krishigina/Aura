@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
+import com.aura.core.ui.theme.AuraPalette
 
 @Composable
 fun AuraLotusLogo(modifier: Modifier = Modifier) {
@@ -20,11 +21,11 @@ private fun DrawScope.drawAuraLotusLogo() {
     val cx = size.width / 2f
     val cy = size.height / 2f
     val petalColors = listOf(
-        Color(0xFFFF9A8B),
-        Color(0xFFFF6A88),
-        Color(0xFFFF99AC),
-        Color(0xFFFFB88C),
-        Color(0xFFFFE0B2)
+        AuraPalette.BrandRose,
+        AuraPalette.BrandPink,
+        AuraPalette.BlobPink,
+        AuraPalette.Warning,
+        AuraPalette.SurfaceSoftLavender
     )
     val angles = listOf(0f, -30f, 30f, -55f, 55f)
     val petalWidths = listOf(0.35f, 0.45f, 0.45f, 0.55f, 0.55f)

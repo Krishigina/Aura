@@ -26,9 +26,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.aura.core.data.api.AuraApiClient
+import com.aura.core.domain.model.GeoLocation
 import com.aura.core.data.repository.TokenManager
 import com.aura.core.ui.theme.AppState
-import com.aura.core.ui.theme.Primary
+import com.aura.core.ui.theme.AuraPalette
+import com.aura.core.ui.theme.auraThemeColors
+import com.aura.feature.chat.ChatDocumentAttachment
 import com.aura.feature.auth.AuthScreen
 import com.aura.feature.catalog.CatalogScreen
 import com.aura.feature.chat.ChatScreen
@@ -38,8 +41,6 @@ import com.aura.feature.profile.ProfileScreen
 import com.aura.feature.product.ProductDetailScreen
 import com.aura.feature.splash.AuraSplashScreen
 import com.aura.feature.survey.AuraSkinSurveyScreen
-
-private val AuraMint = Color(0xFFA7F3D0)
 
 object Routes {
     const val AUTH = "auth"
@@ -64,7 +65,11 @@ private val bottomTabs = listOf(
 )
 
 @Composable
-fun AuraNavigation(apiClient: AuraApiClient) {
+fun AuraNavigation(
+    apiClient: AuraApiClient,
+    pickDocument: (suspend () -> ChatDocumentAttachment?)? = null,
+    requestUserLocation: (suspend () -> GeoLocation?)? = null,
+) {
     val navController = rememberNavController()
     var startDest by remember { mutableStateOf<String?>(null) }
     var shouldAllowSurveySkip by remember { mutableStateOf(false) }
@@ -74,8 +79,14 @@ fun AuraNavigation(apiClient: AuraApiClient) {
             TokenManager.getToken()?.let { token ->
                 runCatching { apiClient.getMe(token) }
                     .onSuccess { TokenManager.setUser(it) }
+                    .onFailure {
+                        TokenManager.clearToken()
+                        startDest = Routes.AUTH
+                    }
             }
-            startDest = Routes.HOME
+            if (startDest == null) {
+                startDest = Routes.HOME
+            }
         } else {
             startDest = Routes.AUTH
         }
@@ -102,6 +113,8 @@ fun AuraNavigation(apiClient: AuraApiClient) {
         MainShell(
             navController = navController,
             apiClient = apiClient,
+            pickDocument = pickDocument,
+            requestUserLocation = requestUserLocation,
             startRoute = if (startDest == Routes.SKIN_SURVEY) Routes.SKIN_SURVEY else Routes.HOME,
             initialSurveySkippable = shouldAllowSurveySkip
         )
@@ -112,16 +125,17 @@ fun AuraNavigation(apiClient: AuraApiClient) {
 private fun MainShell(
     navController: NavHostController,
     apiClient: AuraApiClient,
+    pickDocument: (suspend () -> ChatDocumentAttachment?)? = null,
+    requestUserLocation: (suspend () -> GeoLocation?)? = null,
     startRoute: String = Routes.HOME,
     initialSurveySkippable: Boolean = false
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var isSurveySkippable by rememberSaveable { mutableStateOf(initialSurveySkippable) }
     val dark = isSystemInDarkTheme() || AppState.isDarkMode
-    val glassAlpha = if (dark) 0.08f else 0.45f
-    val cardBorder = if (dark) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.6f)
-    val textBody = if (dark) Color(0xFFCBD5E1) else Color(0xFF334155)
-    val textMuted = if (dark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val colors = auraThemeColors(dark)
+    val textBody = colors.textBody
+    val textMuted = colors.textSecondary
     
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
 
@@ -132,6 +146,8 @@ private fun MainShell(
         ) {
             composable(Routes.HOME) {
                 HomeScreen(
+                    apiClient = apiClient,
+                    requestUserLocation = requestUserLocation,
                     onNavigateToProduct = { id -> navController.navigate(Routes.PRODUCT_DETAIL.replace("{productId}", id)) }
                 )
             }
@@ -145,7 +161,11 @@ private fun MainShell(
                 DiagnosticsScreen(onBack = { navController.popBackStack() })
             }
             composable(Routes.CHAT) {
-                ChatScreen(onBack = { navController.popBackStack() })
+                ChatScreen(
+                    apiClient = apiClient,
+                    pickDocument = pickDocument,
+                    onBack = { navController.popBackStack() }
+                )
             }
             composable(Routes.PROFILE) {
                 ProfileScreen(
@@ -183,6 +203,7 @@ private fun MainShell(
                 val productId = backStackEntry.arguments?.getString("productId") ?: ""
                 ProductDetailScreen(
                     productId = productId,
+                    apiClient = apiClient,
                     onBack = { navController.popBackStack() }
                 )
             }
@@ -196,8 +217,8 @@ private fun MainShell(
                     .fillMaxWidth(0.9f)
                     .padding(bottom = 24.dp)
                     .clip(RoundedCornerShape(50))
-                    .background(Color.White.copy(alpha = glassAlpha))
-                    .border(1.dp, cardBorder, RoundedCornerShape(50))
+                    .background(colors.glassSurface)
+                    .border(1.dp, colors.glassBorder, RoundedCornerShape(50))
                     .padding(horizontal = 8.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
@@ -217,9 +238,9 @@ private fun MainShell(
                             .padding(4.dp)
                     ) {
                         if (isActive) {
-                            Box(
-                                modifier = Modifier
-                                    .background(if (dark) Color.White.copy(alpha = 0.12f) else AuraMint.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                                Box(
+                                    modifier = Modifier
+                                    .background(if (dark) Color.White.copy(alpha = 0.12f) else AuraPalette.BrandMint.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
                                     .padding(6.dp)
                             ) {
                                 Icon(tab.icon, contentDescription = tab.label, tint = textBody, modifier = Modifier.size(24.dp))

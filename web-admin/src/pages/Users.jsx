@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
-import { Search, Eye, Edit2, Trash2, Mail, Phone, Calendar, X, Plus } from 'lucide-react'
+import { Search, Eye, Edit2, Trash2, Mail, Calendar, X, Plus } from 'lucide-react'
 import { usersApi } from '../api'
 import Select from '../components/Select'
 import './Users.css'
@@ -59,8 +59,6 @@ export default function Users() {
   const [form, setForm] = useState({ 
     name: '', 
     email: '', 
-    phone: '',
-    phone_digits: '',
     role: 'user',
     nickname: ''
   })
@@ -92,7 +90,7 @@ export default function Users() {
 
   const openAddModal = () => {
     setEditingUser(null)
-    setForm({ name: '', email: '', phone: '', phone_digits: '', role: 'user', nickname: '' })
+    setForm({ name: '', email: '', role: 'user', nickname: '' })
     setFormErrors({})
     setModalOpen(true)
   }
@@ -102,8 +100,6 @@ export default function Users() {
     setForm({
       name: user.name || '',
       email: user.email || '',
-      phone: formatPhone(user.phone || '').masked,
-      phone_digits: (user.phone || '').replace(/\D/g, ''),
       role: user.role || 'user',
       nickname: user.nickname || ''
     })
@@ -113,12 +109,6 @@ export default function Users() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
-    if (name === 'phone') {
-      const { masked, digits } = formatPhone(value)
-      setForm(prev => ({ ...prev, phone: masked, phone_digits: digits }))
-      setFormErrors(prev => ({ ...prev, phone: '' }))
-      return
-    }
 
     if (name === 'nickname') {
       const login = normalizeLogin(value)
@@ -169,10 +159,6 @@ export default function Users() {
       }
     }
 
-    if (!/^7\d{10}$/.test(form.phone_digits || '')) {
-      errors.phone = 'Телефон должен быть в формате +7 (999) 999-99-99'
-    }
-
     setFormErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -186,7 +172,6 @@ export default function Users() {
       email: form.email.trim(),
       role: form.role,
       nickname,
-      phone: form.phone_digits,
       avatar: ''
     }
 
@@ -271,7 +256,6 @@ export default function Users() {
             <div className="user-info">
               <h4>{user.name} <span className={`badge ${getRoleBadge(user.role).class}`} style={{marginLeft: '8px', fontSize: '10px'}}>{getRoleBadge(user.role).label}</span></h4>
               <div className="user-info-row"><Mail size={14} />{user.email}</div>
-              <div className="user-info-row"><Phone size={14} />{formatPhone(user.phone || '').masked || '-'}</div>
               {user.nickname && <div className="user-info-row"><span style={{width: '14px'}}/>{user.nickname}</div>}
               <div className="user-info-row join-date"><Calendar size={14} />С {formatDate(user.created_at)}</div>
             </div>
@@ -306,7 +290,6 @@ export default function Users() {
                 <div className="profile-row"><span>Никнейм:</span> {viewModal.nickname}</div>
                 <div className="profile-row"><span>Роль:</span> {getRoleBadge(viewModal.role).label}</div>
                 <div className="profile-row"><span>Email:</span> {viewModal.email}</div>
-                <div className="profile-row"><span>Телефон:</span> {formatPhone(viewModal.phone || '').masked || '-'}</div>
                 <div className="profile-row"><span>Дата регистрации:</span> {formatDate(viewModal.created_at)}</div>
               </div>
             </div>
@@ -351,11 +334,6 @@ export default function Users() {
                 <label>Email *</label>
                 <input className="input" name="email" type="email" value={form.email} onChange={handleInputChange} required />
                 {formErrors.email && <small style={{ color: '#ef4444' }}>{formErrors.email}</small>}
-              </div>
-              <div className="form-group">
-                <label>Телефон</label>
-                <input className="input" name="phone" value={form.phone} onChange={handleInputChange} placeholder="+7 (999) 123-45-67" />
-                {formErrors.phone && <small style={{ color: '#ef4444' }}>{formErrors.phone}</small>}
               </div>
             </div>
             <div className="modal-actions">
