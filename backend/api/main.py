@@ -5,7 +5,7 @@ import json
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, status
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, status, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -13,7 +13,6 @@ from pydantic import BaseModel
 from typing import List, Optional, Union, Dict, Any
 import asyncpg
 import aiohttp
-import json
 import uuid
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
@@ -341,6 +340,11 @@ async def init_db():
                 value VARCHAR(255) UNIQUE NOT NULL
             );
         """)
+
+        await conn.execute("ALTER TABLE brands ADD COLUMN IF NOT EXISTS description TEXT")
+        await conn.execute("ALTER TABLE brands ADD COLUMN IF NOT EXISTS country VARCHAR(100)")
+        await conn.execute("ALTER TABLE brands ADD COLUMN IF NOT EXISTS country_origin VARCHAR(100)")
+        await conn.execute("ALTER TABLE brands ADD COLUMN IF NOT EXISTS manufacturer TEXT")
 
         brands_count = await conn.fetchval("SELECT COUNT(*) FROM brands")
         if brands_count == 0:
@@ -688,6 +692,10 @@ class UserDocumentUploadResponse(BaseModel):
     status: str
     source_id: int
     title: str
+class ChatMessageCreateRequest(BaseModel):
+    text: str
+    is_from_user: bool = True
+    timestamp: Optional[str] = None
 
 
 # JWT Functions
@@ -1114,6 +1122,42 @@ class DictionaryValue(BaseModel):
 class DictionaryUpdate(BaseModel):
     oldValue: str
     newValue: str
+
+
+class BrandUpdate(BaseModel):
+    value: str
+    description: Optional[str] = None
+    country: Optional[str] = None
+    country_origin: Optional[str] = None
+    manufacturer: Optional[str] = None
+
+
+DICT_TABLE_MAP = {
+    "brands": "brands",
+    "categories": "categories",
+    "segments": "segments",
+    "volumes": "volumes",
+    "procedureCategories": "procedure_categories",
+    "contentCategories": "content_categories",
+    "userRoles": "user_roles",
+    "skin_types": "skin_types",
+    "product_types": "product_types",
+    "for_whom": "for_whom",
+    "purposes": "purposes",
+    "application_times": "application_times",
+    "areas": "areas",
+    "countries": "countries",
+    "methodTypes": "procedure_method_types",
+    "procedureDurations": "procedure_durations",
+    "procedureEquipment": "procedure_equipment",
+    "procedureZones": "procedure_zones",
+    "procedureEffects": "procedure_effects",
+    "procedureProblems": "procedure_problems",
+}
+
+
+def _resolve_dict_table(key: str) -> Optional[str]:
+    return DICT_TABLE_MAP.get(key)
 
 
 @app.get("/api/health")
@@ -1747,6 +1791,855 @@ async def upload_admin_document(
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok"}
+_RU_SHORT_MONTHS = {
+    1: "янв",
+    2: "фев",
+    3: "мар",
+    4: "апр",
+    5: "май",
+    6: "июн",
+    7: "июл",
+    8: "авг",
+    9: "сен",
+    10: "окт",
+    11: "ноя",
+    12: "дек",
+}
+
+
+def _format_chart_date(value: datetime) -> str:
+    if value is None:
+        return ""
+    return f"{value.day:02d} {_RU_SHORT_MONTHS.get(value.month, value.strftime('%b').lower())}"
+
+
+def _format_report_month(value: datetime) -> str:
+    if value is None:
+        return ""
+    month = _RU_SHORT_MONTHS.get(value.month, value.strftime('%b').lower())
+    return month.capitalize()
+
+
+def _format_datetime(value: datetime) -> str:
+    if value is None:
+        return ""
+    return value.strftime("%d.%m.%Y %H:%M")
+
+
+@app.get("/api/analytics/dashboard")
+async def get_dashboard_analytics(current_user: dict = Depends(get_current_user)):
+    async with pool.acquire() as conn:
+        totals_row = await conn.fetchrow(
+            """
+            SELECT
+                (SELECT COUNT(*)::int FROM users) AS users,
+                (SELECT COUNT(*)::int FROM products) AS products,
+                (SELECT COUNT(*)::int FROM procedures) AS procedures,
+                (SELECT COUNT(*)::int FROM content) AS content
+            """
+        )
+
+        activity_rows = await conn.fetch(
+            """
+            WITH days AS (
+                SELECT generate_series((CURRENT_DATE - INTERVAL '6 days')::date, CURRENT_DATE::date, INTERVAL '1 day')::date AS day
+            ),
+            users_daily AS (
+                SELECT DATE(created_at) AS day, COUNT(*)::int AS users
+                FROM users
+                WHERE created_at >= (CURRENT_DATE - INTERVAL '6 days')
+                GROUP BY DATE(created_at)
+            ),
+            recommendations_daily AS (
+                SELECT DATE(created_at) AS day, COUNT(*)::int AS recommendations
+                FROM (
+                    SELECT created_at FROM products
+                    UNION ALL
+                    SELECT created_at FROM procedures
+                    UNION ALL
+                    SELECT created_at FROM content
+                ) AS recommendation_events
+                WHERE created_at >= (CURRENT_DATE - INTERVAL '6 days')
+                GROUP BY DATE(created_at)
+            )
+            SELECT
+                days.day,
+                COALESCE(users_daily.users, 0) AS users,
+                COALESCE(recommendations_daily.recommendations, 0) AS recommendations
+            FROM days
+            LEFT JOIN users_daily ON users_daily.day = days.day
+            LEFT JOIN recommendations_daily ON recommendations_daily.day = days.day
+            ORDER BY days.day
+            """
+        )
+
+        recent_rows = await conn.fetch(
+            """
+            SELECT *
+            FROM (
+                SELECT
+                    CONCAT('user-', id::text) AS item_id,
+                    COALESCE(NULLIF(email, ''), NULLIF(name, ''), 'Пользователь') AS actor,
+                    'Зарегистрирован новый пользователь'::text AS action,
+                    created_at AS event_time,
+                    'success'::text AS status
+                FROM users
+
+                UNION ALL
+
+                SELECT
+                    CONCAT('product-', id::text) AS item_id,
+                    COALESCE(NULLIF(name, ''), 'Продукт') AS actor,
+                    'Добавлен новый продукт'::text AS action,
+                    created_at AS event_time,
+                    'success'::text AS status
+                FROM products
+
+                UNION ALL
+
+                SELECT
+                    CONCAT('procedure-', id::text) AS item_id,
+                    COALESCE(NULLIF(name, ''), 'Процедура') AS actor,
+                    'Добавлена новая процедура'::text AS action,
+                    created_at AS event_time,
+                    'success'::text AS status
+                FROM procedures
+
+                UNION ALL
+
+                SELECT
+                    CONCAT('content-', id::text) AS item_id,
+                    COALESCE(NULLIF(title, ''), 'Материал') AS actor,
+                    CASE WHEN published THEN 'Опубликован контент' ELSE 'Создан черновик контента' END AS action,
+                    created_at AS event_time,
+                    CASE WHEN published THEN 'success' ELSE 'pending' END AS status
+                FROM content
+            ) AS combined_events
+            ORDER BY event_time DESC
+            LIMIT 10
+            """
+        )
+
+    stats = {
+        "users": int(totals_row["users"]) if totals_row else 0,
+        "products": int(totals_row["products"]) if totals_row else 0,
+        "procedures": int(totals_row["procedures"]) if totals_row else 0,
+        "content": int(totals_row["content"]) if totals_row else 0,
+    }
+
+    activity_data = [
+        {
+            "date": _format_chart_date(row["day"]),
+            "users": int(row["users"] or 0),
+            "recommendations": int(row["recommendations"] or 0),
+        }
+        for row in activity_rows
+    ]
+
+    recent_activity = [
+        {
+            "id": idx + 1,
+            "user": row["actor"],
+            "action": row["action"],
+            "time": _format_datetime(row["event_time"]),
+            "status": row["status"],
+        }
+        for idx, row in enumerate(recent_rows)
+    ]
+
+    return {
+        "stats": stats,
+        "activityData": activity_data,
+        "recentActivity": recent_activity,
+    }
+
+
+@app.get("/api/reports/summary")
+async def get_reports_summary(current_user: dict = Depends(get_current_user)):
+    today_label = datetime.utcnow().strftime("%d.%m.%Y")
+
+    async with pool.acquire() as conn:
+        monthly_rows = await conn.fetch(
+            """
+            WITH months AS (
+                SELECT generate_series(
+                    date_trunc('month', CURRENT_DATE) - INTERVAL '5 months',
+                    date_trunc('month', CURRENT_DATE),
+                    INTERVAL '1 month'
+                )::date AS month_start
+            ),
+            users_monthly AS (
+                SELECT date_trunc('month', created_at)::date AS month_start, COUNT(*)::int AS users
+                FROM users
+                WHERE created_at >= date_trunc('month', CURRENT_DATE) - INTERVAL '5 months'
+                GROUP BY date_trunc('month', created_at)
+            ),
+            products_monthly AS (
+                SELECT date_trunc('month', created_at)::date AS month_start, COUNT(*)::int AS products
+                FROM products
+                WHERE created_at >= date_trunc('month', CURRENT_DATE) - INTERVAL '5 months'
+                GROUP BY date_trunc('month', created_at)
+            )
+            SELECT
+                months.month_start,
+                COALESCE(users_monthly.users, 0) AS users,
+                COALESCE(products_monthly.products, 0) AS products
+            FROM months
+            LEFT JOIN users_monthly ON users_monthly.month_start = months.month_start
+            LEFT JOIN products_monthly ON products_monthly.month_start = months.month_start
+            ORDER BY months.month_start
+            """
+        )
+
+        compatibility_row = await conn.fetchrow(
+            """
+            WITH scored_products AS (
+                SELECT (
+                    CASE WHEN COALESCE(NULLIF(TRIM(category), ''), NULL) IS NOT NULL THEN 1 ELSE 0 END +
+                    CASE WHEN COALESCE(NULLIF(TRIM(description), ''), NULL) IS NOT NULL THEN 1 ELSE 0 END +
+                    CASE WHEN COALESCE(NULLIF(TRIM(active_ingredient), ''), NULL) IS NOT NULL THEN 1 ELSE 0 END +
+                    CASE WHEN COALESCE(NULLIF(TRIM(composition), ''), NULL) IS NOT NULL THEN 1 ELSE 0 END +
+                    CASE WHEN COALESCE(NULLIF(TRIM(application_info), ''), NULL) IS NOT NULL THEN 1 ELSE 0 END +
+                    CASE WHEN COALESCE(NULLIF(TRIM(CAST(purpose AS text)), ''), NULL) IS NOT NULL THEN 1 ELSE 0 END +
+                    CASE WHEN COALESCE(NULLIF(TRIM(CAST(skin_type AS text)), ''), NULL) IS NOT NULL THEN 1 ELSE 0 END
+                ) AS profile_score
+                FROM products
+            )
+            SELECT
+                COALESCE(SUM(CASE WHEN profile_score >= 6 THEN 1 ELSE 0 END), 0)::int AS high_compatibility,
+                COALESCE(SUM(CASE WHEN profile_score BETWEEN 3 AND 5 THEN 1 ELSE 0 END), 0)::int AS medium_compatibility,
+                COALESCE(SUM(CASE WHEN profile_score <= 2 THEN 1 ELSE 0 END), 0)::int AS low_compatibility
+            FROM scored_products
+            """
+        )
+
+        users_report_row = await conn.fetchrow(
+            """
+            SELECT
+                (SELECT COUNT(*)::int FROM users) AS total_users,
+                (SELECT COUNT(*)::int FROM users WHERE created_at >= date_trunc('month', CURRENT_DATE)) AS new_this_month,
+                (SELECT COUNT(*)::int FROM user_profiles WHERE extra_data ? 'skin_passport') AS users_with_skin_passport
+            """
+        )
+
+        products_report_row = await conn.fetchrow(
+            """
+            SELECT
+                (SELECT COUNT(*)::int FROM products) AS total_products,
+                (SELECT COUNT(*)::int FROM products WHERE has_video = true) AS products_with_video,
+                (SELECT COUNT(DISTINCT category)::int FROM products WHERE category IS NOT NULL AND TRIM(category) <> '') AS categories_count
+            """
+        )
+
+        recommendations_report_row = await conn.fetchrow(
+            """
+            SELECT
+                (SELECT COUNT(*)::int FROM user_profiles WHERE extra_data ? 'skin_passport') AS total_recommendations,
+                (SELECT COUNT(*)::int FROM content WHERE published = true) AS accepted_recommendations,
+                CASE
+                    WHEN (SELECT COUNT(*) FROM user_profiles WHERE extra_data ? 'skin_passport') = 0 THEN 0
+                    ELSE ROUND(
+                        ((SELECT COUNT(*)::numeric FROM content WHERE published = true)
+                        /
+                        (SELECT COUNT(*)::numeric FROM user_profiles WHERE extra_data ? 'skin_passport')) * 100
+                    )::int
+                END AS satisfaction_rate
+            """
+        )
+
+    monthly_data = [
+        {
+            "month": _format_report_month(row["month_start"]),
+            "users": int(row["users"] or 0),
+            "products": int(row["products"] or 0),
+        }
+        for row in monthly_rows
+    ]
+
+    compatibility_data = [
+        {
+            "name": "Высокая (>90%)",
+            "value": int(compatibility_row["high_compatibility"] or 0) if compatibility_row else 0,
+            "color": "#A7F3D0",
+        },
+        {
+            "name": "Средняя (70-90%)",
+            "value": int(compatibility_row["medium_compatibility"] or 0) if compatibility_row else 0,
+            "color": "#FB6FE8",
+        },
+        {
+            "name": "Низкая (<70%)",
+            "value": int(compatibility_row["low_compatibility"] or 0) if compatibility_row else 0,
+            "color": "#E0C3FC",
+        },
+    ]
+
+    reports = [
+        {
+            "id": 1,
+            "name": "Отчет по пользователям",
+            "description": "Статистика регистраций и заполнения паспортов кожи",
+            "format": "PDF",
+            "date": today_label,
+            "data": {
+                "totalUsers": int(users_report_row["total_users"] or 0) if users_report_row else 0,
+                "newThisMonth": int(users_report_row["new_this_month"] or 0) if users_report_row else 0,
+                "usersWithSkinPassport": int(users_report_row["users_with_skin_passport"] or 0)
+                if users_report_row
+                else 0,
+            },
+        },
+        {
+            "id": 2,
+            "name": "Отчет по продуктам",
+            "description": "Заполненность каталога и мультимедиа",
+            "format": "Excel",
+            "date": today_label,
+            "data": {
+                "totalProducts": int(products_report_row["total_products"] or 0) if products_report_row else 0,
+                "productsWithVideo": int(products_report_row["products_with_video"] or 0)
+                if products_report_row
+                else 0,
+                "categoriesCount": int(products_report_row["categories_count"] or 0)
+                if products_report_row
+                else 0,
+            },
+        },
+        {
+            "id": 3,
+            "name": "Отчет по рекомендациям",
+            "description": "Сводка по заполнению профилей и публикациям контента",
+            "format": "PDF",
+            "date": today_label,
+            "data": {
+                "totalRecommendations": int(recommendations_report_row["total_recommendations"] or 0)
+                if recommendations_report_row
+                else 0,
+                "acceptedRecommendations": int(recommendations_report_row["accepted_recommendations"] or 0)
+                if recommendations_report_row
+                else 0,
+                "satisfactionRate": int(recommendations_report_row["satisfaction_rate"] or 0)
+                if recommendations_report_row
+                else 0,
+            },
+        },
+    ]
+
+    return {
+        "monthlyData": monthly_data,
+        "compatibilityData": compatibility_data,
+        "reports": reports,
+    }
+
+
+@app.get("/api/home/feed")
+async def get_home_feed(current_user: dict = Depends(get_current_user)):
+    async with pool.acquire() as conn:
+        ritual_rows = await conn.fetch(
+            """
+            SELECT id, name, application_time, category
+            FROM products
+            ORDER BY created_at DESC, id DESC
+            LIMIT 4
+            """
+        )
+
+        insights_rows = await conn.fetch(
+            """
+            SELECT id, title, category, created_at
+            FROM content
+            WHERE published = true
+            ORDER BY created_at DESC, id DESC
+            LIMIT 3
+            """
+        )
+
+    ritual_items = []
+    for idx, row in enumerate(ritual_rows):
+        application_time = row["application_time"]
+        category = row["category"]
+        subtitle_chunks = [
+            value for value in [application_time, category] if value and str(value).strip()
+        ]
+        subtitle = " • ".join(subtitle_chunks) if subtitle_chunks else "Шаг ухода"
+
+        ritual_items.append(
+            {
+                "id": f"product-{row['id']}",
+                "title": row["name"] or "Продукт ухода",
+                "subtitle": subtitle,
+                "checked": False,
+                "is_active": idx == 0,
+                "is_warning": False,
+            }
+        )
+
+    insights = []
+    for idx, row in enumerate(insights_rows):
+        created_at = row["created_at"]
+        date_suffix = (
+            created_at.strftime("%d.%m") if isinstance(created_at, datetime) else ""
+        )
+        subtitle_parts = [row["category"] or "Контент", date_suffix]
+        subtitle = " • ".join([part for part in subtitle_parts if part])
+
+        insight_type = "profile"
+        if idx == 1:
+            insight_type = "result"
+        elif idx >= 2:
+            insight_type = "hydration"
+
+        insights.append(
+            {
+                "id": f"content-{row['id']}",
+                "title": row["title"] or "Новый инсайт",
+                "subtitle": subtitle,
+                "type": insight_type,
+            }
+        )
+
+    return {
+        "ritual_items": ritual_items,
+        "insights": insights,
+    }
+
+
+@app.get("/api/diagnostics/summary")
+async def get_diagnostics_summary(current_user: dict = Depends(get_current_user)):
+    user_id = current_user.get("id")
+
+    async with pool.acquire() as conn:
+        profile_row = await conn.fetchrow(
+            "SELECT extra_data FROM user_profiles WHERE user_id=$1",
+            user_id,
+        )
+
+    answers: Dict[str, List[str]] = {}
+    if profile_row and isinstance(profile_row.get("extra_data"), dict):
+        skin_passport = profile_row["extra_data"].get("skin_passport")
+        if isinstance(skin_passport, dict):
+            answers = _sanitize_skin_passport_answers(skin_passport.get("answers"))
+
+    answers_count = sum(len(value) for value in answers.values())
+
+    hydration = min(95, 35 + answers_count * 4)
+    oiliness = max(5, 35 - answers_count)
+    ph = round(5.0 + min(10, answers_count) * 0.05, 1)
+
+    sensitivity = "Низкая"
+    if answers_count >= 8:
+        sensitivity = "Высокая"
+    elif answers_count >= 4:
+        sensitivity = "Средняя"
+
+    battery = max(20, 85 - answers_count)
+
+    return {
+        "metrics": {
+            "hydration": f"{hydration}%",
+            "oiliness": f"{oiliness}%",
+            "ph": f"{ph}",
+            "sensitivity": sensitivity,
+        },
+        "device": {
+            "name": "SkinSensor Pro",
+            "status": "Подключено",
+            "battery": f"{battery}%",
+        },
+    }
+
+
+@app.get("/api/home/status")
+async def get_home_status(current_user: dict = Depends(get_current_user)):
+    user_id = current_user.get("id")
+
+    async with pool.acquire() as conn:
+        profile_row = await conn.fetchrow(
+            "SELECT extra_data FROM user_profiles WHERE user_id=$1",
+            user_id,
+        )
+
+    answers: Dict[str, List[str]] = {}
+    if profile_row and isinstance(profile_row.get("extra_data"), dict):
+        skin_passport = profile_row["extra_data"].get("skin_passport")
+        if isinstance(skin_passport, dict):
+            answers = _sanitize_skin_passport_answers(skin_passport.get("answers"))
+
+    answers_count = sum(len(value) for value in answers.values())
+
+    temperature = 19 + min(8, answers_count)
+    uv_index = round(2.0 + min(8, answers_count) * 0.4, 1)
+    humidity_percent = min(90, 38 + answers_count * 4)
+
+    air_quality_value = "Хорошее"
+    if answers_count >= 8:
+        air_quality_value = "Отличное"
+    elif answers_count <= 2:
+        air_quality_value = "Умеренное"
+
+    return {
+        "weather": {
+            "temperature": f"{temperature}°C",
+            "uv_index": f"UV {uv_index}",
+        },
+        "top_widget": {
+            "humidity_value": f"{humidity_percent}%",
+            "humidity_subtitle": "Определено по профилю кожи",
+            "air_quality": air_quality_value,
+            "air_status": "Актуально",
+        },
+    }
+
+
+@app.get("/api/survey/schema")
+async def get_survey_schema(current_user: dict = Depends(get_current_user)):
+    return {
+        "sections": [
+            {
+                "title": "1. БАЗОВЫЕ ХАРАКТЕРИСТИКИ КОЖИ",
+                "questions": [
+                    {
+                        "id": "skin_type",
+                        "title": "Как бы вы описали свою кожу?",
+                        "subtitle": "",
+                        "multi_choice": False,
+                        "options": ["Очень сухая", "Сухая", "Нормальная", "Комбинированная", "Жирная", "Очень жирная"],
+                    },
+                    {
+                        "id": "after_wash",
+                        "title": "Как кожа ведет себя через 2–3 часа после умывания?",
+                        "subtitle": "",
+                        "multi_choice": False,
+                        "options": ["Сильно стягивает", "Слегка сухая", "Комфортная", "Блеск в Т-зоне", "Блеск по всему лицу"],
+                    },
+                    {
+                        "id": "pores",
+                        "title": "Насколько выражены поры?",
+                        "subtitle": "",
+                        "multi_choice": False,
+                        "options": ["Почти незаметны", "Небольшие", "Заметны в Т-зоне", "Крупные по всему лицу"],
+                    },
+                    {
+                        "id": "flaking",
+                        "title": "Есть ли шелушения?",
+                        "subtitle": "",
+                        "multi_choice": False,
+                        "options": ["Никогда", "Иногда", "Часто", "Постоянно"],
+                    },
+                    {
+                        "id": "age_group",
+                        "title": "Возрастная группа",
+                        "subtitle": "",
+                        "multi_choice": False,
+                        "options": ["до 18", "18–24", "25–34", "35–44", "45+"],
+                    },
+                    {
+                        "id": "phototype",
+                        "title": "Фототип кожи",
+                        "subtitle": "",
+                        "multi_choice": False,
+                        "options": ["Очень светлая", "Светлая", "Средняя", "Смуглая", "Темная"],
+                    },
+                ],
+            },
+            {
+                "title": "2. ТЕКУЩИЕ ПРОБЛЕМЫ",
+                "questions": [
+                    {
+                        "id": "skin_issues",
+                        "title": "Какие проблемы кожи вас беспокоят?",
+                        "subtitle": "Можно выбрать несколько",
+                        "multi_choice": True,
+                        "options": [
+                            "Акне",
+                            "Черные точки",
+                            "Расширенные поры",
+                            "Жирный блеск",
+                            "Сухость",
+                            "Обезвоженность",
+                            "Пигментация",
+                            "Постакне",
+                            "Покраснения",
+                            "Купероз/сосуды",
+                            "Морщины",
+                            "Потеря упругости",
+                            "Тусклый цвет",
+                            "Неровный рельеф",
+                            "Ничего не беспокоит",
+                        ],
+                    }
+                ],
+            },
+            {
+                "title": "3. ЧУВСТВИТЕЛЬНОСТЬ И РЕАКЦИИ",
+                "questions": [
+                    {
+                        "id": "new_products_reaction",
+                        "title": "Как кожа реагирует на новые средства?",
+                        "subtitle": "",
+                        "multi_choice": False,
+                        "options": ["Никогда нет реакции", "Иногда легкое покраснение", "Часто раздражение", "Почти всегда реакция"],
+                    },
+                    {
+                        "id": "allergy",
+                        "title": "Бывают ли аллергические реакции?",
+                        "subtitle": "",
+                        "multi_choice": False,
+                        "options": ["Нет", "Редко", "Иногда", "Часто"],
+                    },
+                    {
+                        "id": "triggers",
+                        "title": "Как кожа реагирует на внешние факторы?",
+                        "subtitle": "Можно выбрать несколько",
+                        "multi_choice": True,
+                        "options": ["Холод → покраснение", "Солнце → раздражение", "Ветер → сухость", "Косметика → жжение", "Ничего из перечисленного"],
+                    },
+                    {
+                        "id": "diagnosis",
+                        "title": "Есть ли диагнозы?",
+                        "subtitle": "",
+                        "multi_choice": True,
+                        "options": ["Акне", "Розацеа", "Дерматит", "Экзема", "Нет"],
+                    },
+                ],
+            },
+            {
+                "title": "4. ОБРАЗ ЖИЗНИ",
+                "questions": [
+                    {
+                        "id": "climate",
+                        "title": "В каком климате вы живете?",
+                        "subtitle": "",
+                        "multi_choice": False,
+                        "options": ["Холодный", "Умеренный", "Жаркий", "Переменный"],
+                    },
+                    {
+                        "id": "stress",
+                        "title": "Уровень стресса",
+                        "subtitle": "",
+                        "multi_choice": False,
+                        "options": ["Низкий", "Средний", "Высокий", "Очень высокий"],
+                    },
+                    {
+                        "id": "sleep",
+                        "title": "Сон",
+                        "subtitle": "",
+                        "multi_choice": False,
+                        "options": ["7–8 часов", "5–7 часов", "<5 часов", "Нерегулярный"],
+                    },
+                    {
+                        "id": "food",
+                        "title": "Питание",
+                        "subtitle": "",
+                        "multi_choice": False,
+                        "options": ["Сбалансированное", "Есть сладкое/жирное", "Частый фастфуд", "Строгие диеты"],
+                    },
+                    {
+                        "id": "water",
+                        "title": "Вода",
+                        "subtitle": "",
+                        "multi_choice": False,
+                        "options": ["2 л/день", "1–2 л", "<1 л"],
+                    },
+                    {
+                        "id": "smoking",
+                        "title": "Курение",
+                        "subtitle": "",
+                        "multi_choice": False,
+                        "options": ["Нет", "Иногда", "Да"],
+                    },
+                    {
+                        "id": "activity",
+                        "title": "Физическая активность",
+                        "subtitle": "",
+                        "multi_choice": False,
+                        "options": ["Регулярная", "Умеренная", "Низкая"],
+                    },
+                    {
+                        "id": "environment",
+                        "title": "Где вы проводите больше времени?",
+                        "subtitle": "",
+                        "multi_choice": False,
+                        "options": ["Офис/помещение", "На улице", "Смешанный режим"],
+                    },
+                ],
+            },
+            {
+                "title": "5. ИСТОРИЯ УХОДА",
+                "questions": [
+                    {
+                        "id": "routine_level",
+                        "title": "Используете ли уход?",
+                        "subtitle": "",
+                        "multi_choice": False,
+                        "options": ["Нет", "Минимальный", "Базовый", "Полный уход"],
+                    },
+                    {
+                        "id": "used_products",
+                        "title": "Какие средства используете?",
+                        "subtitle": "Можно выбрать несколько",
+                        "multi_choice": True,
+                        "options": ["Очищение", "Тоник", "Крем", "Сыворотка", "SPF", "Кислоты", "Ретиноиды", "Маски"],
+                    },
+                    {
+                        "id": "negative_reactions",
+                        "title": "Были ли негативные реакции на",
+                        "subtitle": "Можно выбрать несколько",
+                        "multi_choice": True,
+                        "options": ["Кислоты", "Ретиноиды", "Витамин C", "SPF", "Не было"],
+                    },
+                    {
+                        "id": "actives_experience",
+                        "title": "Использовали ли активы?",
+                        "subtitle": "",
+                        "multi_choice": False,
+                        "options": ["Никогда", "Иногда", "Регулярно"],
+                    },
+                ],
+            },
+            {
+                "title": "6. ЦЕЛИ ПОЛЬЗОВАТЕЛЯ",
+                "questions": [
+                    {
+                        "id": "goals",
+                        "title": "Что вы хотите улучшить?",
+                        "subtitle": "Можно выбрать несколько",
+                        "multi_choice": True,
+                        "options": ["Избавиться от акне", "Уменьшить жирность", "Увлажнить кожу", "Осветлить пигментацию", "Уменьшить морщины", "Выровнять тон", "Улучшить текстуру", "Поддерживать текущее состояние"],
+                    },
+                    {
+                        "id": "priority",
+                        "title": "Какой результат важнее?",
+                        "subtitle": "",
+                        "multi_choice": False,
+                        "options": ["Быстрый эффект", "Безопасность", "Долгосрочный результат"],
+                    },
+                    {
+                        "id": "active_readiness",
+                        "title": "Готовность к активным компонентам",
+                        "subtitle": "",
+                        "multi_choice": False,
+                        "options": ["Только мягкий уход", "Умеренные активы", "Готов к сильным активам"],
+                    },
+                    {
+                        "id": "budget",
+                        "title": "Бюджет на уход в месяц",
+                        "subtitle": "",
+                        "multi_choice": False,
+                        "options": ["До 3 000 ₽", "3 000–8 000 ₽", "8 000–15 000 ₽", "Без ограничений"],
+                    },
+                    {
+                        "id": "preferred_format",
+                        "title": "Какой формат рекомендаций удобнее?",
+                        "subtitle": "",
+                        "multi_choice": False,
+                        "options": ["Краткий план", "Подробный план", "Смешанный"],
+                    },
+                ],
+            },
+        ]
+    }
+
+
+@app.get("/api/chat/bootstrap")
+async def get_chat_bootstrap(current_user: dict = Depends(get_current_user)):
+    user_id = current_user.get("id")
+
+    async with pool.acquire() as conn:
+        profile_row = await conn.fetchrow(
+            "SELECT extra_data FROM user_profiles WHERE user_id=$1",
+            user_id,
+        )
+
+    messages = []
+    if profile_row and isinstance(profile_row.get("extra_data"), dict):
+        chat_blob = profile_row["extra_data"].get("chat")
+        if isinstance(chat_blob, dict):
+            stored = chat_blob.get("messages")
+            if isinstance(stored, list):
+                for item in stored:
+                    if isinstance(item, dict):
+                        text = str(item.get("text") or "").strip()
+                        if not text:
+                            continue
+                        messages.append(
+                            {
+                                "text": text,
+                                "is_from_user": bool(item.get("is_from_user", False)),
+                                "timestamp": str(item.get("timestamp") or ""),
+                            }
+                        )
+
+    return {
+        "assistant_name": "Aura AI - Помощник",
+        "assistant_context": "Здоровье кожи",
+        "messages": messages,
+    }
+
+
+@app.post("/api/chat/messages")
+async def append_chat_message(
+    payload: ChatMessageCreateRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    user_id = current_user.get("id")
+    text = (payload.text or "").strip()
+
+    if not text:
+        raise HTTPException(status_code=400, detail="Пустое сообщение")
+
+    timestamp = payload.timestamp or datetime.utcnow().strftime("%H:%M")
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT extra_data FROM user_profiles WHERE user_id=$1",
+            user_id,
+        )
+
+        extra_data = {}
+        if row and isinstance(row.get("extra_data"), dict):
+            extra_data = dict(row["extra_data"])
+
+        chat_blob = extra_data.get("chat")
+        if not isinstance(chat_blob, dict):
+            chat_blob = {}
+
+        messages = chat_blob.get("messages")
+        if not isinstance(messages, list):
+            messages = []
+
+        messages.append(
+            {
+                "text": text,
+                "is_from_user": bool(payload.is_from_user),
+                "timestamp": str(timestamp),
+            }
+        )
+
+        chat_blob["messages"] = messages[-100:]
+        extra_data["chat"] = chat_blob
+
+        await conn.execute(
+            """
+            INSERT INTO user_profiles (user_id, extra_data, updated_at)
+            VALUES ($1, $2::jsonb, NOW())
+            ON CONFLICT (user_id)
+            DO UPDATE SET
+                extra_data = $2::jsonb,
+                updated_at = NOW()
+            """,
+            user_id,
+            json.dumps(extra_data, ensure_ascii=False),
+        )
+
+    return {
+        "success": True,
+        "message": {
+            "text": text,
+            "is_from_user": bool(payload.is_from_user),
+            "timestamp": str(timestamp),
+        },
+    }
 
 
 @app.get("/api/products")
@@ -1758,12 +2651,48 @@ async def get_products():
 
 @app.post("/api/products")
 async def create_product(product: ProductCreate):
+    def serialize_field(field):
+        if field is None:
+            return None
+        if isinstance(field, list):
+            return json.dumps(field, ensure_ascii=False)
+        return field
+
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            """INSERT INTO products (name, brand, category, description, images, volume, segment) 
-               VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *""",
-            product.name, product.brand, product.category, product.description,
-            product.images, product.volume, product.segment
+            """INSERT INTO products (
+               name, what_is_it, brand, product_type, for_whom,
+               purpose, skin_type, application_time, area,
+               active_ingredient, volume, segment, composition,
+               application_info, country, category, description,
+               images, has_video
+            )
+               VALUES (
+               $1, $2, $3, $4, $5,
+               $6, $7, $8, $9,
+               $10, $11, $12, $13,
+               $14, $15, $16, $17,
+               $18, $19
+            ) RETURNING *""",
+            product.name,
+            product.what_is_it,
+            product.brand,
+            product.product_type,
+            product.for_whom,
+            serialize_field(product.purpose),
+            serialize_field(product.skin_type),
+            product.application_time,
+            product.area,
+            product.active_ingredient,
+            product.volume,
+            product.segment,
+            product.composition,
+            product.application_info,
+            product.country,
+            product.category,
+            product.description,
+            product.images,
+            product.has_video if product.has_video is not None else False
         )
         return dict(row)
 
@@ -1983,49 +2912,128 @@ async def get_product_video(product_id: int):
         return None
 
 
+@app.put("/api/dictionaries/brands")
+async def update_brand(data: BrandUpdate):
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            UPDATE brands
+            SET description=$1, country=$2, country_origin=$3, manufacturer=$4
+            WHERE value=$5
+            RETURNING id, value, description, country, country_origin, manufacturer
+            """,
+            data.description,
+            data.country,
+            data.country_origin,
+            data.manufacturer,
+            data.value,
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Бренд не найден")
+        return dict(row)
+
+
 @app.get("/api/dictionaries/{key}")
 async def get_dictionary(key: str):
-    table = DICT_TABLE_MAP.get(key)
+    table = _resolve_dict_table(key)
     if not table:
         raise HTTPException(status_code=400, detail="Unknown dictionary key")
+
     async with pool.acquire() as conn:
+        if key == "brands":
+            rows = await conn.fetch(
+                "SELECT id, value, description, country, country_origin, manufacturer FROM brands ORDER BY id"
+            )
+            return [dict(row) for row in rows]
+
         rows = await conn.fetch(f"SELECT value FROM {table} ORDER BY id")
         return [row["value"] for row in rows]
 
 
 @app.post("/api/dictionaries/{key}")
 async def create_dictionary_value(key: str, data: DictionaryValue):
-    table = DICT_TABLE_MAP.get(key)
+    table = _resolve_dict_table(key)
     if not table:
         raise HTTPException(status_code=400, detail="Unknown dictionary key")
+
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            f"INSERT INTO {table} (value) VALUES ($1) RETURNING *",
-            data.value
-        )
-        return dict(row)
+        try:
+            if key == "brands":
+                row = await conn.fetchrow(
+                    """
+                    INSERT INTO brands (value, description, country, country_origin, manufacturer)
+                    VALUES ($1, NULL, NULL, NULL, NULL)
+                    RETURNING id, value, description, country, country_origin, manufacturer
+                    """,
+                    data.value,
+                )
+                return dict(row)
+
+            row = await conn.fetchrow(
+                f"INSERT INTO {table} (value) VALUES ($1) RETURNING id, value",
+                data.value,
+            )
+            return dict(row)
+        except Exception as exc:
+            message = str(exc).lower()
+            if "duplicate key" in message or "unique" in message:
+                raise HTTPException(status_code=400, detail="Значение уже существует")
+            raise
 
 
 @app.put("/api/dictionaries/{key}")
-async def update_dictionary_value(key: str, data: DictionaryUpdate):
-    table = DICT_TABLE_MAP.get(key)
+async def update_dictionary_value(key: str, data: dict = Body(...)):
+    table = _resolve_dict_table(key)
     if not table:
         raise HTTPException(status_code=400, detail="Unknown dictionary key")
+
     async with pool.acquire() as conn:
+        if key == "brands":
+            value = data.get("value")
+            if not value or not isinstance(value, str):
+                raise HTTPException(status_code=400, detail="Поле value обязательно для бренда")
+
+            row = await conn.fetchrow(
+                """
+                UPDATE brands
+                SET description=$1, country=$2, country_origin=$3, manufacturer=$4
+                WHERE value=$5
+                RETURNING id, value, description, country, country_origin, manufacturer
+                """,
+                data.get("description"),
+                data.get("country"),
+                data.get("country_origin"),
+                data.get("manufacturer"),
+                value,
+            )
+            if not row:
+                raise HTTPException(status_code=404, detail="Бренд не найден")
+            return dict(row)
+
+        old_value = data.get("oldValue")
+        new_value = data.get("newValue")
+        if not old_value or not new_value:
+            raise HTTPException(status_code=400, detail="Требуются поля oldValue и newValue")
+
         row = await conn.fetchrow(
-            f"UPDATE {table} SET value=$1 WHERE value=$2 RETURNING *",
-            data.newValue, data.oldValue
+            f"UPDATE {table} SET value=$1 WHERE value=$2 RETURNING id, value",
+            new_value, old_value
         )
+        if not row:
+            raise HTTPException(status_code=404, detail="Значение не найдено")
         return dict(row)
 
 
 @app.delete("/api/dictionaries/{key}/{value}")
 async def delete_dictionary_value(key: str, value: str):
-    table = DICT_TABLE_MAP.get(key)
+    table = _resolve_dict_table(key)
     if not table:
         raise HTTPException(status_code=400, detail="Unknown dictionary key")
     async with pool.acquire() as conn:
-        await conn.execute(f"DELETE FROM {table} WHERE value=$1", value)
+        result = await conn.execute(f"DELETE FROM {table} WHERE value=$1", value)
+        deleted_count = int(result.split()[-1]) if result else 0
+        if deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Значение не найдено")
         return {"success": True}
 
 
@@ -2061,8 +3069,8 @@ async def create_procedure(procedure: ProcedureCreate):
                zones, effects, problems, description, procedure_about, advantages, 
                indications, principle, how_it_goes, for_whom, problems_solved, 
                contraindications_full, preparation, recommended_course, rehabilitation, 
-               post_care, side_effects, photos) 
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23) 
+               post_care, side_effects) 
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22) 
                RETURNING *""",
             procedure.name, procedure.direction, procedure.method_type, parse_duration(procedure.duration),
             procedure.equipment, serialize_field(procedure.zones), serialize_field(procedure.effects),
@@ -2070,7 +3078,7 @@ async def create_procedure(procedure: ProcedureCreate):
             procedure.advantages, procedure.indications, procedure.principle, procedure.how_it_goes,
             procedure.for_whom, procedure.problems_solved, procedure.contraindications_full,
             procedure.preparation, procedure.recommended_course, procedure.rehabilitation,
-            procedure.post_care, procedure.side_effects, None
+            procedure.post_care, procedure.side_effects
         )
         return dict(row)
 

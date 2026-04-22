@@ -443,11 +443,12 @@ const [fullPageEditValue, setFullPageEditValue] = useState(null)
                   <Factory size={14} />
                   Производитель
                 </label>
-                <input 
-                  className="input"
+                <textarea
+                  className="input textarea"
+                  rows={3}
                   value={brandForm.manufacturer || ''}
                   onChange={e => setBrandForm(prev => ({ ...prev, manufacturer: e.target.value }))}
-                  placeholder="Название производителя"
+                  placeholder="Название производителя (можно указать подробности)"
                 />
               </div>
             </div>

@@ -22,7 +22,23 @@ async function request(endpoint, options = {}) {
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Request failed', detail: response.statusText }))
-    throw new Error(error.detail || error.error || 'Request failed')
+    let message = error.detail || error.error || 'Request failed'
+    if (Array.isArray(message)) {
+      message = message
+        .map((item) => {
+          if (typeof item === 'string') return item
+          if (!item || typeof item !== 'object') return ''
+          const field = Array.isArray(item.loc) ? item.loc.join('.') : ''
+          const text = item.msg || item.message || ''
+          return [field, text].filter(Boolean).join(': ')
+        })
+        .filter(Boolean)
+        .join('; ')
+    }
+    if (typeof message !== 'string') {
+      message = JSON.stringify(message)
+    }
+    throw new Error(message || 'Request failed')
   }
   return response.json()
 }
@@ -243,6 +259,14 @@ export const usersApi = {
   create: (data) => request('/users', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id) => request(`/users/${id}`, { method: 'DELETE' }),
+}
+
+export const analyticsApi = {
+  getDashboard: () => request('/analytics/dashboard'),
+}
+
+export const reportsApi = {
+  getSummary: () => request('/reports/summary'),
 }
 
 export const knowledgeApi = {
