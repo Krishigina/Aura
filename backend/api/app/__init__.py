@@ -1,1 +1,0 @@
-# Aura Admin API Application
