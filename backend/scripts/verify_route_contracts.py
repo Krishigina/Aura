@@ -1,7 +1,15 @@
-from backend.api.main import app
+import sys
+from pathlib import Path
 
 
-def _route_pairs():
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from backend.main import app
+
+
+def collect_pairs():
     pairs = set()
     for route in app.routes:
         methods = getattr(route, "methods", set())
@@ -15,9 +23,8 @@ def _route_pairs():
     return pairs
 
 
-def test_core_entity_routes_exist():
-    pairs = _route_pairs()
-
+def main():
+    pairs = collect_pairs()
     expected = {
         ("GET", "/api/health"),
         ("POST", "/api/auth/login"),
@@ -46,11 +53,16 @@ def test_core_entity_routes_exist():
         ("POST", "/api/content"),
     }
 
-    missing = expected - pairs
-    assert not missing, f"Missing route contracts: {sorted(missing)}"
+    missing = sorted(expected - pairs)
+    if missing:
+        raise SystemExit(f"Missing route contracts: {missing}")
+
+    health_count = sum(1 for p in pairs if p == ("GET", "/api/health"))
+    if health_count != 1:
+        raise SystemExit(f"Expected exactly one /api/health route, got {health_count}")
+
+    print("Route contracts OK")
 
 
-def test_single_health_route_in_active_backend():
-    pairs = _route_pairs()
-    health_count = sum(1 for pair in pairs if pair == ("GET", "/api/health"))
-    assert health_count == 1, f"Expected 1 /api/health route, got {health_count}"
+if __name__ == "__main__":
+    main()
