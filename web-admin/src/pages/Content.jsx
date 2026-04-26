@@ -7,14 +7,12 @@ import Select from '../components/Select'
 import AdvancedRichTextEditor from '../components/AdvancedRichTextEditor'
 import './Content.css'
 
-const defaultContentCategories = ['Уход за кожей', 'Ингредиенты', 'Защита', 'Процедуры', 'Питание', 'Образ жизни']
-
 export default function Content() {
   const { user, hasPermission } = useAuth()
   const { success, error } = useToast()
   const [articles, setArticles] = useState([])
   const [cosmetologists, setCosmetologists] = useState([])
-  const [contentCategories, setContentCategories] = useState(defaultContentCategories)
+  const [contentCategories, setContentCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [showEditor, setShowEditor] = useState(false)
@@ -48,10 +46,10 @@ export default function Content() {
       const [articlesData, usersData, contentCategoriesData] = await Promise.all([
         contentApi.getAll().catch(() => []),
         usersApi.getCosmetologists().catch(() => []),
-        dictionariesApi.get('contentCategories').catch(() => defaultContentCategories),
+        dictionariesApi.get('contentCategories').catch(() => []),
       ])
       setArticles(articlesData)
-      setContentCategories(contentCategoriesData)
+      setContentCategories(Array.isArray(contentCategoriesData) ? contentCategoriesData : [])
       const cosmetologistsList = usersData.map(u => ({
         id: u.id,
         name: u.name,
@@ -60,7 +58,7 @@ export default function Content() {
       setCosmetologists(cosmetologistsList)
     } catch (err) {
       setArticles([])
-      setContentCategories(defaultContentCategories)
+      setContentCategories([])
     } finally {
       setLoading(false)
     }
