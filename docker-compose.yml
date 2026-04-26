@@ -1,7 +1,4 @@
-version: '3.8'
-
 services:
-  # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
     container_name: aura_postgres
@@ -20,7 +17,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # Redis Cache
   redis:
     image: redis:7-alpine
     container_name: aura_redis
@@ -30,106 +26,31 @@ services:
       - redis_data:/data
     command: redis-server --appendonly yes
 
-  # Vector DB (Weaviate)
   weaviate:
     image: semitechnologies/weaviate:latest
     container_name: aura_weaviate
     ports:
       - "8080:8080"
+      - "50051:50051"
     environment:
       QUERY_DEFAULTS_LIMIT: 25
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: true
       PERSISTENCE_DATA_PATH: /var/lib/weaviate
       ENABLE_MODULES: text2vec-transformers
       TRANSFORMERS_INFERENCE_API: http://t2v-transformers:8080
+      CLUSTER_HOSTNAME: aura_weaviate
     volumes:
       - weaviate_data:/var/lib/weaviate
     depends_on:
       - t2v-transformers
 
-  # Embedding Model
   t2v-transformers:
     image: semitechnologies/transformers-inference:sentence-transformers-all-MiniLM-L6-v2
+    ports:
+      - "8081:8080"
     environment:
       ENABLE_CUDA: 0
 
-  # Auth Service
-  # auth-service:
-  #   build: ./backend/services/auth-service
-  #   container_name: aura_auth_service
-  #   ports:
-  #     - "8001:8001"
-  #   environment:
-  #     - DATABASE_URL=jdbc:postgresql://postgres:5432/aura
-  #     - REDIS_URL=redis://redis:6379
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-
-  # User Service
-  # user-service:
-  #   build: ./backend/services/user-service
-  #   container_name: aura_user_service
-  #   ports:
-  #     - "8002:8002"
-  #   environment:
-  #     - DATABASE_URL=jdbc:postgresql://postgres:5432/aura
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-
-  # Product Service
-  # product-service:
-  #   build: ./backend/services/product-service
-  #   container_name: aura_product_service
-  #   ports:
-  #     - "8003:8003"
-  #   environment:
-  #     - DATABASE_URL=jdbc:postgresql://postgres:5432/aura
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-
-  # Recommendation Service
-  # recommendation-service:
-  #   build: ./backend/services/recommendation-service
-  #   container_name: aura_recommendation_service
-  #   ports:
-  #     - "8004:8004"
-  #   environment:
-  #     - DATABASE_URL=jdbc:postgresql://postgres:5432/aura
-  #     - AI_SERVICE_URL=http://ai-service:9001
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     ai-service:
-  #       condition: service_started
-
-  # Tracker Service
-  # tracker-service:
-  #   build: ./backend/services/tracker-service
-  #   container_name: aura_tracker_service
-  #   ports:
-  #     - "8005:8005"
-  #   environment:
-  #     - DATABASE_URL=jdbc:postgresql://postgres:5432/aura
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-
-  # Admin Service (Web Dashboard)
-  # admin-service:
-  #   build: ./backend/services/admin-service
-  #   container_name: aura_admin_service
-  #   ports:
-  #     - "8010:8010"
-  #   environment:
-  #     - DATABASE_URL=jdbc:postgresql://postgres:5432/aura
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-
-  # AI Service (commented out - requires building)
   # ai-service:
   #   build: ./ai-service
   #   container_name: aura_ai_service
@@ -142,9 +63,8 @@ services:
   #     weaviate:
   #       condition: service_started
 
-  # Admin API (FastAPI - already running locally on port 3002)
   # admin-api:
-  #   build: ./backend/api
+  #   build: ./backend
   #   container_name: aura_admin_api
   #   ports:
   #     - "3001:3001"
@@ -158,7 +78,6 @@ services:
   #     postgres:
   #       condition: service_healthy
 
-  # Web Admin (commented out - requires building)
   # web-admin:
   #   build: ./web-admin
   #   container_name: aura_web_admin
