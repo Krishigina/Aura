@@ -44,7 +44,7 @@ export default function Login() {
         <div className="login-card glass-card">
           <div className="login-header">
             <div className="login-logo">
-              <span className="logo-icon">A</span>
+              <img className="logo-icon" src="/logo.svg" alt="Aura" />
             </div>
             <h1>Aura Admin</h1>
             <p>Панель управления системой</p>
@@ -99,20 +99,6 @@ export default function Login() {
             </button>
           </form>
 
-          <div className="login-demo">
-            <p>Демо-аккаунты:</p>
-            <div className="demo-accounts">
-              <button onClick={() => { setEmail('admin@aura.ru'); setPassword('admin123'); }}>
-                admin / admin123
-              </button>
-              <button onClick={() => { setEmail('manager@aura.ru'); setPassword('manager123'); }}>
-                manager / manager123
-              </button>
-              <button onClick={() => { setEmail('cosmetolog@aura.ru'); setPassword('cosmo123'); }}>
-                cosmetolog / cosmo123
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     </div>

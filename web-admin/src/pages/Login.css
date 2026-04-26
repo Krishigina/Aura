@@ -90,14 +90,9 @@
 .login-logo .logo-icon {
   width: 64px;
   height: 64px;
-  background: linear-gradient(135deg, var(--color-mint-green), var(--color-pink));
   border-radius: var(--radius-xl);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 32px;
-  color: white;
+  display: block;
+  object-fit: contain;
   box-shadow: var(--shadow-mint);
 }
 
