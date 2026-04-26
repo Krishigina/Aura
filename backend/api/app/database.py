@@ -136,6 +136,7 @@ def init_db():
             email VARCHAR(255) UNIQUE NOT NULL,
             role VARCHAR(50) DEFAULT 'user',
             nickname VARCHAR(255),
+            phone VARCHAR(50),
             avatar VARCHAR(500),
             created_at TIMESTAMP DEFAULT NOW()
         );
@@ -158,6 +159,11 @@ def init_db():
 
     try:
         cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname VARCHAR(255)")
+    except:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50)")
     except:
         pass
     
