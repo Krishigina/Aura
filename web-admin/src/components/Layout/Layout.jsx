@@ -48,7 +48,7 @@ export default function Layout({ children }) {
       <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-header">
           <div className="logo">
-            <span className="logo-icon">A</span>
+            <img className="logo-icon" src="/logo.svg" alt="Aura" />
             {sidebarOpen && <span className="logo-text">Aura Admin</span>}
           </div>
           <button className="sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>

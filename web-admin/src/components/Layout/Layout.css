@@ -43,14 +43,9 @@
 .logo-icon {
   width: 36px;
   height: 36px;
-  background: linear-gradient(135deg, var(--color-mint-green), var(--color-pink));
   border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 18px;
-  color: white;
+  display: block;
+  object-fit: contain;
 }
 
 .logo-text {
