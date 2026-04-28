@@ -1,10 +1,10 @@
-from typing import List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 import logging
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.models.schemas import RAGRequest, RAGResponse
+from app.models.schemas import RAGAttachmentIngestRequest, RAGRequest, RAGResponse
 from app.services.rag_pipeline import get_rag_pipeline
 from app.services.rag_service import get_rag_service
 
@@ -15,6 +15,8 @@ router = APIRouter(prefix="/rag", tags=["RAG"])
 class RAGQueryRequest(BaseModel):
     query: str
     user_id: str
+    session_id: Optional[str] = None
+    context: Optional[Dict[str, Any]] = None
     max_results: int = Field(default=5, ge=1, le=50)
 
 
@@ -31,6 +33,8 @@ async def query_rag(request: RAGQueryRequest):
             RAGRequest(
                 query=query,
                 user_id=request.user_id,
+                session_id=request.session_id,
+                context=request.context,
                 max_results=request.max_results,
             )
         )
@@ -38,6 +42,19 @@ async def query_rag(request: RAGQueryRequest):
         raise
     except Exception:
         logger.exception("RAG query error")
+        raise HTTPException(status_code=502, detail="RAG service unavailable")
+
+
+@router.post("/attachments/ingest")
+async def ingest_attachment(request: RAGAttachmentIngestRequest):
+    """Ingest one user attachment into RAG context."""
+    try:
+        service = get_rag_service()
+        return await service.ingest_attachment(request)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Attachment ingest error")
         raise HTTPException(status_code=502, detail="RAG service unavailable")
 
 

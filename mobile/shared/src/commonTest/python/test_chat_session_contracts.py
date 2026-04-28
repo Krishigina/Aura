@@ -86,3 +86,66 @@ def test_chat_and_profile_use_translucent_toolbars():
 
     assert "modifier = Modifier.align(Alignment.TopCenter)" in profile
     assert "GlassSurface(" in profile
+
+
+def test_chat_attachment_models_match_backend_contract():
+    source = (COMMON / "core" / "domain" / "model" / "Models.kt").read_text(encoding="utf-8")
+
+    assert "data class ChatAttachment" in source
+    assert '@SerialName("attachment_id") val attachmentId' in source
+    assert '@SerialName("session_id") val sessionId' in source
+    assert '@SerialName("content_type") val contentType' in source
+    assert "data class ChatAttachmentsResponse" in source
+    assert "val attachments: List<ChatAttachment>" in source
+
+
+def test_chat_client_exposes_attachment_upload_and_list_methods():
+    source = (COMMON / "core" / "data" / "api" / "AuraApiClient.kt").read_text(encoding="utf-8")
+
+    assert "MultiPartFormDataContent" in source
+    assert "formData" in source
+    assert "suspend fun uploadChatAttachment" in source
+    assert "suspend fun getChatAttachments" in source
+    assert '"$baseUrl/api/chat/sessions/$sessionId/attachments"' in source
+    assert 'filename=\\"$filename\\"' in source
+    assert "ContentType.parse(contentType)" in source
+
+
+def test_chat_ui_has_soft_user_bubble_and_attachment_chips():
+    source = (COMMON / "feature" / "chat" / "ChatScreen.kt").read_text(encoding="utf-8")
+
+    assert "ChatAttachmentChip" in source
+    assert "selectedAttachments" in source
+    assert "onAttachClick" in source
+    assert "Color(0xFFE9FFF6)" in source or "UserBubbleMint" in source
+    assert ".background(CoolGrey)" not in source
+    assert "color = TextGray800" in source
+
+
+def test_chat_attach_button_uses_picker_bridge_not_hardcoded_chip():
+    source = (COMMON / "feature" / "chat" / "ChatScreen.kt").read_text(encoding="utf-8")
+
+    assert "data class PickedChatAttachment" in source
+    assert "object ChatAttachmentPickerBridge" in source
+    assert "ChatAttachmentPickerBridge.openPicker()" in source
+    assert "ChatAttachmentPickerBridge.onPicked" in source
+    assert "apiClient.uploadChatAttachment" in source
+    assert "apiClient.createChatSession" in source
+    assert "Файл будет добавлен" not in source
+
+
+def test_android_main_activity_uses_native_source_chooser():
+    source = (SHARED_ROOT.parent / "app" / "src" / "androidMain" / "kotlin" / "com" / "aura" / "app" / "MainActivity.kt").read_text(encoding="utf-8")
+
+    assert "rememberLauncherForActivityResult" in source
+    assert "ActivityResultContracts.StartActivityForResult" in source
+    assert "Intent.createChooser" in source
+    assert "Intent.ACTION_OPEN_DOCUMENT" in source
+    assert "Intent.ACTION_PICK" in source
+    assert "ActivityResultContracts.OpenDocument" not in source
+    assert "application/pdf" in source
+    assert "application/vnd.openxmlformats-officedocument.wordprocessingml.document" in source
+    assert "image/jpeg" in source
+    assert "image/png" in source
+    assert "ChatAttachmentPickerBridge.deliver" in source
+    assert "OpenableColumns.DISPLAY_NAME" in source

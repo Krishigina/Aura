@@ -44,6 +44,12 @@ class VectorStore:
                 Property(name="text", data_type=DataType.TEXT),
                 Property(name="description", data_type=DataType.TEXT),
                 Property(name="category", data_type=DataType.TEXT),
+                Property(name="source_type", data_type=DataType.TEXT),
+                Property(name="attachment_id", data_type=DataType.TEXT),
+                Property(name="user_id", data_type=DataType.TEXT),
+                Property(name="session_id", data_type=DataType.TEXT),
+                Property(name="filename", data_type=DataType.TEXT),
+                Property(name="content_type", data_type=DataType.TEXT),
             ],
         )
         logger.info(f"Created collection: {name}")
@@ -69,6 +75,12 @@ class VectorStore:
                         "text": text or content or description or title,
                         "description": description,
                         "category": category,
+                        "source_type": doc.get("source_type"),
+                        "attachment_id": doc.get("attachment_id"),
+                        "user_id": doc.get("user_id"),
+                        "session_id": doc.get("session_id"),
+                        "filename": doc.get("filename"),
+                        "content_type": doc.get("content_type"),
                     },
                     vector=vector,
                 )
@@ -79,18 +91,31 @@ class VectorStore:
         logger.info(f"Added {len(objects)} documents to {collection_name}")
         return len(objects)
 
-    def search(self, collection_name: str, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+    def search(self, collection_name: str, query: str, limit: int = 5, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         self.create_collection(collection_name)
         collection = self.client.collections.get(collection_name)
         query_vector = self.embedder.embed(query)
         search = collection.query.hybrid(query=query, vector=query_vector, limit=limit)
         results = []
         for obj in search.objects:
+            properties = obj.properties or {}
+            if filters:
+                skip = False
+                for key, value in filters.items():
+                    if value is None:
+                        continue
+                    prop_value = properties.get(key)
+                    if prop_value not in (None, "", str(value)):
+                        skip = True
+                        break
+                if skip:
+                    continue
+
             results.append(
                 {
                     "id": str(obj.uuid),
                     "score": getattr(obj.metadata, "score", None),
-                    "properties": obj.properties,
+                    "properties": properties,
                 }
             )
         return results

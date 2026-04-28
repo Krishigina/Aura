@@ -4,8 +4,25 @@ from typing import Optional, List, Dict, Any
 class RAGRequest(BaseModel):
     query: str
     user_id: str
+    session_id: Optional[str] = None
     context: Optional[Dict[str, Any]] = None
     max_results: int = 5
+
+
+class RAGAttachmentIngestRequest(BaseModel):
+    attachment_id: str
+    user_id: str
+    session_id: str
+    filename: str
+    content_type: str
+    content_base64: str
+
+
+class AttachmentIngestResponse(BaseModel):
+    attachment_id: str
+    summary: str
+    extracted_text: str = ""
+    indexed: bool = True
 
 class RAGResponse(BaseModel):
     answer: str

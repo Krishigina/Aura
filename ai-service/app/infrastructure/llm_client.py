@@ -1,4 +1,5 @@
 import json
+import base64
 
 import httpx
 
@@ -59,6 +60,44 @@ class OpenRouterClient:
                 return data["choices"][0]["message"]["content"].strip()
         except (httpx.HTTPError, KeyError, IndexError, TypeError, AttributeError) as exc:
             raise LLMRequestError("OpenRouter request failed") from exc
+
+    async def summarize_image(self, image_bytes: bytes, content_type: str, prompt: str) -> str:
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": self.site_url,
+            "X-Title": self.app_name,
+        }
+        image_base64 = base64.b64encode(image_bytes).decode("ascii")
+        payload = {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:{content_type};base64,{image_base64}"},
+                        },
+                    ],
+                }
+            ],
+            "temperature": 0.2,
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers=headers,
+                    json=payload,
+                )
+                response.raise_for_status()
+                data = response.json()
+                return data["choices"][0]["message"]["content"].strip()
+        except (httpx.HTTPError, KeyError, IndexError, TypeError, AttributeError) as exc:
+            raise LLMRequestError("OpenRouter vision request failed") from exc
 
     def _build_user_message(self, query: str, context: list[dict]) -> str:
         formatted_context = json.dumps(context, ensure_ascii=False, indent=2)
