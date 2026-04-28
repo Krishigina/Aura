@@ -1,27 +1,45 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from typing import List, Dict, Any, Optional, Union
-from app.services.rag_pipeline import get_rag_pipeline
+from typing import List, Optional, Union
 import logging
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+
+from app.models.schemas import RAGRequest, RAGResponse
+from app.services.rag_pipeline import get_rag_pipeline
+from app.services.rag_service import get_rag_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/rag", tags=["RAG"])
 
+
 class RAGQueryRequest(BaseModel):
     query: str
     user_id: str
-    max_results: int = 5
+    max_results: int = Field(default=5, ge=1, le=50)
 
-@router.post("/query")
+
+@router.post("/query", response_model=RAGResponse)
 async def query_rag(request: RAGQueryRequest):
-    """Query the RAG system"""
+    """Query the RAG system."""
+    query = request.query.strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="query must not be empty")
+
     try:
-        pipeline = get_rag_pipeline()
-        result = pipeline.query(request.query, {"user_id": request.user_id}, request.max_results)
-        return result
-    except Exception as e:
-        logger.error(f"RAG query error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        service = get_rag_service()
+        return await service.query(
+            RAGRequest(
+                query=query,
+                user_id=request.user_id,
+                max_results=request.max_results,
+            )
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("RAG query error")
+        raise HTTPException(status_code=502, detail="RAG service unavailable")
+
 
 class Document(BaseModel):
     title: str
@@ -33,34 +51,29 @@ class Document(BaseModel):
     owner_user_id: Optional[str] = None
     weight: Optional[float] = 1.0
 
+
 @router.post("/ingest")
 async def ingest_documents(documents: List[Document]):
-    """Ingest documents into knowledge base"""
+    """Ingest documents into knowledge base."""
     try:
-        pipeline = get_rag_pipeline()
+        service = get_rag_service()
         docs = [
-            {
-                "title": d.title,
-                "content": d.content,
-                "category": d.category,
-                "source_type": d.source_type,
-                "source_id": d.source_id,
-                "source_scope": d.source_scope,
-                "owner_user_id": d.owner_user_id,
-                "weight": d.weight,
-            }
+            d.model_dump() if hasattr(d, "model_dump") else d.dict()
             for d in documents
         ]
-        return pipeline.ingest_documents(docs)
-    except Exception as e:
-        logger.error(f"Ingest error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return service.add_knowledge(docs)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Ingest error")
+        raise HTTPException(status_code=502, detail="RAG service unavailable")
+
 
 @router.delete("/knowledge")
 async def delete_knowledge():
-    """Delete all knowledge"""
+    """Delete all knowledge."""
     try:
         pipeline = get_rag_pipeline()
         return pipeline.delete_knowledge_base()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=str(error))

@@ -2,14 +2,13 @@
 setlocal EnableExtensions EnableDelayedExpansion
 
 set "ROOT=%~dp0"
-set "BACKEND_DIR=%ROOT%backend\api"
 set "FRONTEND_DIR=%ROOT%web-admin"
+set "AI_SERVICE_DIR=%ROOT%ai-service"
 
-set "DB_HOST=localhost"
-set "DB_PORT=5433"
 set "DB_NAME=aura"
 set "DB_USER=aura_user"
 set "DB_PASSWORD=aura_password"
+set "DB_PORT=5433"
 
 echo ========================================
 echo Starting Aura Full System
@@ -17,9 +16,9 @@ echo ========================================
 echo.
 
 :: ============================================
-:: [1/6] Check prerequisites
+:: [1/8] Check prerequisites
 :: ============================================
-echo [1/6] Checking prerequisites...
+echo [1/8] Checking prerequisites...
 
 docker info >nul 2>&1
 if errorlevel 1 (
@@ -59,9 +58,9 @@ echo   Node.js: OK
 echo.
 
 :: ============================================
-:: [2/6] Install frontend deps if needed
+:: [2/8] Install frontend deps if needed
 :: ============================================
-echo [2/6] Checking frontend dependencies...
+echo [2/8] Checking frontend dependencies...
 if not exist "%FRONTEND_DIR%\node_modules" (
     echo   Installing node_modules...
     pushd "%FRONTEND_DIR%"
@@ -80,9 +79,9 @@ if not exist "%FRONTEND_DIR%\node_modules" (
 echo.
 
 :: ============================================
-:: [3/6] PostgreSQL setup
+:: [3/8] PostgreSQL setup
 :: ============================================
-echo [3/6] Setting up PostgreSQL...
+echo [3/8] Setting up PostgreSQL...
 
 docker inspect aura_postgres >nul 2>&1
 if errorlevel 1 (
@@ -127,18 +126,77 @@ echo   PostgreSQL: ready
 echo.
 
 :: ============================================
-:: [4/6] Start Backend API
+:: [4/8] Vector DB setup
 :: ============================================
-echo [4/6] Starting Backend API on port 3002...
+echo [4/8] Setting up Weaviate vector DB...
+echo   Starting Docker services: weaviate, t2v-transformers
+docker compose up -d weaviate t2v-transformers >nul 2>&1
+if errorlevel 1 (
+    echo   [WARN] Could not start Weaviate via docker compose. RAG chat may be unavailable.
+) else (
+    echo   Waiting for Weaviate...
+    set /a WV_ATTEMPTS=0
+    :wait_weaviate
+    set /a WV_ATTEMPTS+=1
+    if !WV_ATTEMPTS! gtr 45 (
+        echo   [WARN] Weaviate did not report ready state yet. Continuing startup.
+        goto :weaviate_done
+    )
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r = Invoke-WebRequest -UseBasicParsing -Uri 'http://localhost:8080/v1/.well-known/ready' -TimeoutSec 2; if($r.StatusCode -eq 200){exit 0}else{exit 1} } catch { exit 1 }" >nul 2>&1
+    if errorlevel 1 (
+        call :sleep 2
+        goto :wait_weaviate
+    )
+    echo   Weaviate: ready
+)
+:weaviate_done
+echo.
 
-echo   Restarting backend process...
+:: ============================================
+:: [5/8] Start AI Service
+:: ============================================
+echo [5/8] Starting AI Service on port 9002...
+
+if not exist "%AI_SERVICE_DIR%\app\main.py" (
+    echo   [WARN] AI service not found at %AI_SERVICE_DIR%. Skipping AI service startup.
+    goto :start_backend
+)
+
+taskkill /F /FI "WINDOWTITLE eq Aura AI Service*" /T >nul 2>&1
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr /R /C:":9002 .*LISTENING"') do (
+    taskkill /F /PID %%a >nul 2>&1
+)
+
+start "Aura AI Service" cmd /k "cd /d ""%AI_SERVICE_DIR%"" && python -m uvicorn app.main:app --host 127.0.0.1 --port 9002"
+
+echo   Waiting for AI service...
+set /a AI_ATTEMPTS=0
+:wait_ai
+set /a AI_ATTEMPTS+=1
+if !AI_ATTEMPTS! gtr 45 (
+    echo   [WARN] AI service may not have started. Check the AI Service window.
+    goto :start_backend
+)
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r = Invoke-WebRequest -UseBasicParsing -Uri 'http://localhost:9002/health' -TimeoutSec 2; if($r.StatusCode -eq 200){exit 0}else{exit 1} } catch { exit 1 }" >nul 2>&1
+if errorlevel 1 (
+    call :sleep 2
+    goto :wait_ai
+)
+echo   AI service: ready
+echo.
+
+:: ============================================
+:: [6/8] Start Backend API
+:: ============================================
+:start_backend
+echo [6/8] Starting Backend API on port 3002...
+
 taskkill /F /FI "WINDOWTITLE eq Aura Backend API*" /T >nul 2>&1
-
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr /R /C:":3002 .*LISTENING"') do (
     taskkill /F /PID %%a >nul 2>&1
 )
 
-start "Aura Backend API" cmd /k ""%ROOT%run_backend.bat""
+start "Aura Backend API" cmd /k "set AI_SERVICE_URL=http://localhost:9002 && call ""%ROOT%run_backend.bat"""
 
 echo   Waiting for backend...
 set /a BK_ATTEMPTS=0
@@ -159,13 +217,11 @@ echo   Backend: ready
 echo.
 
 :: ============================================
-:: [5/6] Start Frontend
+:: [7/8] Start Frontend
 :: ============================================
-echo [5/6] Starting Frontend on port 5173...
+echo [7/8] Starting Frontend on port 5173...
 
-echo   Restarting frontend process...
 taskkill /F /FI "WINDOWTITLE eq Aura Frontend*" /T >nul 2>&1
-
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr /R /C:":5173 .*LISTENING"') do (
     taskkill /F /PID %%a >nul 2>&1
 )
@@ -184,13 +240,15 @@ echo   Frontend: ready
 echo.
 
 :: ============================================
-:: [6/6] Summary
+:: [8/8] Summary
 :: ============================================
 echo ========================================
 echo System started successfully!
 echo ========================================
 echo.
 echo URLs:
+echo   - AI Service:    http://localhost:9002
+echo   - AI Health:     http://localhost:9002/health
 echo   - Backend API:   http://localhost:3002
 echo   - API Docs:      http://localhost:3002/docs
 echo   - Frontend:      http://localhost:5173
@@ -204,7 +262,7 @@ echo Opening Frontend in browser...
 start http://localhost:5173
 echo.
 echo To stop:
-echo   - close "Aura Backend API" and "Aura Frontend" windows
+echo   - close "Aura AI Service", "Aura Backend API" and "Aura Frontend" windows
 echo   - docker stop aura_postgres
 echo.
 pause

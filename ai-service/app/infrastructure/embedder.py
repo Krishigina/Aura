@@ -3,6 +3,8 @@ from typing import List
 import logging
 import httpx
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
 class Embedder:
@@ -15,35 +17,23 @@ class Embedder:
             with httpx.Client() as client:
                 response = client.post(
                     f"{self.model_url}/vectors",
-                    json={"texts": [text]},
+                    json={"text": text},
                     timeout=30.0
                 )
                 if response.status_code == 200:
                     result = response.json()
-                    return result["vectors"][0]
+                    return result["vector"]
         except Exception as e:
             logger.error(f"Failed to get embedding from t2v service: {e}")
         return [0.0] * self.dimension
     
     def embed_batch(self, texts: List[str]) -> List[List[float]]:
-        try:
-            with httpx.Client() as client:
-                response = client.post(
-                    f"{self.model_url}/vectors",
-                    json={"texts": texts},
-                    timeout=30.0
-                )
-                if response.status_code == 200:
-                    result = response.json()
-                    return result["vectors"]
-        except Exception as e:
-            logger.error(f"Failed to get embeddings from t2v service: {e}")
-        return [[0.0] * self.dimension for _ in texts]
+        return [self.embed(text) for text in texts]
 
 _embedder: Embedder = None
 
 def get_embedder() -> Embedder:
     global _embedder
     if _embedder is None:
-        _embedder = Embedder()
+        _embedder = Embedder(settings.embedding_service_url)
     return _embedder
