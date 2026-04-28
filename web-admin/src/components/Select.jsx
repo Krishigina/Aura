@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { ChevronDown, Check, X } from 'lucide-react'
 import './Select.css'
 
-export default function Select({ label, name, value, onChange, options = [], required, placeholder, multiple = false, searchable = false }) {
+export default function Select({ label, name, value, onChange, options = [], required, placeholder, multiple = false, searchable = false, disabled = false }) {
   const [isOpen, setIsOpen] = useState(false)
   const [search, setSearch] = useState('')
   const wrapperRef = useRef(null)
@@ -82,7 +82,8 @@ export default function Select({ label, name, value, onChange, options = [], req
         <button
           type="button"
           className={`custom-select-trigger ${isOpen ? 'open' : ''} ${value || (multiple && values.length) ? 'has-value' : ''}`}
-          onClick={() => setIsOpen(!isOpen)}
+          disabled={disabled}
+          onClick={() => !disabled && setIsOpen(!isOpen)}
         >
           {multiple && values.length > 0 ? (
             <div className="multiple-values">
@@ -100,7 +101,7 @@ export default function Select({ label, name, value, onChange, options = [], req
           <ChevronDown size={18} className="select-arrow" />
         </button>
         
-        {isOpen && (
+        {isOpen && !disabled && (
           <div className="custom-select-dropdown">
             {(multiple || searchable) && (
               <div className="select-search-wrapper">

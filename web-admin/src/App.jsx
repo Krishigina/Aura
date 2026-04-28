@@ -47,7 +47,9 @@ function AppRoutes() {
         <Route path="dictionaries" element={<Dictionaries />} />
         <Route path="knowledge-sources" element={<KnowledgeSources />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
 }

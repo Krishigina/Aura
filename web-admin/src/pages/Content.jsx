@@ -294,11 +294,6 @@ export default function Content() {
             ))}
           </div>
 
-          {filtered.length === 0 && (
-            <div className="empty-state glass-card">
-              <p>Статьи не найдены</p>
-            </div>
-          )}
         </>
       ) : (
         <>

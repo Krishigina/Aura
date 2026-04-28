@@ -1,11 +1,49 @@
 import { useEffect, useMemo, useState } from 'react'
 import { knowledgeApi } from '../api'
+import Select from '../components/Select'
+import './KnowledgeSources.css'
+
+const filterOptions = [
+  { value: 'all', label: 'Все источники' },
+  { value: 'global', label: 'Общая база' },
+  { value: 'personal', label: 'Персональные' }
+]
+
+const scopeOptions = [
+  { value: 'both', label: 'Ответы и рекомендации' },
+  { value: 'rag', label: 'Только ответы' },
+  { value: 'recommendations', label: 'Только рекомендации' }
+]
+
+const scopeLabels = scopeOptions.reduce((acc, option) => ({ ...acc, [option.value]: option.label }), {})
+
+const typeLabels = {
+  pdf: 'PDF',
+  txt: 'Текст',
+  md: 'Markdown',
+  note: 'Заметка',
+  document: 'Документ'
+}
 
 function ScopeBadge({ scope }) {
-  const color = scope === 'rag' ? '#7c3aed' : scope === 'recommendations' ? '#0ea5e9' : '#16a34a'
+  const className = scope === 'rag' ? 'scope-rag' : scope === 'recommendations' ? 'scope-recommendations' : 'scope-both'
   return (
-    <span style={{ padding: '4px 10px', borderRadius: 999, background: `${color}22`, color, fontSize: 12, fontWeight: 600 }}>
-      {scope}
+    <span className={`knowledge-badge ${className}`}>
+      {scopeLabels[scope] || scope}
+    </span>
+  )
+}
+
+function TypeBadge({ type }) {
+  const label = typeLabels[String(type || '').toLowerCase()] || type || 'Источник'
+  return <span className="knowledge-badge source-type-badge">{label}</span>
+}
+
+function OwnerBadge({ ownerUserId }) {
+  const isGlobal = ownerUserId == null
+  return (
+    <span className={`knowledge-badge ${isGlobal ? 'owner-global' : 'owner-personal'}`}>
+      {isGlobal ? 'Общая' : `Пользователь: ${ownerUserId}`}
     </span>
   )
 }
@@ -48,6 +86,10 @@ export default function KnowledgeSources() {
     setItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)))
   }
 
+  const handleFilterChange = (_name, value) => setFilter(value)
+  const handleUploadScopeChange = (_name, value) => setUploadScope(value)
+  const handleRowScopeChange = (id, value) => updateSource(id, { scope: value })
+
   const updateSource = async (id, payload) => {
     try {
       setSavingId(id)
@@ -85,7 +127,7 @@ export default function KnowledgeSources() {
         weight: Number(uploadWeight || 1),
       })
       await load()
-      alert('Документ загружен и добавлен в Global KB')
+      alert('Документ загружен и добавлен в общую базу знаний')
     } catch (e) {
       alert(e.message || 'Не удалось загрузить документ')
     } finally {
@@ -94,109 +136,112 @@ export default function KnowledgeSources() {
   }
 
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
+    <div className="knowledge-sources-page">
+      <div className="page-header">
         <div>
-          <h2 style={{ margin: 0 }}>Источники знаний</h2>
-          <p style={{ marginTop: 6, color: '#64748b' }}>Управляйте тем, какие источники влияют на рекомендации и ответы RAG-ассистента.</p>
+          <h2>Источники знаний</h2>
+          <p>Управляйте тем, какие источники влияют на рекомендации и ответы RAG-ассистента.</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <select value={filter} onChange={(e) => setFilter(e.target.value)} style={{ padding: '8px 10px', borderRadius: 8 }}>
-            <option value="all">Все</option>
-            <option value="global">Global KB</option>
-            <option value="personal">Personal KB</option>
-          </select>
-          <select value={uploadScope} onChange={(e) => setUploadScope(e.target.value)} style={{ padding: '8px 10px', borderRadius: 8 }}>
-            <option value="both">scope: both</option>
-            <option value="rag">scope: rag</option>
-            <option value="recommendations">scope: recommendations</option>
-          </select>
+      </div>
+
+      <div className="filters-bar glass-card knowledge-controls">
+        <div className="knowledge-control-group">
+          <Select name="filter" value={filter} onChange={handleFilterChange} options={filterOptions} />
+          <Select name="uploadScope" value={uploadScope} onChange={handleUploadScopeChange} options={scopeOptions} />
           <input
+            className="input knowledge-weight-input"
             type="number"
             min={0}
             max={10}
             step={0.1}
             value={uploadWeight}
             onChange={(e) => setUploadWeight(e.target.value)}
-            style={{ width: 90, padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d5db' }}
+            aria-label="Вес загружаемого источника"
           />
-          <label style={{ display: 'inline-flex', alignItems: 'center', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 8, cursor: uploading ? 'not-allowed' : 'pointer', background: uploading ? '#e5e7eb' : '#fff' }}>
-            {uploading ? 'Загрузка...' : 'Загрузить PDF в Global KB'}
-            <input type="file" accept=".pdf,.txt,.md" onChange={uploadAdminDocument} disabled={uploading} style={{ display: 'none' }} />
+        </div>
+        <div className="knowledge-actions">
+          <label className={`btn btn-secondary knowledge-upload-button ${uploading ? 'disabled' : ''}`}>
+            {uploading ? 'Загрузка...' : 'Загрузить документ в общую базу'}
+            <input type="file" accept=".pdf,.txt,.md" onChange={uploadAdminDocument} disabled={uploading} />
           </label>
-          <button onClick={runReindex} disabled={reindexing || loading} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: reindexing ? '#e5e7eb' : '#ffffff', cursor: 'pointer' }}>
-            {reindexing ? 'Идет переиндексация...' : 'Переиндексировать Global KB'}
+          <button className="btn btn-primary" onClick={runReindex} disabled={reindexing || loading}>
+            {reindexing ? 'Идет переиндексация...' : 'Переиндексировать общую базу'}
           </button>
         </div>
       </div>
 
-      {error && <div style={{ marginBottom: 16, color: '#b91c1c' }}>{error}</div>}
+      {error && <div className="knowledge-error glass-card">{error}</div>}
 
       {loading ? (
-        <div>Загрузка...</div>
+        <div className="loading-state">Загрузка...</div>
       ) : (
-        <div style={{ overflowX: 'auto', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: '#f8fafc', textAlign: 'left' }}>
-                <th style={{ padding: 12, borderBottom: '1px solid #e5e7eb' }}>Название</th>
-                <th style={{ padding: 12, borderBottom: '1px solid #e5e7eb' }}>Тип</th>
-                <th style={{ padding: 12, borderBottom: '1px solid #e5e7eb' }}>Владелец</th>
-                <th style={{ padding: 12, borderBottom: '1px solid #e5e7eb' }}>Scope</th>
-                <th style={{ padding: 12, borderBottom: '1px solid #e5e7eb' }}>Weight</th>
-                <th style={{ padding: 12, borderBottom: '1px solid #e5e7eb' }}>Enabled</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleItems.map((item) => (
-                <tr key={item.id}>
-                  <td style={{ padding: 12, borderBottom: '1px solid #f1f5f9' }}>{item.title}</td>
-                  <td style={{ padding: 12, borderBottom: '1px solid #f1f5f9' }}>{item.source_type}</td>
-                  <td style={{ padding: 12, borderBottom: '1px solid #f1f5f9' }}>{item.owner_user_id == null ? 'global' : `user:${item.owner_user_id}`}</td>
-                  <td style={{ padding: 12, borderBottom: '1px solid #f1f5f9' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <ScopeBadge scope={item.scope} />
-                      <select
-                        value={item.scope}
-                        disabled={savingId === item.id}
-                        onChange={(e) => updateSource(item.id, { scope: e.target.value })}
-                        style={{ padding: '6px 8px', borderRadius: 8 }}
-                      >
-                        <option value="both">both</option>
-                        <option value="rag">rag</option>
-                        <option value="recommendations">recommendations</option>
-                      </select>
-                    </div>
-                  </td>
-                  <td style={{ padding: 12, borderBottom: '1px solid #f1f5f9' }}>
-                    <input
-                      type="number"
-                      min={0}
-                      max={10}
-                      step={0.1}
-                      value={item.weight}
-                      disabled={savingId === item.id}
-                      onChange={(e) => patchItem(item.id, { weight: Number(e.target.value || 0) })}
-                      onBlur={(e) => updateSource(item.id, { weight: Number(e.target.value || 0) })}
-                      style={{ width: 80, padding: '6px 8px', borderRadius: 8, border: '1px solid #d1d5db' }}
-                    />
-                  </td>
-                  <td style={{ padding: 12, borderBottom: '1px solid #f1f5f9' }}>
-                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                      <input
-                        type="checkbox"
-                        checked={item.enabled}
-                        disabled={savingId === item.id}
-                        onChange={(e) => updateSource(item.id, { enabled: e.target.checked })}
-                      />
-                      {item.enabled ? 'on' : 'off'}
-                    </label>
-                  </td>
+        <>
+          <div className="table-card glass-card knowledge-table-card">
+            <table className="table knowledge-table">
+              <thead>
+                <tr>
+                  <th>Название</th>
+                  <th>Тип</th>
+                  <th>Владелец</th>
+                  <th>Область</th>
+                  <th>Вес</th>
+                  <th>Статус</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {visibleItems.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <div className="knowledge-source-title">{item.title}</div>
+                      <div className="knowledge-source-meta">{item.owner_user_id == null ? 'Документ общей базы' : 'Персональный источник'}</div>
+                    </td>
+                    <td><TypeBadge type={item.source_type} /></td>
+                    <td><OwnerBadge ownerUserId={item.owner_user_id} /></td>
+                    <td>
+                      <div className="knowledge-inline-control">
+                        <ScopeBadge scope={item.scope} />
+                        <Select
+                          name={`scope-${item.id}`}
+                          value={item.scope}
+                          disabled={savingId === item.id}
+                          onChange={(_name, value) => handleRowScopeChange(item.id, value)}
+                          options={scopeOptions}
+                        />
+                      </div>
+                    </td>
+                    <td>
+                      <input
+                        className="input knowledge-weight-input"
+                        type="number"
+                        min={0}
+                        max={10}
+                        step={0.1}
+                        value={item.weight}
+                        disabled={savingId === item.id}
+                        onChange={(e) => patchItem(item.id, { weight: Number(e.target.value || 0) })}
+                        onBlur={(e) => updateSource(item.id, { weight: Number(e.target.value || 0) })}
+                        aria-label={`Вес источника ${item.title}`}
+                      />
+                    </td>
+                    <td>
+                      <label className="knowledge-status-toggle">
+                        <input
+                          type="checkbox"
+                          checked={item.enabled}
+                          disabled={savingId === item.id}
+                          onChange={(e) => updateSource(item.id, { enabled: e.target.checked })}
+                        />
+                        <span className={`knowledge-status-dot ${item.enabled ? 'enabled' : ''}`} />
+                        <span>{item.enabled ? 'Включен' : 'Выключен'}</span>
+                      </label>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {visibleItems.length === 0 && <div className="empty-state glass-card"><p>Источники не найдены</p></div>}
+        </>
       )}
     </div>
   )
