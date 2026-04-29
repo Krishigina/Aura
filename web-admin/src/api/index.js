@@ -317,3 +317,16 @@ export const knowledgeApi = {
     return response.json()
   },
 }
+
+export const matchingApi = {
+  listRules: (status) => request(`/matching/rules${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+  createRule: (data) => request('/matching/rules', { method: 'POST', body: JSON.stringify(data) }),
+  updateRule: (id, data) => request(`/matching/rules/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  matchProducts: (data = {}) => request('/matching/products', { method: 'POST', body: JSON.stringify(data) }),
+}
+
+export const passportSuggestionsApi = {
+  list: () => request('/profile/skin-passport/suggestions'),
+  create: (data) => request('/profile/skin-passport/suggestions', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id, data) => request(`/profile/skin-passport/suggestions/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+}
