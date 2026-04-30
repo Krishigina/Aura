@@ -56,10 +56,16 @@ class ProductRecommendationInput:
     brand: str
     segment: str
     product_type: str
-    purpose: List[str]
-    skin_type: List[str]
+    purpose: Optional[List[str]]
+    skin_type: Optional[List[str]]
     composition: str
     application_info: str = ""
+
+    def purpose_values(self) -> List[str]:
+        return self.purpose or []
+
+    def skin_type_values(self) -> List[str]:
+        return self.skin_type or []
 
 
 def normalize_product_segment(value: str) -> str:
@@ -118,8 +124,9 @@ def _reason(product: ProductRecommendationInput, match_result: Any) -> str:
         return f"Подходит для коррекции: {', '.join(match_result.matched_concerns)}"
     if match_result.matched_goals:
         return f"Подходит для целей: {', '.join(match_result.matched_goals)}"
-    if product.purpose:
-        return f"Соответствует задаче ухода: {', '.join(product.purpose)}"
+    purpose = product.purpose_values()
+    if purpose:
+        return f"Соответствует задаче ухода: {', '.join(purpose)}"
     return "Подобрано по данным анкеты кожи"
 
 
@@ -178,8 +185,8 @@ def build_recommendation(
             name=product.name,
             composition=product.composition,
             product_type=product.product_type,
-            purpose=", ".join(product.purpose),
-            skin_type=", ".join(product.skin_type),
+            purpose=", ".join(product.purpose_values()),
+            skin_type=", ".join(product.skin_type_values()),
         )
         match_result = match_product(candidate, profile, rules or [])
         if match_result.decision == "exclude":

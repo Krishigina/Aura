@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 import pytest
 
 from backend.api.matching_engine import MatchingProfile, MatchingRule, ProductCandidate, match_product
@@ -85,11 +87,13 @@ def test_build_recommendation_returns_all_four_lines_without_measurements():
 
 
 def test_recent_procedure_adds_recovery_warning():
+    recent_performed_at = datetime.now(timezone.utc).isoformat()
+
     result = build_recommendation(
         answers={"concerns": ["dehydration"], "skin_type": ["dry"]},
         accepted_insights=[],
         sensor_readings=[],
-        procedures=[{"procedure_name": "Пилинг", "performed_at": "2026-04-29T12:00:00Z"}],
+        procedures=[{"procedure_name": "Пилинг", "performed_at": recent_performed_at}],
         products=[],
         rules=[],
     )
@@ -128,6 +132,34 @@ def test_blocked_products_do_not_enter_routine():
     assert luxury["routine"]["morning"] == []
     assert luxury["routine"]["evening"] == []
     assert any("Недостаточно продуктов" in warning for warning in luxury["warnings"])
+
+
+def test_build_recommendation_handles_missing_product_lists():
+    products = [
+        ProductRecommendationInput(
+            id=4,
+            name="Barrier Cream",
+            brand="Aura Lab",
+            segment="budget",
+            product_type="Крем",
+            purpose=None,
+            skin_type=None,
+            composition="Ceramide",
+            application_info="Наносите утром",
+        )
+    ]
+
+    result = build_recommendation(
+        answers={"concerns": ["sensitivity"], "skin_type": ["dry"]},
+        accepted_insights=[],
+        sensor_readings=[],
+        procedures=[],
+        products=products,
+        rules=[],
+    )
+
+    budget = next(line for line in result["lines"] if line["key"] == "budget")
+    assert budget["routine"]["morning"][0]["product_id"] == 4
 
 
 def test_matching_engine_still_exposes_block_decision_for_reference():
