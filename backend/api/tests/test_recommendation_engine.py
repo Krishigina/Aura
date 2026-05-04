@@ -82,6 +82,10 @@ def test_build_recommendation_returns_all_four_lines_without_measurements():
     professional = next(line for line in result["lines"] if line["key"] == "professional")
     morning_steps = professional["routine"]["morning"]
     assert morning_steps[0]["product_id"] == 1
+    assert morning_steps[0]["product_name"] == "Niacinamide Serum"
+    assert morning_steps[0]["step"] == "Сыворотка"
+    assert "name" not in morning_steps[0]
+    assert "product_type" not in morning_steps[0]
     assert morning_steps[0]["compatibility_percent"] == 80
     assert morning_steps[0]["sequence"] == 1
 
@@ -101,6 +105,83 @@ def test_recent_procedure_adds_recovery_warning():
     assert result["input_quality"]["procedures"] == "recent"
     assert any("процедур" in item.lower() for item in result["procedure_context"])
     assert any("SPF" in item for item in result["warnings"])
+
+
+def test_recent_procedure_excludes_aggressive_products_from_routine():
+    recent_performed_at = datetime.now(timezone.utc).isoformat()
+    products = [
+        ProductRecommendationInput(
+            id=5,
+            name="Retinol Peel Serum",
+            brand="Active Lab",
+            segment="cosmeceutical",
+            product_type="Кислотный пилинг",
+            purpose=["texture"],
+            skin_type=["combination"],
+            composition="Retinol, glycolic acid",
+            application_info="Наносите вечером",
+        ),
+        ProductRecommendationInput(
+            id=6,
+            name="Barrier Cream",
+            brand="Aura Lab",
+            segment="cosmeceutical",
+            product_type="Крем",
+            purpose=["barrier"],
+            skin_type=["combination"],
+            composition="Ceramide",
+            application_info="Наносите утром",
+        ),
+    ]
+
+    result = build_recommendation(
+        answers={"concerns": ["texture"], "skin_type": ["combination"]},
+        accepted_insights=[],
+        sensor_readings=[],
+        procedures=[{"procedure_name": "Чистка", "performed_at": recent_performed_at}],
+        products=products,
+        rules=[],
+    )
+
+    cosmeceutical = next(line for line in result["lines"] if line["key"] == "cosmeceutical")
+    routine_names = [
+        step["product_name"]
+        for steps in cosmeceutical["routine"].values()
+        for step in steps
+    ]
+    assert "Retinol Peel Serum" not in routine_names
+    assert "Barrier Cream" in routine_names
+
+
+def test_low_hydration_sensor_reading_focuses_summary_on_barrier_support():
+    result = build_recommendation(
+        answers={"concerns": ["dryness"], "skin_type": ["dry"]},
+        accepted_insights=[],
+        sensor_readings=[{"hydration": 2, "oiliness": 3, "measured_at": "2026-04-01T10:00:00+00:00"}],
+        procedures=[],
+        products=[],
+        rules=[],
+    )
+
+    summary_text = " ".join(str(value) for value in result["summary"].values()).lower()
+    context_text = " ".join(result["procedure_context"] + result["warnings"]).lower()
+    assert "барьер" in summary_text or "hydration" in summary_text or "увлаж" in summary_text
+    support_text = f"{summary_text} {context_text}"
+    assert "барьер" in support_text or "hydration" in support_text or "увлаж" in support_text
+
+
+def test_high_oiliness_sensor_reading_mentions_sebum_control():
+    result = build_recommendation(
+        answers={"concerns": ["shine"], "skin_type": ["oily"]},
+        accepted_insights=[],
+        sensor_readings=[{"hydration": 4, "oiliness": 4, "measured_at": "2026-04-01T10:00:00+00:00"}],
+        procedures=[],
+        products=[],
+        rules=[],
+    )
+
+    summary_text = " ".join(str(value) for value in result["summary"].values()).lower()
+    assert "себум" in summary_text or "sebum" in summary_text
 
 
 def test_blocked_products_do_not_enter_routine():

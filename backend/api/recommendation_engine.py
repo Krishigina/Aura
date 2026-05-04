@@ -22,6 +22,7 @@ LINE_POSITIONING = {
     "luxury": "Премиальный уход с акцентом на комфорт и текстуры",
     "cosmeceutical": "Активный уход с дерматологическим фокусом",
 }
+AGGRESSIVE_ACTIVE_TERMS = ("retinol", "ретин", "acid", "кислот", "пилинг", "peel")
 SEGMENT_ALIASES = {
     "budget": "budget",
     "бюджет": "budget",
@@ -97,6 +98,34 @@ def _has_recent_procedure(procedures: List[Dict[str, Any]]) -> bool:
     return False
 
 
+def _has_aggressive_active(product: ProductRecommendationInput) -> bool:
+    searchable = " ".join(
+        [
+            str(product.product_type or ""),
+            str(product.application_info or ""),
+            str(product.composition or ""),
+        ]
+    ).lower()
+    return any(term in searchable for term in AGGRESSIVE_ACTIVE_TERMS)
+
+
+def _latest_sensor_reading(sensor_readings: List[Dict[str, Any]]) -> Dict[str, Any]:
+    readings = sensor_readings or []
+    if not readings:
+        return {}
+    return max(
+        readings,
+        key=lambda reading: _parse_dt(reading.get("measured_at") or reading.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc),
+    )
+
+
+def _sensor_value(reading: Dict[str, Any], key: str) -> Optional[float]:
+    try:
+        return float(reading[key])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def _routine_bucket(product: ProductRecommendationInput) -> str:
     info = str(product.application_info or "").lower()
     if "вечер" in info or "night" in info or "pm" in info:
@@ -130,11 +159,27 @@ def _reason(product: ProductRecommendationInput, match_result: Any) -> str:
     return "Подобрано по данным анкеты кожи"
 
 
-def _summary_title(answers: Dict[str, List[str]]) -> str:
+def _summary_text(answers: Dict[str, List[str]], latest_sensor: Dict[str, Any]) -> Dict[str, str]:
+    hydration = _sensor_value(latest_sensor, "hydration")
+    oiliness = _sensor_value(latest_sensor, "oiliness")
+
+    if hydration is not None and hydration <= 2:
+        title = "Фокус на увлажнение и поддержку барьера"
+        description = "Замеры показывают низкое увлажнение: сделайте акцент на поддержке барьера и восстановлении комфорта кожи."
+        if oiliness is not None and oiliness >= 4:
+            description += " Дополнительно учитывайте sebum control без пересушивания."
+        return {"title": title, "description": description}
+
+    if oiliness is not None and oiliness >= 4:
+        return {
+            "title": "Персональная линейка с sebum control",
+            "description": "Замеры показывают повышенную жирность: уход должен помогать контролировать себум и блеск.",
+        }
+
     concerns = answers.get("concerns") or answers.get("concern") or []
     if concerns:
-        return f"Персональная линейка для: {', '.join(concerns)}"
-    return "Персональная линейка ухода"
+        return {"title": f"Персональная линейка для: {', '.join(concerns)}", "description": ""}
+    return {"title": "Персональная линейка ухода", "description": ""}
 
 
 def build_recommendation(
@@ -162,10 +207,13 @@ def build_recommendation(
     if not sensor_readings:
         notes.append("Замеры не учтены")
 
-    if _has_recent_procedure(procedures):
+    has_recent_procedure = _has_recent_procedure(procedures)
+    if has_recent_procedure:
         input_quality["procedures"] = "recent"
         procedure_context.append("После недавних процедур коже нужен восстановительный режим")
         warnings.append("После процедур используйте SPF и избегайте агрессивных активов")
+
+    latest_sensor = _latest_sensor_reading(sensor_readings)
 
     profile = MatchingProfile(answers=answers or {}, accepted_insights=accepted_insights or [])
     lines_by_key = {
@@ -180,6 +228,9 @@ def build_recommendation(
     }
 
     for product in products or []:
+        if has_recent_procedure and _has_aggressive_active(product):
+            continue
+
         candidate = ProductCandidate(
             id=product.id,
             name=product.name,
@@ -198,9 +249,9 @@ def build_recommendation(
             {
                 "sequence": len(line["routine"][bucket]) + 1,
                 "product_id": product.id,
-                "name": product.name,
+                "product_name": product.name,
                 "brand": product.brand,
-                "product_type": product.product_type,
+                "step": product.product_type,
                 "compatibility_percent": match_result.compatibility_percent,
                 "instruction": _instruction(product),
                 "frequency": _frequency(product),
@@ -214,11 +265,14 @@ def build_recommendation(
         if not line["routine"]["morning"] and not line["routine"]["evening"]:
             line["warnings"].append("Недостаточно продуктов для полноценной линейки")
 
+    summary = _summary_text(answers or {}, latest_sensor)
+
     return {
         "id": str(uuid4()),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "summary": {
-            "title": _summary_title(answers or {}),
+            "title": summary["title"],
+            "description": summary["description"],
             "line_count": len(lines),
         },
         "input_quality": input_quality,
