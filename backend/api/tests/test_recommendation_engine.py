@@ -7,6 +7,7 @@ from backend.api.recommendation_engine import (
     LINE_KEYS,
     ProductRecommendationInput,
     RecommendationGenerationError,
+    build_extended_skin_profile,
     build_recommendation,
     normalize_product_segment,
 )
@@ -51,6 +52,28 @@ def test_build_recommendation_requires_skin_passport_answers():
     assert exc_info.value.message == "Чтобы собрать точную линейку, пройдите анкету кожи"
 
 
+def test_extended_skin_profile_preserves_zone_concerns():
+    profile = build_extended_skin_profile(
+        answers={"skin_type": ["combination"], "concerns": ["texture"]},
+        accepted_insights=[],
+        sensor_readings=[{
+            "measured_at": "2026-04-01T10:00:00+00:00",
+            "zones": {
+                "forehead": {"hydration": 1, "oiliness": 1},
+                "chin": {"hydration": 3, "oiliness": 5},
+                "nose": {"oiliness": 5},
+                "cheeks": {"hydration": 2, "sensitivity": 4},
+            },
+        }],
+    )
+
+    assert profile["global_skin_type"] == "combination"
+    assert "dryness" in profile["zone_concerns"]["forehead"]
+    assert "oiliness" in profile["zone_concerns"]["chin"]
+    assert "oily_t_zone" in profile["state_tags"]
+    assert "dehydrated_areas" in profile["state_tags"]
+
+
 def test_build_recommendation_returns_all_four_lines_without_measurements():
     products = [
         ProductRecommendationInput(
@@ -86,7 +109,7 @@ def test_build_recommendation_returns_all_four_lines_without_measurements():
     assert morning_steps[0]["step"] == "Сыворотка"
     assert "name" not in morning_steps[0]
     assert "product_type" not in morning_steps[0]
-    assert morning_steps[0]["compatibility_percent"] == 80
+    assert morning_steps[0]["compatibility_percent"] == 58
     assert morning_steps[0]["sequence"] == 1
 
 
@@ -249,3 +272,25 @@ def test_matching_engine_still_exposes_block_decision_for_reference():
     result = match_product(product, profile, [_rule(3, "retinol", "pregnancy", "true", effect="block", weight_delta=0)])
 
     assert result.decision == "exclude"
+
+
+def test_recommendation_line_sorts_steps_by_compatibility_percent():
+    products = [
+        ProductRecommendationInput(1, "Basic Cream", "Aura", "budget", "Крем", ["basic"], ["dry"], "Aqua", "Наносите утром"),
+        ProductRecommendationInput(2, "Niacinamide Gel", "Aura", "budget", "Гель", ["oiliness"], ["combination"], "Niacinamide", "Наносите утром"),
+    ]
+    rules = [_rule(31, "niacinamide", "concern", "oiliness", effect="boost", weight_delta=8)]
+
+    result = build_recommendation(
+        answers={"concerns": ["oiliness"], "skin_type": ["combination"]},
+        accepted_insights=[],
+        sensor_readings=[],
+        procedures=[],
+        products=products,
+        rules=rules,
+    )
+
+    budget = next(line for line in result["lines"] if line["key"] == "budget")
+    assert budget["routine"]["morning"][0]["product_id"] == 2
+    assert "score_breakdown" in budget["routine"]["morning"][0]
+    assert budget["routine"]["morning"][0]["explanations"]

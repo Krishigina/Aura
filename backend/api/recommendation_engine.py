@@ -126,6 +126,66 @@ def _sensor_value(reading: Dict[str, Any], key: str) -> Optional[float]:
         return None
 
 
+def _zone_metric(zone: Dict[str, Any], key: str) -> Optional[float]:
+    try:
+        return float(zone[key])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _derive_zone_concerns(zone: Dict[str, Any]) -> List[str]:
+    concerns: List[str] = []
+    hydration = _zone_metric(zone, "hydration")
+    oiliness = _zone_metric(zone, "oiliness")
+    sensitivity = _zone_metric(zone, "sensitivity")
+    if hydration is not None and hydration <= 2:
+        concerns.extend(["dryness", "low_hydration"])
+    if oiliness is not None and oiliness >= 4:
+        concerns.append("oiliness")
+    if sensitivity is not None and sensitivity >= 4:
+        concerns.append("sensitivity")
+    return concerns
+
+
+def build_extended_skin_profile(
+    answers: Dict[str, List[str]],
+    accepted_insights: List[str],
+    sensor_readings: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    latest = _latest_sensor_reading(sensor_readings)
+    zone_concerns: Dict[str, List[str]] = {}
+    zones = latest.get("zones") if isinstance(latest, dict) else None
+    if isinstance(zones, dict):
+        for zone_name, zone_data in zones.items():
+            if isinstance(zone_data, dict):
+                derived = _derive_zone_concerns(zone_data)
+                if derived:
+                    zone_concerns[str(zone_name)] = derived
+
+    tags = set(str(item) for item in accepted_insights or [])
+    flat_zone_values = {value for values in zone_concerns.values() for value in values}
+    if {"dryness", "low_hydration"}.intersection(flat_zone_values):
+        tags.add("dehydrated_areas")
+    if "oiliness" in flat_zone_values:
+        tags.add("oily_t_zone")
+    if "sensitivity" in flat_zone_values:
+        tags.add("sensitive")
+
+    skin_types = answers.get("skin_type") or answers.get("skin_types") or []
+    global_skin_type = str(skin_types[0]) if skin_types else ""
+    if "dehydrated_areas" in tags and "oily_t_zone" in tags:
+        global_skin_type = "combination"
+        tags.add("combination_pattern")
+
+    concerns = list(dict.fromkeys((answers.get("concerns") or answers.get("concern") or []) + list(flat_zone_values)))
+    return {
+        "global_skin_type": global_skin_type,
+        "concerns": concerns,
+        "zone_concerns": zone_concerns,
+        "state_tags": sorted(tags),
+    }
+
+
 def _routine_bucket(product: ProductRecommendationInput) -> str:
     info = str(product.application_info or "").lower()
     if "вечер" in info or "night" in info or "pm" in info:
@@ -214,8 +274,9 @@ def build_recommendation(
         warnings.append("После процедур используйте SPF и избегайте агрессивных активов")
 
     latest_sensor = _latest_sensor_reading(sensor_readings)
+    extended_skin_profile = build_extended_skin_profile(answers or {}, accepted_insights or [], sensor_readings or [])
 
-    profile = MatchingProfile(answers=answers or {}, accepted_insights=accepted_insights or [])
+    profile = MatchingProfile(answers=answers or {}, accepted_insights=accepted_insights or [], skin_state=extended_skin_profile)
     lines_by_key = {
         key: {
             "key": key,
@@ -253,12 +314,21 @@ def build_recommendation(
                 "brand": product.brand,
                 "step": product.product_type,
                 "compatibility_percent": match_result.compatibility_percent,
+                "score_breakdown": match_result.score_breakdown,
+                "explanations": match_result.explanations,
+                "decision": match_result.decision,
                 "instruction": _instruction(product),
                 "frequency": _frequency(product),
                 "reason": _reason(product, match_result),
                 "warnings": match_result.warnings,
             }
         )
+
+    for line in lines_by_key.values():
+        for bucket in ("morning", "evening"):
+            line["routine"][bucket].sort(key=lambda item: -int(item.get("compatibility_percent") or 0))
+            for index, item in enumerate(line["routine"][bucket], start=1):
+                item["sequence"] = index
 
     lines = [lines_by_key[key] for key in LINE_KEYS]
     for line in lines:
@@ -276,6 +346,7 @@ def build_recommendation(
             "line_count": len(lines),
         },
         "input_quality": input_quality,
+        "extended_skin_profile": extended_skin_profile,
         "lines": lines,
         "procedure_context": procedure_context,
         "warnings": warnings,
