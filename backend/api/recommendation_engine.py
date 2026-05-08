@@ -209,6 +209,11 @@ def _frequency(product: ProductRecommendationInput) -> str:
 
 
 def _reason(product: ProductRecommendationInput, match_result: Any) -> str:
+    compatibility = int(getattr(match_result, "compatibility_percent", 0) or 0)
+    if compatibility < 40:
+        return "Низкая совместимость: средство не является приоритетной рекомендацией для текущего профиля"
+    if compatibility < 50:
+        return "Возможное средство только с осторожностью: совместимость ниже оптимального уровня"
     if match_result.matched_concerns:
         return f"Подходит для коррекции: {', '.join(match_result.matched_concerns)}"
     if match_result.matched_goals:

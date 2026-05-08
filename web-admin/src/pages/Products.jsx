@@ -34,6 +34,7 @@ export default function Products() {
   const [category, setCategory] = useState('Все')
   const [showModal, setShowModal] = useState(false)
   const [editingProduct, setEditingProduct] = useState(null)
+  const [detailsLoading, setDetailsLoading] = useState(false)
   const [deleteModal, setDeleteModal] = useState(null)
   const [formData, setFormData] = useState({
     name: '',
@@ -131,6 +132,10 @@ export default function Products() {
     }
   }
   const handleEdit = async (product) => { 
+    setEditingProduct(product)
+    setDetailsLoading(true)
+    setShowModal(true)
+
     let parsedPurpose = []
     let parsedSkinType = []
     
@@ -174,7 +179,6 @@ export default function Products() {
       }
     }
     
-    setEditingProduct(product)
     setFormData({
       name: product.name || '',
       what_is_it: product.what_is_it || '',
@@ -196,7 +200,7 @@ export default function Products() {
       has_video: loadedVideo ? true : false,
       video: loadedVideo
     })
-    setShowModal(true) 
+    setDetailsLoading(false)
   }
   const openAddModal = async () => {
     try {
@@ -469,12 +473,66 @@ export default function Products() {
     return classes[segment] || 'segment-budget'
   }
 
-  if (loading) {
-    return (
-      <div className="products-page">
-        <div className="loading-state">Загрузка...</div>
+  const ProductPageSkeleton = () => (
+    <div className="products-page">
+      <div className="page-header products-skeleton-header">
+        <div>
+          <div className="skeleton-line skeleton-title"></div>
+          <div className="skeleton-line skeleton-subtitle"></div>
+        </div>
+        <div className="skeleton-actions">
+          <div className="skeleton-button"></div>
+          <div className="skeleton-button skeleton-button-primary"></div>
+        </div>
       </div>
-    )
+
+      <div className="filters-bar glass-card skeleton-filters">
+        <div className="skeleton-input"></div>
+        <div className="skeleton-tabs">
+          {Array.from({ length: 5 }).map((_, idx) => <div key={idx} className="skeleton-pill"></div>)}
+        </div>
+      </div>
+
+      <div className="table-card glass-card skeleton-table-card">
+        {Array.from({ length: 7 }).map((_, idx) => (
+          <div key={idx} className="skeleton-table-row">
+            <div className="skeleton-cell-main">
+              <div className="skeleton-line skeleton-product-name"></div>
+              <div className="skeleton-line skeleton-product-desc"></div>
+            </div>
+            <div className="skeleton-badge"></div>
+            <div className="skeleton-badge"></div>
+            <div className="skeleton-line skeleton-volume"></div>
+            <div className="skeleton-badge"></div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+
+  const ProductDetailsSkeleton = () => (
+    <div className="product-details-skeleton">
+      {['О продукте', 'Описание', 'Характеристики', 'Применение', 'Состав', 'Медиа'].map((title, sectionIndex) => (
+        <div key={title} className="form-section skeleton-form-section">
+          <div className="form-section-header">
+            <div className="skeleton-icon"></div>
+            <span>{title}</span>
+          </div>
+          <div className="skeleton-section-grid">
+            {Array.from({ length: sectionIndex === 1 || sectionIndex === 4 ? 1 : 2 }).map((_, idx) => (
+              <div key={idx} className="skeleton-field">
+                <div className="skeleton-line skeleton-label"></div>
+                <div className="skeleton-input"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+
+  if (loading) {
+    return <ProductPageSkeleton />
   }
 
   return (
@@ -563,6 +621,7 @@ export default function Products() {
               <button className="btn btn-ghost btn-sm" onClick={() => setShowModal(false)}><X size={20} /></button>
             </div>
             <form onSubmit={handleSave} className="product-form">
+              {detailsLoading ? <ProductDetailsSkeleton /> : (
               <div className="form-grid" style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
                 {/* Секция 1: О продукте */}
                 <div className="form-section" style={{ gridColumn: 'span 2' }}>
@@ -756,9 +815,10 @@ export default function Products() {
                   </div>
                 </div>
               </div>
+              )}
               <div className="modal-actions">
                 <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>Отмена</button>
-                <button type="submit" className="btn btn-primary">Сохранить</button>
+                <button type="submit" className="btn btn-primary" disabled={detailsLoading}>Сохранить</button>
               </div>
             </form>
           </div>

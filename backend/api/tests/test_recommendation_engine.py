@@ -266,6 +266,38 @@ def test_build_recommendation_handles_missing_product_lists():
     assert budget["routine"]["morning"][0]["product_id"] == 4
 
 
+def test_low_compatibility_reason_does_not_say_product_fits():
+    products = [
+        ProductRecommendationInput(
+            id=8,
+            name="Basic Cream",
+            brand="Aura",
+            segment="budget",
+            product_type="Крем",
+            purpose=None,
+            skin_type=["oily"],
+            composition="Aqua",
+            application_info="Наносите утром",
+        )
+    ]
+
+    result = build_recommendation(
+        answers={"skin_type": ["dry"]},
+        accepted_insights=[],
+        sensor_readings=[],
+        procedures=[],
+        products=products,
+        rules=[],
+    )
+
+    budget = next(line for line in result["lines"] if line["key"] == "budget")
+    item = budget["routine"]["morning"][0]
+    assert item["compatibility_percent"] == 35
+    assert item["decision"] == "caution"
+    assert not item["reason"].startswith("Подходит")
+    assert "низкая совместимость" in item["reason"].lower()
+
+
 def test_matching_engine_still_exposes_block_decision_for_reference():
     product = ProductCandidate(id=3, name="Retinol Cream", composition="Retinol")
     profile = MatchingProfile(answers={"pregnancy": ["true"]}, accepted_insights=[])

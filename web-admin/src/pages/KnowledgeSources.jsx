@@ -21,6 +21,7 @@ const typeLabels = {
   pdf: 'PDF',
   txt: 'Текст',
   md: 'Markdown',
+  docx: 'Word',
   note: 'Заметка',
   document: 'Документ'
 }
@@ -162,7 +163,7 @@ export default function KnowledgeSources() {
         <div className="knowledge-actions">
           <label className={`btn btn-secondary knowledge-upload-button ${uploading ? 'disabled' : ''}`}>
             {uploading ? 'Загрузка...' : 'Загрузить документ в общую базу'}
-            <input type="file" accept=".pdf,.txt,.md" onChange={uploadAdminDocument} disabled={uploading} />
+            <input type="file" accept=".pdf,.txt,.md,.docx" onChange={uploadAdminDocument} disabled={uploading} />
           </label>
           <button className="btn btn-primary" onClick={runReindex} disabled={reindexing || loading}>
             {reindexing ? 'Идет переиндексация...' : 'Переиндексировать общую базу'}
