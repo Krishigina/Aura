@@ -88,6 +88,48 @@ class RecordingVectorStore:
         self.documents = documents
 
 
+class SplitResultsVectorStore:
+    def __init__(self):
+        self.calls = []
+
+    def search(self, collection_name: str, query: str, limit: int = 5, filters=None):
+        self.calls.append({"collection_name": collection_name, "query": query, "limit": limit, "filters": filters})
+        if filters and filters.get("session_id"):
+            return [
+                {
+                    "id": "session-doc-1",
+                    "score": 0.93,
+                    "properties": {"title": "Сессионный документ", "content": "Локальная заметка по продукту"},
+                }
+            ]
+        return [
+            {
+                "id": "global-doc-1",
+                "score": 0.81,
+                "properties": {"title": "Глобальная база", "content": "Характеристики продукта из базы знаний"},
+            }
+        ]
+
+
+class ProductBoostVectorStore:
+    def search(self, collection_name: str, query: str, limit: int = 5, filters=None):
+        if filters and filters.get("session_id"):
+            return [
+                {
+                    "id": "session-product-doc",
+                    "score": 0.60,
+                    "properties": {"title": "Ultra Cream", "content": "Состав: ниацинамид, пантенол"},
+                }
+            ]
+        return [
+            {
+                "id": "global-generic-doc",
+                "score": 0.90,
+                "properties": {"title": "Общий гид", "content": "Общие рекомендации по уходу"},
+            }
+        ]
+
+
 @pytest.mark.anyio
 async def test_rag_service_returns_answer_when_vector_store_is_unavailable():
     service = RAGService(vector_store=BrokenVectorStore(), llm=FallbackLlm())
@@ -150,3 +192,50 @@ async def test_rag_service_initializes_when_default_vector_store_is_unavailable(
     response = await service.query(RAGRequest(query="ретинол", user_id="debug", max_results=1))
 
     assert response.answer == "LLM fallback for ретинол"
+
+
+@pytest.mark.anyio
+async def test_rag_service_combines_session_and_global_knowledge_when_session_exists():
+    vector_store = SplitResultsVectorStore()
+    service = RAGService(vector_store=vector_store, llm=FallbackLlm())
+
+    response = await service.query(
+        RAGRequest(
+            query="что важно про этот продукт",
+            user_id="42",
+            session_id="7",
+            max_results=5,
+        )
+    )
+
+    assert len(vector_store.calls) == 2
+    assert vector_store.calls[0]["filters"] == {"user_id": "42", "session_id": "7"}
+    assert vector_store.calls[1]["filters"] is None
+    assert len(response.sources) == 2
+    assert {source["id"] for source in response.sources} == {"session-doc-1", "global-doc-1"}
+
+
+@pytest.mark.anyio
+async def test_rag_service_boosts_product_related_sources_only_when_product_context_present():
+    service = RAGService(vector_store=ProductBoostVectorStore(), llm=FallbackLlm())
+
+    with_product_context = await service.query(
+        RAGRequest(
+            query="подходит ли мне этот продукт",
+            user_id="42",
+            session_id="7",
+            context={"product_context": {"product": {"name": "Ultra Cream"}}},
+            max_results=5,
+        )
+    )
+    without_product_context = await service.query(
+        RAGRequest(
+            query="подходит ли мне этот продукт",
+            user_id="42",
+            session_id="7",
+            max_results=5,
+        )
+    )
+
+    assert with_product_context.sources[0]["id"] == "session-product-doc"
+    assert without_product_context.sources[0]["id"] == "global-generic-doc"

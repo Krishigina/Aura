@@ -4,6 +4,7 @@ import re
 import uuid
 import logging
 import zipfile
+import json
 from io import BytesIO
 from app.infrastructure.vector_store import get_vector_store
 from app.infrastructure.llm_client import get_llm_client
@@ -21,11 +22,26 @@ class RAGService:
         system_prompt = self._build_system_prompt(request.context)
         try:
             vector_store = self.vector_store or get_vector_store()
-            results = vector_store.search(
+            session_results = vector_store.search(
                 collection_name=settings.collection_knowledge,
                 query=request.query,
                 limit=request.max_results,
                 filters={"user_id": request.user_id, "session_id": request.session_id} if request.session_id else None,
+            )
+            global_results = []
+            if request.session_id:
+                global_results = vector_store.search(
+                    collection_name=settings.collection_knowledge,
+                    query=request.query,
+                    limit=request.max_results,
+                    filters=None,
+                )
+            product_context = (request.context or {}).get("product_context")
+            results = self._merge_ranked_results(
+                session_results,
+                global_results,
+                request.max_results,
+                product_context=product_context if isinstance(product_context, dict) else None,
             )
         except Exception as error:
             logger.error(f"Vector search unavailable: {error}")
@@ -42,6 +58,14 @@ class RAGService:
             return RAGResponse(answer=answer, sources=[])
 
         if not results:
+            has_product_context = bool((request.context or {}).get("product_context"))
+            if has_product_context:
+                try:
+                    llm = self.llm or get_llm_client()
+                    answer = await llm.generate_with_context(request.query, [], system_prompt)
+                    return RAGResponse(answer=answer, sources=[])
+                except Exception as llm_error:
+                    logger.error(f"LLM product-context fallback unavailable: {llm_error}")
             return RAGResponse(
                 answer="Извините, я не нашёл релевантной информации в базе знаний.",
                 sources=[]
@@ -148,6 +172,15 @@ class RAGService:
         skin_passport = (context or {}).get("skin_passport")
         if skin_passport:
             prompt += f"\n\nПаспорт кожи пользователя (skin_passport): {skin_passport}"
+        product_context = (context or {}).get("product_context")
+        if product_context:
+            serialized_product_context = json.dumps(product_context, ensure_ascii=False)
+            prompt += (
+                "\n\nКонтекст текущего продукта (product_context): "
+                f"{serialized_product_context}"
+                "\nИспользуй этот контекст как приоритетный источник фактов о продукте: "
+                "состав, характеристики, назначение, совместимость, ограничения."
+            )
         return prompt
 
     def _search_text(self, doc: Dict[str, Any]) -> str:
@@ -157,6 +190,73 @@ class RAGService:
             doc.get("category"),
         ]
         return " ".join(part for part in parts if part)
+
+    def _merge_ranked_results(
+        self,
+        primary_results: Optional[List[Dict[str, Any]]],
+        secondary_results: Optional[List[Dict[str, Any]]],
+        limit: int,
+        product_context: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
+        merged: List[Dict[str, Any]] = []
+        seen_keys = set()
+        for result in (primary_results or []) + (secondary_results or []):
+            key = self._result_identity(result)
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            merged.append(result)
+        boost_terms = self._extract_product_boost_terms(product_context)
+        merged.sort(
+            key=lambda item: self._effective_score(item, boost_terms),
+            reverse=True,
+        )
+        return merged[:limit]
+
+    def _result_identity(self, result: Dict[str, Any]) -> str:
+        result_id = result.get("id")
+        if result_id is not None:
+            return f"id:{result_id}"
+        properties = result.get("properties", {}) or {}
+        title = properties.get("title") or properties.get("name") or ""
+        content = properties.get("content") or properties.get("text") or properties.get("description") or ""
+        return f"content:{title}|{content[:120]}"
+
+    def _extract_product_boost_terms(self, product_context: Optional[Dict[str, Any]]) -> List[str]:
+        if not product_context:
+            return []
+        product = product_context.get("product") if isinstance(product_context.get("product"), dict) else {}
+        raw_terms = [
+            product.get("name"),
+            product.get("brand"),
+            product.get("product_type"),
+            product.get("active_ingredient"),
+            product.get("composition"),
+        ]
+        terms = []
+        for value in raw_terms:
+            if not value:
+                continue
+            text = str(value).strip().lower()
+            if len(text) >= 3:
+                terms.append(text)
+        return terms
+
+    def _effective_score(self, result: Dict[str, Any], boost_terms: List[str]) -> float:
+        base = float(result.get("score") or 0.0)
+        if not boost_terms:
+            return base
+        properties = result.get("properties", {}) or {}
+        haystack = " ".join(
+            str(part or "")
+            for part in [
+                properties.get("title") or properties.get("name"),
+                properties.get("content") or properties.get("text") or properties.get("description"),
+            ]
+        ).lower()
+        if any(term in haystack for term in boost_terms):
+            return base + 0.35
+        return base
 
 _rag_service: Optional[RAGService] = None
 
