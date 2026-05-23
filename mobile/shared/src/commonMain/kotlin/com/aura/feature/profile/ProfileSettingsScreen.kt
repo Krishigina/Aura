@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,6 +27,8 @@ import androidx.compose.material.icons.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Button
@@ -54,6 +57,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aura.core.data.api.AuraApiClient
 import com.aura.core.data.repository.TokenManager
+import com.aura.core.domain.model.ProfileRoutineStep
+import com.aura.core.domain.model.ProfileRoutineUpdateRequest
+import com.aura.core.domain.model.ReminderFrequency
 import com.aura.core.ui.components.GlassSurface
 import com.aura.core.ui.components.SoftPastelBackground
 import com.aura.core.ui.components.SoftPastelVariant
@@ -61,7 +67,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-private enum class SettingsTab { ROOT, NAME, LOGIN, PASSWORD, DELETE }
+private enum class SettingsTab { ROOT, NAME, LOGIN, PASSWORD, ROUTINE, DELETE }
 
 @Composable
 fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccountDeleted: () -> Unit) {
@@ -77,6 +83,28 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
     var success by remember { mutableStateOf<String?>(null) }
     var isSaving by remember { mutableStateOf(false) }
     var deletePassword by remember { mutableStateOf("") }
+    var routineSteps by remember { mutableStateOf<List<ProfileRoutineStep>>(emptyList()) }
+    var routineLoading by remember { mutableStateOf(false) }
+    var routineSaving by remember { mutableStateOf(false) }
+
+    fun loadRoutine() {
+        val token = TokenManager.getToken()
+        if (token.isNullOrBlank()) {
+            error = "Сессия истекла, войдите снова"
+            return
+        }
+        routineLoading = true
+        CoroutineScope(Dispatchers.Main).launch {
+            runCatching {
+                apiClient.getProfileRoutine(token)
+            }.onSuccess { response ->
+                routineSteps = normalizeRoutineStepOrder(response.steps)
+            }.onFailure {
+                error = it.message ?: "Не удалось загрузить рутину"
+            }
+            routineLoading = false
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF4F7FE))) {
         SoftPastelBackground(dark = false, variant = SoftPastelVariant.Default)
@@ -101,6 +129,16 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
                         SettingsEntryCard("Имя", name.ifBlank { "Не указано" }, Icons.Rounded.Person) { tab = SettingsTab.NAME }
                         SettingsEntryCard("Логин", nickname.ifBlank { "Не указан" }, Icons.Rounded.Person) { tab = SettingsTab.LOGIN }
                         SettingsEntryCard("Пароль", "Изменить пароль", Icons.Rounded.Lock) { tab = SettingsTab.PASSWORD }
+                        SettingsEntryCard(
+                            "Моя рутина",
+                            if (routineSteps.isEmpty()) "Не настроена" else "${routineSteps.size} шаг(ов)",
+                            Icons.Rounded.Person
+                        ) {
+                            tab = SettingsTab.ROUTINE
+                            error = null
+                            success = null
+                            loadRoutine()
+                        }
                         DangerEntryCard("Удалить аккаунт", "Это действие необратимо", Icons.Rounded.Delete) { tab = SettingsTab.DELETE }
                     }
 
@@ -166,6 +204,116 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
                                 },
                                 onSaving = { isSaving = it }
                             )
+                        }
+                    }
+
+                    SettingsTab.ROUTINE -> {
+                        if (routineLoading) {
+                            Text("Загрузка рутины...", color = Color(0xFF475569), fontSize = 13.sp)
+                        } else {
+                            routineSteps.forEachIndexed { index, step ->
+                                RoutineStepEditor(
+                                    step = step,
+                                    index = index,
+                                    total = routineSteps.size,
+                                    onProductLabelChange = { value ->
+                                        routineSteps = routineSteps.toMutableList().also {
+                                            it[index] = it[index].copy(product_label = value)
+                                        }
+                                    },
+                                    onOrderChange = { value ->
+                                        val parsed = value.toIntOrNull() ?: step.order
+                                        routineSteps = routineSteps.toMutableList().also {
+                                            it[index] = it[index].copy(order = parsed)
+                                        }
+                                    },
+                                    onFrequencyChange = { value ->
+                                        routineSteps = routineSteps.toMutableList().also {
+                                            it[index] = it[index].copy(
+                                                frequency = value,
+                                                reminder_time = if (value == ReminderFrequency.NONE) null else it[index].reminder_time
+                                            )
+                                        }
+                                    },
+                                    onReminderTimeChange = { value ->
+                                        routineSteps = routineSteps.toMutableList().also {
+                                            it[index] = it[index].copy(reminder_time = value.ifBlank { null })
+                                        }
+                                    },
+                                    onMoveUp = {
+                                        if (index == 0) return@RoutineStepEditor
+                                        val updated = routineSteps.toMutableList()
+                                        val current = updated[index]
+                                        updated[index] = updated[index - 1]
+                                        updated[index - 1] = current
+                                        routineSteps = normalizeRoutineStepOrder(updated)
+                                    },
+                                    onMoveDown = {
+                                        if (index >= routineSteps.lastIndex) return@RoutineStepEditor
+                                        val updated = routineSteps.toMutableList()
+                                        val current = updated[index]
+                                        updated[index] = updated[index + 1]
+                                        updated[index + 1] = current
+                                        routineSteps = normalizeRoutineStepOrder(updated)
+                                    },
+                                    onRemove = {
+                                        routineSteps = normalizeRoutineStepOrder(
+                                            routineSteps.toMutableList().also { it.removeAt(index) }
+                                        )
+                                    }
+                                )
+                            }
+
+                            Button(
+                                onClick = {
+                                    routineSteps = normalizeRoutineStepOrder(
+                                        routineSteps + ProfileRoutineStep(
+                                            id = "",
+                                            product_label = "",
+                                            order = routineSteps.size + 1,
+                                            frequency = ReminderFrequency.NONE,
+                                            reminder_time = null
+                                        )
+                                    )
+                                },
+                                enabled = !routineSaving,
+                                modifier = Modifier.fillMaxWidth().height(46.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                border = BorderStroke(1.dp, Color(0xFFCBD5E1)),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF334155))
+                            ) {
+                                Text("Добавить шаг", fontWeight = FontWeight.SemiBold)
+                            }
+
+                            SaveButton(isSaving = routineSaving) {
+                                error = null
+                                success = null
+                                val token = TokenManager.getToken()
+                                if (token.isNullOrBlank()) {
+                                    error = "Сессия истекла, войдите снова"
+                                    return@SaveButton
+                                }
+                                val normalized = normalizeRoutineStepOrder(routineSteps)
+                                for (step in normalized) {
+                                    val validationError = validateRoutineStep(step)
+                                    if (validationError != null) {
+                                        error = validationError
+                                        return@SaveButton
+                                    }
+                                }
+                                routineSaving = true
+                                CoroutineScope(Dispatchers.Main).launch {
+                                    runCatching {
+                                        apiClient.saveProfileRoutine(token, ProfileRoutineUpdateRequest(normalized))
+                                    }.onSuccess { response ->
+                                        routineSteps = normalizeRoutineStepOrder(response.steps)
+                                        success = "Рутина сохранена"
+                                    }.onFailure {
+                                        error = it.message ?: "Не удалось сохранить рутину"
+                                    }
+                                    routineSaving = false
+                                }
+                            }
                         }
                     }
 
@@ -246,6 +394,92 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
             },
             modifier = Modifier.align(Alignment.TopCenter)
         )
+    }
+}
+
+@Composable
+private fun RoutineStepEditor(
+    step: ProfileRoutineStep,
+    index: Int,
+    total: Int,
+    onProductLabelChange: (String) -> Unit,
+    onOrderChange: (String) -> Unit,
+    onFrequencyChange: (ReminderFrequency) -> Unit,
+    onReminderTimeChange: (String) -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onRemove: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White.copy(alpha = 0.5f))
+            .border(1.dp, Color.White.copy(alpha = 0.7f), RoundedCornerShape(16.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text("Шаг ${index + 1}", color = Color(0xFF1E293B), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        GlassField(
+            value = step.product_label,
+            onValueChange = onProductLabelChange,
+            label = "Продукт",
+            placeholder = "Например, очищающий гель"
+        )
+        GlassField(
+            value = step.order.toString(),
+            onValueChange = onOrderChange,
+            label = "Порядок",
+            placeholder = "1",
+            keyboardType = KeyboardType.Number
+        )
+        GlassField(
+            value = step.frequency.name,
+            onValueChange = {},
+            label = "Частота",
+            placeholder = "Выберите частоту"
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            FrequencyButton("NONE", step.frequency == ReminderFrequency.NONE) { onFrequencyChange(ReminderFrequency.NONE) }
+            FrequencyButton("DAILY", step.frequency == ReminderFrequency.DAILY) { onFrequencyChange(ReminderFrequency.DAILY) }
+            FrequencyButton("WEEKLY", step.frequency == ReminderFrequency.WEEKLY) { onFrequencyChange(ReminderFrequency.WEEKLY) }
+            FrequencyButton("MONTHLY", step.frequency == ReminderFrequency.MONTHLY) { onFrequencyChange(ReminderFrequency.MONTHLY) }
+        }
+        GlassField(
+            value = step.reminder_time.orEmpty(),
+            onValueChange = onReminderTimeChange,
+            label = "Время напоминания",
+            placeholder = if (step.frequency == ReminderFrequency.NONE) "Можно оставить пустым" else "Например, 08:30"
+        )
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            IconButton(onClick = onMoveUp, enabled = index > 0) {
+                Icon(Icons.Rounded.KeyboardArrowUp, contentDescription = "Вверх", tint = Color(0xFF64748B))
+            }
+            IconButton(onClick = onMoveDown, enabled = index < total - 1) {
+                Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Вниз", tint = Color(0xFF64748B))
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            IconButton(onClick = onRemove) {
+                Icon(Icons.Rounded.Delete, contentDescription = "Удалить шаг", tint = Color(0xFFDC2626))
+            }
+        }
+    }
+}
+
+@Composable
+private fun RowScope.FrequencyButton(label: String, selected: Boolean, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier.weight(1f).height(40.dp),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, if (selected) Color(0xFF0284C7) else Color(0xFFCBD5E1)),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (selected) Color(0xFF0EA5E9) else Color.White,
+            contentColor = if (selected) Color.White else Color(0xFF475569)
+        )
+    ) {
+        Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
