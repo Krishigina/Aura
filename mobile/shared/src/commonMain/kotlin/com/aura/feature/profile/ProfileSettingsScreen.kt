@@ -35,8 +35,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,6 +62,8 @@ import com.aura.core.data.api.AuraApiClient
 import com.aura.core.data.repository.TokenManager
 import com.aura.core.domain.model.ProfileRoutineStep
 import com.aura.core.domain.model.ProfileRoutineUpdateRequest
+import com.aura.core.domain.model.ProfileNotificationSettings
+import com.aura.core.domain.model.ReminderPreference
 import com.aura.core.domain.model.ReminderFrequency
 import com.aura.core.ui.components.GlassSurface
 import com.aura.core.ui.components.SoftPastelBackground
@@ -67,7 +71,7 @@ import com.aura.core.ui.components.SoftPastelVariant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-private enum class SettingsTab { ROOT, NAME, LOGIN, PASSWORD, ROUTINE, DELETE }
+private enum class SettingsTab { ROOT, NAME, LOGIN, PASSWORD, ROUTINE, NOTIFICATIONS, DELETE }
 
 @Composable
 fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccountDeleted: () -> Unit) {
@@ -88,6 +92,8 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
     var routineLoading by remember { mutableStateOf(false) }
     var routineSaving by remember { mutableStateOf(false) }
     var routineDirty by remember { mutableStateOf(false) }
+    var notificationSettings by remember { mutableStateOf(ProfileNotificationSettings()) }
+    var notificationSaving by remember { mutableStateOf(false) }
 
     fun loadRoutine() {
         val token = TokenManager.getToken()
@@ -107,6 +113,28 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
             }
             routineLoading = false
         }
+    }
+
+    fun loadNotificationSettings() {
+        val token = TokenManager.getToken()
+        if (token.isNullOrBlank()) {
+            error = "Сессия истекла, войдите снова"
+            return
+        }
+        uiScope.launch {
+            runCatching {
+                apiClient.getProfileNotificationSettings(token)
+            }.onSuccess { response ->
+                notificationSettings = response
+            }.onFailure {
+                error = it.message ?: "Не удалось загрузить настройки уведомлений"
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        loadRoutine()
+        loadNotificationSettings()
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF4F7FE))) {
@@ -143,6 +171,11 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
                             if (!routineDirty) {
                                 loadRoutine()
                             }
+                        }
+                        SettingsEntryCard("Уведомления", "Рутина и журнал", Icons.Rounded.Lock) {
+                            tab = SettingsTab.NOTIFICATIONS
+                            error = null
+                            success = null
                         }
                         DangerEntryCard("Удалить аккаунт", "Это действие необратимо", Icons.Rounded.Delete) { tab = SettingsTab.DELETE }
                     }
@@ -332,6 +365,96 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
                         }
                     }
 
+                    SettingsTab.NOTIFICATIONS -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("Отключить все уведомления", color = Color(0xFF1E293B), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(Color.White.copy(alpha = 0.55f))
+                                    .border(1.dp, Color.White.copy(alpha = 0.8f), RoundedCornerShape(14.dp))
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column {
+                                    Text("Все уведомления", color = Color(0xFF0F172A), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                    Text(if (notificationSettings.disable_all) "Отключены" else "Включены", color = Color(0xFF64748B), fontSize = 12.sp)
+                                }
+                                Switch(
+                                    checked = notificationSettings.disable_all,
+                                    onCheckedChange = { notificationSettings = notificationSettings.copy(disable_all = it) }
+                                )
+                            }
+                        }
+
+                        NotificationDomainEditor(
+                            title = "Рутина",
+                            preference = notificationSettings.routine,
+                            enabled = !notificationSettings.disable_all,
+                            onFrequencyChange = { value ->
+                                notificationSettings = notificationSettings.copy(
+                                    routine = notificationSettings.routine.copy(
+                                        frequency = value,
+                                        reminder_time = if (value == ReminderFrequency.NONE) null else notificationSettings.routine.reminder_time
+                                    )
+                                )
+                            },
+                            onReminderTimeChange = { value ->
+                                notificationSettings = notificationSettings.copy(
+                                    routine = notificationSettings.routine.copy(reminder_time = value.ifBlank { null })
+                                )
+                            }
+                        )
+
+                        NotificationDomainEditor(
+                            title = "Журнал",
+                            preference = notificationSettings.journal,
+                            enabled = !notificationSettings.disable_all,
+                            onFrequencyChange = { value ->
+                                notificationSettings = notificationSettings.copy(
+                                    journal = notificationSettings.journal.copy(
+                                        frequency = value,
+                                        reminder_time = if (value == ReminderFrequency.NONE) null else notificationSettings.journal.reminder_time
+                                    )
+                                )
+                            },
+                            onReminderTimeChange = { value ->
+                                notificationSettings = notificationSettings.copy(
+                                    journal = notificationSettings.journal.copy(reminder_time = value.ifBlank { null })
+                                )
+                            }
+                        )
+
+                        SaveButton(isSaving = notificationSaving) {
+                            error = null
+                            success = null
+                            val token = TokenManager.getToken()
+                            if (token.isNullOrBlank()) {
+                                error = "Сессия истекла, войдите снова"
+                                return@SaveButton
+                            }
+                            val validationError = validateNotificationSettingsBeforeSave(notificationSettings, routineSteps.size)
+                            if (validationError != null) {
+                                error = validationError
+                                return@SaveButton
+                            }
+                            notificationSaving = true
+                            uiScope.launch {
+                                runCatching {
+                                    apiClient.saveProfileNotificationSettings(token, notificationSettings)
+                                }.onSuccess { response ->
+                                    notificationSettings = response
+                                    success = "Настройки уведомлений сохранены"
+                                }.onFailure {
+                                    error = it.message ?: "Не удалось сохранить настройки уведомлений"
+                                }
+                                notificationSaving = false
+                            }
+                        }
+                    }
+
                     SettingsTab.DELETE -> {
                         Text(
                             "Вы уверены, что хотите удалить аккаунт? Это действие необратимо.",
@@ -478,9 +601,10 @@ private fun RoutineStepEditor(
 }
 
 @Composable
-private fun RowScope.FrequencyButton(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun RowScope.FrequencyButton(label: String, selected: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
     Button(
         onClick = onClick,
+        enabled = enabled,
         modifier = Modifier.weight(1f).height(40.dp),
         shape = RoundedCornerShape(10.dp),
         border = BorderStroke(1.dp, if (selected) Color(0xFF0284C7) else Color(0xFFCBD5E1)),
@@ -490,6 +614,45 @@ private fun RowScope.FrequencyButton(label: String, selected: Boolean, onClick: 
         )
     ) {
         Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun NotificationDomainEditor(
+    title: String,
+    preference: ReminderPreference,
+    enabled: Boolean,
+    onFrequencyChange: (ReminderFrequency) -> Unit,
+    onReminderTimeChange: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White.copy(alpha = 0.5f))
+            .border(1.dp, Color.White.copy(alpha = 0.7f), RoundedCornerShape(16.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(title, color = Color(0xFF1E293B), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        Text("Частота", color = Color(0xFF334155), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            FrequencyButton("Никогда", preference.frequency == ReminderFrequency.NONE, enabled) { onFrequencyChange(ReminderFrequency.NONE) }
+            FrequencyButton("Ежедневно", preference.frequency == ReminderFrequency.DAILY, enabled) { onFrequencyChange(ReminderFrequency.DAILY) }
+            FrequencyButton("Еженедельно", preference.frequency == ReminderFrequency.WEEKLY, enabled) { onFrequencyChange(ReminderFrequency.WEEKLY) }
+            FrequencyButton("Ежемесячно", preference.frequency == ReminderFrequency.MONTHLY, enabled) { onFrequencyChange(ReminderFrequency.MONTHLY) }
+        }
+        if (preference.frequency != ReminderFrequency.NONE) {
+            GlassField(
+                value = preference.reminder_time.orEmpty(),
+                onValueChange = onReminderTimeChange,
+                label = "Время напоминания",
+                placeholder = "Например, 08:30",
+                enabled = enabled
+            )
+        } else {
+            Text("Напоминание отключено", color = Color(0xFF94A3B8), fontSize = 12.sp)
+        }
     }
 }
 
@@ -652,14 +815,16 @@ private fun GlassField(
     onValueChange: (String) -> Unit,
     label: String,
     placeholder: String,
-    keyboardType: KeyboardType = KeyboardType.Text
+    keyboardType: KeyboardType = KeyboardType.Text,
+    enabled: Boolean = true
 ) {
     Column {
         Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF334155))
         Spacer(modifier = Modifier.height(6.dp))
         BasicTextField(
             value = value,
-            onValueChange = onValueChange,
+            onValueChange = { if (enabled) onValueChange(it) },
+            enabled = enabled,
             singleLine = true,
             textStyle = TextStyle(color = Color(0xFF1E293B), fontSize = 15.sp),
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = keyboardType),
