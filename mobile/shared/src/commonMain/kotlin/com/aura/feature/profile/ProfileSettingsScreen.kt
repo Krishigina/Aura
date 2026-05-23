@@ -40,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,13 +65,13 @@ import com.aura.core.ui.components.GlassSurface
 import com.aura.core.ui.components.SoftPastelBackground
 import com.aura.core.ui.components.SoftPastelVariant
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 private enum class SettingsTab { ROOT, NAME, LOGIN, PASSWORD, ROUTINE, DELETE }
 
 @Composable
 fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccountDeleted: () -> Unit) {
+    val uiScope = rememberCoroutineScope()
     val user = TokenManager.getUser()
     var tab by remember { mutableStateOf(SettingsTab.ROOT) }
 
@@ -86,6 +87,7 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
     var routineSteps by remember { mutableStateOf<List<ProfileRoutineStep>>(emptyList()) }
     var routineLoading by remember { mutableStateOf(false) }
     var routineSaving by remember { mutableStateOf(false) }
+    var routineDirty by remember { mutableStateOf(false) }
 
     fun loadRoutine() {
         val token = TokenManager.getToken()
@@ -94,11 +96,12 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
             return
         }
         routineLoading = true
-        CoroutineScope(Dispatchers.Main).launch {
+        uiScope.launch {
             runCatching {
                 apiClient.getProfileRoutine(token)
             }.onSuccess { response ->
                 routineSteps = normalizeRoutineStepOrder(response.steps)
+                routineDirty = false
             }.onFailure {
                 error = it.message ?: "Не удалось загрузить рутину"
             }
@@ -137,7 +140,9 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
                             tab = SettingsTab.ROUTINE
                             error = null
                             success = null
-                            loadRoutine()
+                            if (!routineDirty) {
+                                loadRoutine()
+                            }
                         }
                         DangerEntryCard("Удалить аккаунт", "Это действие необратимо", Icons.Rounded.Delete) { tab = SettingsTab.DELETE }
                     }
@@ -152,7 +157,7 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
                         SaveButton(isSaving = isSaving) {
                             saveAccount(apiClient, name, nickname, onError = { error = it }, onSuccess = {
                                 success = "Имя обновлено"
-                            }, onSaving = { isSaving = it })
+                            }, onSaving = { isSaving = it }, scope = uiScope)
                         }
                     }
 
@@ -166,7 +171,7 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
                         SaveButton(isSaving = isSaving) {
                             saveAccount(apiClient, name, nickname, onError = { error = it }, onSuccess = {
                                 success = "Логин обновлен"
-                            }, onSaving = { isSaving = it })
+                            }, onSaving = { isSaving = it }, scope = uiScope)
                         }
                     }
 
@@ -202,7 +207,8 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
                                     newPassword = ""
                                     confirmPassword = ""
                                 },
-                                onSaving = { isSaving = it }
+                                onSaving = { isSaving = it },
+                                scope = uiScope
                             )
                         }
                     }
@@ -220,12 +226,14 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
                                         routineSteps = routineSteps.toMutableList().also {
                                             it[index] = it[index].copy(product_label = value)
                                         }
+                                        routineDirty = true
                                     },
                                     onOrderChange = { value ->
                                         val parsed = value.toIntOrNull() ?: step.order
                                         routineSteps = routineSteps.toMutableList().also {
                                             it[index] = it[index].copy(order = parsed)
                                         }
+                                        routineDirty = true
                                     },
                                     onFrequencyChange = { value ->
                                         routineSteps = routineSteps.toMutableList().also {
@@ -234,11 +242,13 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
                                                 reminder_time = if (value == ReminderFrequency.NONE) null else it[index].reminder_time
                                             )
                                         }
+                                        routineDirty = true
                                     },
                                     onReminderTimeChange = { value ->
                                         routineSteps = routineSteps.toMutableList().also {
                                             it[index] = it[index].copy(reminder_time = value.ifBlank { null })
                                         }
+                                        routineDirty = true
                                     },
                                     onMoveUp = {
                                         if (index == 0) return@RoutineStepEditor
@@ -247,6 +257,7 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
                                         updated[index] = updated[index - 1]
                                         updated[index - 1] = current
                                         routineSteps = normalizeRoutineStepOrder(updated)
+                                        routineDirty = true
                                     },
                                     onMoveDown = {
                                         if (index >= routineSteps.lastIndex) return@RoutineStepEditor
@@ -255,11 +266,13 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
                                         updated[index] = updated[index + 1]
                                         updated[index + 1] = current
                                         routineSteps = normalizeRoutineStepOrder(updated)
+                                        routineDirty = true
                                     },
                                     onRemove = {
                                         routineSteps = normalizeRoutineStepOrder(
                                             routineSteps.toMutableList().also { it.removeAt(index) }
                                         )
+                                        routineDirty = true
                                     }
                                 )
                             }
@@ -275,6 +288,7 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
                                             reminder_time = null
                                         )
                                     )
+                                    routineDirty = true
                                 },
                                 enabled = !routineSaving,
                                 modifier = Modifier.fillMaxWidth().height(46.dp),
@@ -302,12 +316,13 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
                                     }
                                 }
                                 routineSaving = true
-                                CoroutineScope(Dispatchers.Main).launch {
+                                uiScope.launch {
                                     runCatching {
                                         apiClient.saveProfileRoutine(token, ProfileRoutineUpdateRequest(normalized))
                                     }.onSuccess { response ->
                                         routineSteps = normalizeRoutineStepOrder(response.steps)
                                         success = "Рутина сохранена"
+                                        routineDirty = false
                                     }.onFailure {
                                         error = it.message ?: "Не удалось сохранить рутину"
                                     }
@@ -357,7 +372,7 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
                                         return@Button
                                     }
                                     isSaving = true
-                                    CoroutineScope(Dispatchers.Main).launch {
+                                    uiScope.launch {
                                         runCatching {
                                             apiClient.deleteProfileAccount(token, deletePassword)
                                         }.onSuccess {
@@ -433,17 +448,12 @@ private fun RoutineStepEditor(
             placeholder = "1",
             keyboardType = KeyboardType.Number
         )
-        GlassField(
-            value = step.frequency.name,
-            onValueChange = {},
-            label = "Частота",
-            placeholder = "Выберите частоту"
-        )
+        Text("Частота", color = Color(0xFF334155), fontSize = 12.sp, fontWeight = FontWeight.Medium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            FrequencyButton("NONE", step.frequency == ReminderFrequency.NONE) { onFrequencyChange(ReminderFrequency.NONE) }
-            FrequencyButton("DAILY", step.frequency == ReminderFrequency.DAILY) { onFrequencyChange(ReminderFrequency.DAILY) }
-            FrequencyButton("WEEKLY", step.frequency == ReminderFrequency.WEEKLY) { onFrequencyChange(ReminderFrequency.WEEKLY) }
-            FrequencyButton("MONTHLY", step.frequency == ReminderFrequency.MONTHLY) { onFrequencyChange(ReminderFrequency.MONTHLY) }
+            FrequencyButton("Никогда", step.frequency == ReminderFrequency.NONE) { onFrequencyChange(ReminderFrequency.NONE) }
+            FrequencyButton("Ежедневно", step.frequency == ReminderFrequency.DAILY) { onFrequencyChange(ReminderFrequency.DAILY) }
+            FrequencyButton("Еженедельно", step.frequency == ReminderFrequency.WEEKLY) { onFrequencyChange(ReminderFrequency.WEEKLY) }
+            FrequencyButton("Ежемесячно", step.frequency == ReminderFrequency.MONTHLY) { onFrequencyChange(ReminderFrequency.MONTHLY) }
         }
         GlassField(
             value = step.reminder_time.orEmpty(),
@@ -521,7 +531,8 @@ private fun saveAccount(
     nickname: String,
     onError: (String) -> Unit,
     onSuccess: () -> Unit,
-    onSaving: (Boolean) -> Unit
+    onSaving: (Boolean) -> Unit,
+    scope: CoroutineScope
 ) {
     val token = TokenManager.getToken()
     if (token.isNullOrBlank()) {
@@ -533,7 +544,7 @@ private fun saveAccount(
         return
     }
     onSaving(true)
-    CoroutineScope(Dispatchers.Main).launch {
+    scope.launch {
         runCatching {
             val updated = apiClient.updateProfileAccount(token, name.trim(), nickname.trim().ifBlank { null })
             TokenManager.setUser(updated)
@@ -553,7 +564,8 @@ private fun savePassword(
     confirmPassword: String,
     onError: (String) -> Unit,
     onSuccess: () -> Unit,
-    onSaving: (Boolean) -> Unit
+    onSaving: (Boolean) -> Unit,
+    scope: CoroutineScope
 ) {
     val token = TokenManager.getToken()
     if (token.isNullOrBlank()) {
@@ -566,7 +578,7 @@ private fun savePassword(
         return
     }
     onSaving(true)
-    CoroutineScope(Dispatchers.Main).launch {
+    scope.launch {
         runCatching {
             apiClient.updateProfilePassword(token, currentPassword, newPassword)
         }.onSuccess {
