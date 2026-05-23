@@ -41,4 +41,26 @@ class RoutineProductOptionParsingTest {
         assertEquals(12, parsed[1].id)
         assertEquals("Serum", parsed[1].displayLabel)
     }
+
+    @Test
+    fun parseRoutineProductOptionsSkipsItemsWithNonPrimitiveFields() {
+        val payload =
+            """
+            [
+              {"id": 31, "brand": "Valid", "name": "One"},
+              {"id": {"value": 32}, "brand": "Broken", "name": "IdObject"},
+              {"id": 33, "brand": ["Nested"], "name": "BrandArray"},
+              {"id": 34, "brand": "Good", "name": {"text": "Nested"}},
+              {"id": 35, "brand": null, "name": "Two"}
+            ]
+            """.trimIndent()
+
+        val parsed = apiClient.parseRoutineProductOptions(payload)
+
+        assertEquals(2, parsed.size)
+        assertEquals(31, parsed[0].id)
+        assertEquals("Valid One", parsed[0].displayLabel)
+        assertEquals(35, parsed[1].id)
+        assertEquals("Two", parsed[1].displayLabel)
+    }
 }
