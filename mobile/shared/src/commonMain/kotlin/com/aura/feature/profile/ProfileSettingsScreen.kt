@@ -93,7 +93,9 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
     var routineSaving by remember { mutableStateOf(false) }
     var routineDirty by remember { mutableStateOf(false) }
     var notificationSettings by remember { mutableStateOf(ProfileNotificationSettings()) }
+    var notificationLoading by remember { mutableStateOf(false) }
     var notificationSaving by remember { mutableStateOf(false) }
+    var notificationDirty by remember { mutableStateOf(false) }
 
     fun loadRoutine() {
         val token = TokenManager.getToken()
@@ -121,14 +123,18 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
             error = "Сессия истекла, войдите снова"
             return
         }
+        notificationLoading = true
         uiScope.launch {
             runCatching {
                 apiClient.getProfileNotificationSettings(token)
             }.onSuccess { response ->
-                notificationSettings = response
+                if (!notificationDirty) {
+                    notificationSettings = response
+                }
             }.onFailure {
                 error = it.message ?: "Не удалось загрузить настройки уведомлений"
             }
+            notificationLoading = false
         }
     }
 
@@ -366,91 +372,103 @@ fun ProfileSettingsScreen(apiClient: AuraApiClient, onBack: () -> Unit, onAccoun
                     }
 
                     SettingsTab.NOTIFICATIONS -> {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text("Отключить все уведомления", color = Color(0xFF1E293B), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(Color.White.copy(alpha = 0.55f))
-                                    .border(1.dp, Color.White.copy(alpha = 0.8f), RoundedCornerShape(14.dp))
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column {
-                                    Text("Все уведомления", color = Color(0xFF0F172A), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                    Text(if (notificationSettings.disable_all) "Отключены" else "Включены", color = Color(0xFF64748B), fontSize = 12.sp)
-                                }
-                                Switch(
-                                    checked = notificationSettings.disable_all,
-                                    onCheckedChange = { notificationSettings = notificationSettings.copy(disable_all = it) }
-                                )
-                            }
-                        }
-
-                        NotificationDomainEditor(
-                            title = "Рутина",
-                            preference = notificationSettings.routine,
-                            enabled = !notificationSettings.disable_all,
-                            onFrequencyChange = { value ->
-                                notificationSettings = notificationSettings.copy(
-                                    routine = notificationSettings.routine.copy(
-                                        frequency = value,
-                                        reminder_time = if (value == ReminderFrequency.NONE) null else notificationSettings.routine.reminder_time
+                        if (notificationLoading) {
+                            Text("Загрузка настроек уведомлений...", color = Color(0xFF475569), fontSize = 13.sp)
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text("Отключить все уведомления", color = Color(0xFF1E293B), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(Color.White.copy(alpha = 0.55f))
+                                        .border(1.dp, Color.White.copy(alpha = 0.8f), RoundedCornerShape(14.dp))
+                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column {
+                                        Text("Все уведомления", color = Color(0xFF0F172A), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(if (notificationSettings.disable_all) "Отключены" else "Включены", color = Color(0xFF64748B), fontSize = 12.sp)
+                                    }
+                                    Switch(
+                                        checked = notificationSettings.disable_all,
+                                        onCheckedChange = {
+                                            notificationSettings = notificationSettings.copy(disable_all = it)
+                                            notificationDirty = true
+                                        }
                                     )
-                                )
-                            },
-                            onReminderTimeChange = { value ->
-                                notificationSettings = notificationSettings.copy(
-                                    routine = notificationSettings.routine.copy(reminder_time = value.ifBlank { null })
-                                )
-                            }
-                        )
-
-                        NotificationDomainEditor(
-                            title = "Журнал",
-                            preference = notificationSettings.journal,
-                            enabled = !notificationSettings.disable_all,
-                            onFrequencyChange = { value ->
-                                notificationSettings = notificationSettings.copy(
-                                    journal = notificationSettings.journal.copy(
-                                        frequency = value,
-                                        reminder_time = if (value == ReminderFrequency.NONE) null else notificationSettings.journal.reminder_time
-                                    )
-                                )
-                            },
-                            onReminderTimeChange = { value ->
-                                notificationSettings = notificationSettings.copy(
-                                    journal = notificationSettings.journal.copy(reminder_time = value.ifBlank { null })
-                                )
-                            }
-                        )
-
-                        SaveButton(isSaving = notificationSaving) {
-                            error = null
-                            success = null
-                            val token = TokenManager.getToken()
-                            if (token.isNullOrBlank()) {
-                                error = "Сессия истекла, войдите снова"
-                                return@SaveButton
-                            }
-                            val validationError = validateNotificationSettingsBeforeSave(notificationSettings, routineSteps.size)
-                            if (validationError != null) {
-                                error = validationError
-                                return@SaveButton
-                            }
-                            notificationSaving = true
-                            uiScope.launch {
-                                runCatching {
-                                    apiClient.saveProfileNotificationSettings(token, notificationSettings)
-                                }.onSuccess { response ->
-                                    notificationSettings = response
-                                    success = "Настройки уведомлений сохранены"
-                                }.onFailure {
-                                    error = it.message ?: "Не удалось сохранить настройки уведомлений"
                                 }
-                                notificationSaving = false
+                            }
+
+                            NotificationDomainEditor(
+                                title = "Рутина",
+                                preference = notificationSettings.routine,
+                                enabled = !notificationSettings.disable_all,
+                                onFrequencyChange = { value ->
+                                    notificationSettings = notificationSettings.copy(
+                                        routine = notificationSettings.routine.copy(
+                                            frequency = value,
+                                            reminder_time = if (value == ReminderFrequency.NONE) null else notificationSettings.routine.reminder_time
+                                        )
+                                    )
+                                    notificationDirty = true
+                                },
+                                onReminderTimeChange = { value ->
+                                    notificationSettings = notificationSettings.copy(
+                                        routine = notificationSettings.routine.copy(reminder_time = value.ifBlank { null })
+                                    )
+                                    notificationDirty = true
+                                }
+                            )
+
+                            NotificationDomainEditor(
+                                title = "Журнал",
+                                preference = notificationSettings.journal,
+                                enabled = !notificationSettings.disable_all,
+                                onFrequencyChange = { value ->
+                                    notificationSettings = notificationSettings.copy(
+                                        journal = notificationSettings.journal.copy(
+                                            frequency = value,
+                                            reminder_time = if (value == ReminderFrequency.NONE) null else notificationSettings.journal.reminder_time
+                                        )
+                                    )
+                                    notificationDirty = true
+                                },
+                                onReminderTimeChange = { value ->
+                                    notificationSettings = notificationSettings.copy(
+                                        journal = notificationSettings.journal.copy(reminder_time = value.ifBlank { null })
+                                    )
+                                    notificationDirty = true
+                                }
+                            )
+
+                            SaveButton(isSaving = notificationSaving) {
+                                error = null
+                                success = null
+                                val token = TokenManager.getToken()
+                                if (token.isNullOrBlank()) {
+                                    error = "Сессия истекла, войдите снова"
+                                    return@SaveButton
+                                }
+                                val validationError = validateNotificationSettingsBeforeSave(notificationSettings, routineSteps.size)
+                                if (validationError != null) {
+                                    error = validationError
+                                    return@SaveButton
+                                }
+                                notificationSaving = true
+                                uiScope.launch {
+                                    runCatching {
+                                        apiClient.saveProfileNotificationSettings(token, notificationSettings)
+                                    }.onSuccess { response ->
+                                        notificationSettings = response
+                                        notificationDirty = false
+                                        success = "Настройки уведомлений сохранены"
+                                    }.onFailure {
+                                        error = it.message ?: "Не удалось сохранить настройки уведомлений"
+                                    }
+                                    notificationSaving = false
+                                }
                             }
                         }
                     }

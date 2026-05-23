@@ -12,6 +12,9 @@ fun validatePasswordChange(currentPassword: String, newPassword: String, confirm
 }
 
 fun validateNotificationSettingsBeforeSave(settings: ProfileNotificationSettings, routineStepsCount: Int): String? {
+    if (settings.disable_all) {
+        return null
+    }
     if (settings.routine.frequency != ReminderFrequency.NONE && routineStepsCount == 0) {
         return "Создайте шаги рутины, чтобы получать напоминания"
     }
