@@ -130,6 +130,14 @@ class ProductBoostVectorStore:
         ]
 
 
+class RecordingAddVectorStore:
+    def __init__(self):
+        self.calls = []
+
+    def add_documents(self, collection_name: str, documents: list[dict], texts: list[str]):
+        self.calls.append({"collection_name": collection_name, "documents": documents, "texts": texts})
+
+
 @pytest.mark.anyio
 async def test_rag_service_returns_answer_when_vector_store_is_unavailable():
     service = RAGService(vector_store=BrokenVectorStore(), llm=FallbackLlm())
@@ -239,3 +247,19 @@ async def test_rag_service_boosts_product_related_sources_only_when_product_cont
 
     assert with_product_context.sources[0]["id"] == "session-product-doc"
     assert without_product_context.sources[0]["id"] == "global-generic-doc"
+
+
+def test_rag_service_add_knowledge_uses_default_vector_store_when_not_injected(monkeypatch):
+    import app.services.rag_service as rag_service
+
+    recorder = RecordingAddVectorStore()
+    monkeypatch.setattr(rag_service, "get_vector_store", lambda: recorder)
+    service = RAGService(llm=FallbackLlm())
+
+    result = service.add_knowledge([
+        {"title": "A", "content": "B", "category": "ingredients"},
+    ])
+
+    assert result["status"] == "success"
+    assert result["indexed_count"] == 1
+    assert len(recorder.calls) == 1
