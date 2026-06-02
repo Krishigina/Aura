@@ -92,6 +92,7 @@ SEED_INGREDIENTS = (
     ),
 )
 
+
 def normalize_key(value: str) -> str:
     return re.sub(r"\s+", " ", value.strip().lower())
 
@@ -170,7 +171,7 @@ def aggregate_function_profile(facts: list[ExtractedIngredientFact]) -> dict[str
 
 
 def _sentences(text: str) -> list[str]:
-    return [part.strip() for part in re.split(r"(?<=[.!?。])\s+|\n+", text) if part.strip()]
+    return [part.strip() for part in re.split(r"(?<=[.!?])\s+|\n+", text) if part.strip()]
 
 
 def _mentions_ingredient(normalized_sentence: str, ingredient: SeedIngredient) -> bool:

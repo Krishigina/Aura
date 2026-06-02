@@ -8,16 +8,10 @@ from html.parser import HTMLParser
 from typing import Dict, Iterable, List
 
 import asyncpg
+from pypdf import PdfReader
 
-try:
-    from PyPDF2 import PdfReader
-except ImportError:
-    PdfReader = None
-
-try:
-    from backend.api.main import ensure_knowledge_schema, extract_ingredient_facts_from_source
-except ImportError:
-    from main import ensure_knowledge_schema, extract_ingredient_facts_from_source
+from backend.db.schema import ensure_knowledge_schema
+from backend.core.ingredient_knowledge_admin import extract_ingredient_facts_from_source
 
 
 ALLOWED_EVIDENCE_TIERS = {"tier_1_guideline", "tier_1_safety", "tier_2_reference", "tier_3_identity"}
@@ -170,8 +164,6 @@ def fetch_url(url: str, timeout: int = 30) -> bytes:
 
 
 def extract_pdf_text(content: bytes) -> str:
-    if PdfReader is None:
-        raise RuntimeError("PyPDF2 is required to read PDF sources")
     reader = PdfReader(io.BytesIO(content))
     return "\n".join((page.extract_text() or "") for page in reader.pages).strip()
 
