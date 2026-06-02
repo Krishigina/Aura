@@ -1,0 +1,139 @@
+[
+  {
+    "status": "blocked",
+    "source_site": "goldapple",
+    "source_url": "https://goldapple.ru/",
+    "block_reason": "no_product_data",
+    "scraped_at": "2026-06-04T10:35:32.423010+00:00"
+  },
+  {
+    "status": "blocked",
+    "source_site": "letu",
+    "source_url": "https://www.letu.ru/",
+    "block_reason": "fetch_error:ClientResponseError",
+    "scraped_at": "2026-06-04T10:35:34.089916+00:00"
+  },
+  {
+    "status": "blocked",
+    "source_site": "rivegauche",
+    "source_url": "https://rivegauche.ru/",
+    "block_reason": "fetch_error:ClientResponseError",
+    "scraped_at": "2026-06-04T10:35:35.769702+00:00"
+  },
+  {
+    "status": "blocked",
+    "source_site": "podrygka",
+    "source_url": "https://www.podrygka.ru/",
+    "block_reason": "captcha",
+    "scraped_at": "2026-06-04T10:35:38.766391+00:00"
+  },
+  {
+    "status": "blocked",
+    "source_site": "iledebeaute.ru",
+    "source_url": "https://iledebeaute.ru/",
+    "block_reason": "captcha",
+    "scraped_at": "2026-06-04T10:35:40.747788+00:00"
+  },
+  {
+    "status": "blocked",
+    "source_site": "ozon",
+    "source_url": "https://www.ozon.ru/",
+    "block_reason": "access_denied",
+    "scraped_at": "2026-06-04T10:35:42.354353+00:00"
+  },
+  {
+    "status": "blocked",
+    "source_site": "wildberries",
+    "source_url": "https://www.wildberries.ru/",
+    "block_reason": "fetch_error:ClientResponseError",
+    "scraped_at": "2026-06-04T10:35:43.818819+00:00"
+  },
+  {
+    "status": "blocked",
+    "source_site": "market.yandex.ru",
+    "source_url": "https://market.yandex.ru/",
+    "block_reason": "access_denied",
+    "scraped_at": "2026-06-04T10:35:45.391558+00:00"
+  },
+  {
+    "status": "ok",
+    "source_site": "apteka.ru",
+    "source_url": "https://apteka.ru/",
+    "scraped_at": "2026-06-04T10:35:48.591106+00:00",
+    "name": "Интернет-аптека Apteka.ru в Москве, поиск лекарств, онлайн заказ, купить препараты в интернет-магазине лекарств",
+    "description": "В интернет-аптеке в Москве на Apteka.ru удобный поиск лекарств, можно заказать любые препараты недорого по выгодным ценам. Удобный каталог лекарств, инструкций и советы врачей!",
+    "images": [
+      "https://images.apteka.ru/original_meta-logo.png"
+    ]
+  },
+  {
+    "status": "blocked",
+    "source_site": "eapteka.ru",
+    "source_url": "https://www.eapteka.ru/",
+    "block_reason": "fetch_error:ClientResponseError",
+    "scraped_at": "2026-06-04T10:35:50.122605+00:00"
+  },
+  {
+    "status": "blocked",
+    "source_site": "zdravcity.ru",
+    "source_url": "https://zdravcity.ru/",
+    "block_reason": "captcha",
+    "scraped_at": "2026-06-04T10:35:51.982814+00:00"
+  },
+  {
+    "status": "blocked",
+    "source_site": "366.ru",
+    "source_url": "https://366.ru/",
+    "block_reason": "no_product_data",
+    "scraped_at": "2026-06-04T10:35:53.517027+00:00"
+  },
+  {
+    "status": "blocked",
+    "source_site": "laroche-posay.ru",
+    "source_url": "https://www.laroche-posay.ru/",
+    "block_reason": "captcha",
+    "scraped_at": "2026-06-04T10:35:55.233409+00:00"
+  },
+  {
+    "status": "blocked",
+    "source_site": "vichy.ru",
+    "source_url": "https://www.vichy.ru/",
+    "block_reason": "captcha",
+    "scraped_at": "2026-06-04T10:35:57.107593+00:00"
+  },
+  {
+    "status": "blocked",
+    "source_site": "cerave.ru",
+    "source_url": "https://www.cerave.ru/",
+    "block_reason": "fetch_error:ClientConnectorError",
+    "scraped_at": "2026-06-04T10:35:58.213453+00:00"
+  },
+  {
+    "status": "blocked",
+    "source_site": "bioderma.ru",
+    "source_url": "https://www.bioderma.ru/",
+    "block_reason": "fetch_error:ClientConnectorError",
+    "scraped_at": "2026-06-04T10:36:20.352393+00:00"
+  },
+  {
+    "status": "blocked",
+    "source_site": "eucerin.ru",
+    "source_url": "https://www.eucerin.ru/",
+    "block_reason": "captcha",
+    "scraped_at": "2026-06-04T10:36:26.488981+00:00"
+  },
+  {
+    "status": "blocked",
+    "source_site": "cosrx.com",
+    "source_url": "https://cosrx.com/",
+    "block_reason": "fetch_error:ClientConnectorCertificateError",
+    "scraped_at": "2026-06-04T10:36:33.339297+00:00"
+  },
+  {
+    "status": "blocked",
+    "source_site": "theordinary.com",
+    "source_url": "https://theordinary.com/",
+    "block_reason": "captcha",
+    "scraped_at": "2026-06-04T10:36:36.466109+00:00"
+  }
+]
