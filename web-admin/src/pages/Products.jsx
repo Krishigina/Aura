@@ -364,6 +364,20 @@ export default function Products() {
     }
   }
 
+  const getProductPhotoSrc = (photo) => {
+    if (!photo) return null
+    if (photo.data && photo.data.length > 0) {
+      return `data:${photo.content_type};base64,${photo.data}`
+    }
+    if (photo.url) {
+      return photo.url.startsWith('http') ? photo.url : productsApi.getPhotoUrl(editingProduct.id, photo.id)
+    }
+    if (editingProduct?.id && photo.id) {
+      return productsApi.getPhotoUrl(editingProduct.id, photo.id)
+    }
+    return null
+  }
+
   const handleVideoUpload = async (file) => {
     if (!editingProduct) {
       error('Сначала сохраните продукт')
@@ -702,12 +716,12 @@ export default function Products() {
                                   onDragStart={() => handlePhotoDragStart(idx)}
                                   onDragOver={handlePhotoDragOver}
                                   onDrop={() => handlePhotoDrop(idx)}
-                                  onClick={() => setMediaModal({ type: 'image', src: photo.data && photo.data.length > 0 ? `data:${photo.content_type};base64,${photo.data}` : null })}
+                                  onClick={() => setMediaModal({ type: 'image', src: getProductPhotoSrc(photo) })}
                                 >
                                   <div className="photo-preview">
-                                    {photo.data && photo.data.length > 0 ? (
+                                    {getProductPhotoSrc(photo) ? (
                                       <img 
-                                        src={`data:${photo.content_type};base64,${photo.data}`}
+                                        src={getProductPhotoSrc(photo)}
                                         alt="" 
                                       />
                                     ) : (
