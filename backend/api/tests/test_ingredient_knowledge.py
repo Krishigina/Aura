@@ -38,13 +38,27 @@ def test_extracts_high_confidence_urea_dryness_fact_from_local_source_text():
 
 
 def test_low_confidence_mentions_remain_draft():
-    text = "В тексте кратко упоминается ретинол без рекомендации, риска или состояния кожи."
+    text = "В тексте кратко упоминается ретинол без описания риска или состояния кожи."
 
     facts = extract_ingredient_facts(text, source_id=3, source_title="notes.txt")
 
     assert facts
     assert all(fact.evidence_status == "draft" for fact in facts)
     assert all(fact.confidence < 0.82 for fact in facts)
+
+
+def test_negated_recommendation_extracts_warning_not_positive_boost():
+    facts = extract_ingredient_facts("Ретинол не рекомендуется при акне.", source_id=5, source_title="risk.txt")
+
+    assert len(facts) == 1
+    fact = facts[0]
+    assert fact.ingredient_key == "retinol"
+    assert fact.condition_type == "concern"
+    assert fact.condition_value == "acne"
+    assert fact.matching_effect == "warning"
+    assert fact.effect_key in {"warning", "risk", "contraindication"}
+    assert fact.confidence >= 0.82
+    assert fact.evidence_status == "auto_high_confidence"
 
 
 def test_aggregate_function_profile_weights_confirmed_above_auto_facts():

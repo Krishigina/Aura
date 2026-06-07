@@ -118,7 +118,8 @@ def extract_ingredient_facts(
             if not _mentions_ingredient(normalized_sentence, ingredient):
                 continue
 
-            effect_key = _choose_effect(ingredient, normalized_sentence)
+            is_warning = _is_negated_recommendation(normalized_sentence)
+            effect_key = "warning" if is_warning else _choose_effect(ingredient, normalized_sentence)
             condition_value = _condition_value(normalized_sentence)
             confidence = _confidence(normalized_sentence, condition_value)
             facts.append(
@@ -127,7 +128,7 @@ def extract_ingredient_facts(
                     effect_key=effect_key,
                     condition_type="concern" if condition_value else None,
                     condition_value=condition_value,
-                    matching_effect="boost",
+                    matching_effect="warning" if is_warning else "boost",
                     confidence=confidence,
                     evidence_status=(
                         "auto_high_confidence" if confidence >= AUTO_CONFIDENCE_THRESHOLD else "draft"
@@ -175,6 +176,13 @@ def _mentions_ingredient(normalized_sentence: str, ingredient: SeedIngredient) -
 
 def _contains_phrase(text: str, phrase: str) -> bool:
     return re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", text) is not None
+
+
+def _is_negated_recommendation(normalized_sentence: str) -> bool:
+    return any(
+        phrase in normalized_sentence
+        for phrase in ("не рекомендуется", "не рекомендовано", "не следует")
+    )
 
 
 def _choose_effect(ingredient: SeedIngredient, normalized_sentence: str) -> str:
