@@ -1,12 +1,12 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 try:
-    from .matching_engine import MatchingProfile, MatchingRule, ProductCandidate, match_product
+    from .matching_engine import MatchingProfile, MatchingRule, ProductCandidate, ProductFunctionSignal, match_product
 except ImportError:  # pragma: no cover - supports direct script-style imports
-    from matching_engine import MatchingProfile, MatchingRule, ProductCandidate, match_product
+    from matching_engine import MatchingProfile, MatchingRule, ProductCandidate, ProductFunctionSignal, match_product
 
 
 LINE_KEYS = ["budget", "professional", "luxury", "cosmeceutical"]
@@ -61,6 +61,7 @@ class ProductRecommendationInput:
     skin_type: Optional[List[str]]
     composition: str
     application_info: str = ""
+    function_signals: List[ProductFunctionSignal] = field(default_factory=list)
 
     def purpose_values(self) -> List[str]:
         return self.purpose or []
@@ -304,6 +305,7 @@ def build_recommendation(
             product_type=product.product_type,
             purpose=", ".join(product.purpose_values()),
             skin_type=", ".join(product.skin_type_values()),
+            function_signals=product.function_signals,
         )
         match_result = match_product(candidate, profile, rules or [])
         if match_result.decision == "exclude":
@@ -326,6 +328,7 @@ def build_recommendation(
                 "frequency": _frequency(product),
                 "reason": _reason(product, match_result),
                 "warnings": match_result.warnings,
+                "matched_functions": match_result.matched_functions,
             }
         )
 

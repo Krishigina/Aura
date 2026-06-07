@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from backend.api.matching_engine import MatchingProfile, MatchingRule, ProductCandidate, match_product
+from backend.api.matching_engine import MatchingProfile, MatchingRule, ProductCandidate, ProductFunctionSignal, match_product
 from backend.api.recommendation_engine import (
     LINE_KEYS,
     ProductRecommendationInput,
@@ -264,6 +264,40 @@ def test_build_recommendation_handles_missing_product_lists():
 
     budget = next(line for line in result["lines"] if line["key"] == "budget")
     assert budget["routine"]["morning"][0]["product_id"] == 4
+
+
+def test_build_recommendation_uses_product_function_signals():
+    products = [
+        ProductRecommendationInput(
+            id=9,
+            name="Profile Hydration Serum",
+            brand="Aura Lab",
+            segment="professional",
+            product_type="Сыворотка",
+            purpose=["hydration"],
+            skin_type=["dry"],
+            composition="Aqua",
+            application_info="Наносите утром",
+            function_signals=[
+                ProductFunctionSignal(function_key="hydration", score=0.9, evidence_status="confirmed", evidence_count=2, source_ids=[7]),
+            ],
+        )
+    ]
+
+    result = build_recommendation(
+        answers={"concerns": ["dryness"], "skin_type": ["dry"]},
+        accepted_insights=[],
+        sensor_readings=[],
+        procedures=[],
+        products=products,
+        rules=[],
+    )
+
+    professional = next(line for line in result["lines"] if line["key"] == "professional")
+    item = professional["routine"]["morning"][0]
+    assert item["compatibility_percent"] >= 50
+    assert item["score_breakdown"]["ingredient_function_fit"] > 0
+    assert "hydration" in item["matched_functions"]
 
 
 def test_low_compatibility_reason_does_not_say_product_fits():
