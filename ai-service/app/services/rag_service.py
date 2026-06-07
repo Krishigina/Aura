@@ -40,13 +40,22 @@ class RAGService:
 
     async def query(self, request: RAGRequest) -> RAGResponse:
         system_prompt = self._build_system_prompt(request.context)
+        recovery_prompt = self._build_context_recovery_prompt(request.context)
         session_filters = {"user_id": request.user_id, "session_id": request.session_id} if request.session_id else None
         product_context = (request.context or {}).get("product_context")
+        recommendation_context = (request.context or {}).get("recommendation_context")
+        chat_history = self._normalize_chat_history((request.context or {}).get("chat_history"))
+        retrieval_query = self._build_retrieval_query(request.query, chat_history, product_context)
+        contextual_entries = (
+            self._chat_history_entries(chat_history)
+            + self._product_context_entries(product_context)
+            + self._recommendation_context_entries(recommendation_context)
+        )
         try:
             vector_store = self.vector_store or get_vector_store()
             session_results = vector_store.search(
                 collection_name=settings.collection_knowledge,
-                query=request.query,
+                query=retrieval_query,
                 limit=request.max_results * 2,
                 filters=session_filters,
             )
@@ -54,7 +63,7 @@ class RAGService:
             if request.session_id:
                 global_results = vector_store.search(
                     collection_name=settings.collection_knowledge,
-                    query=request.query,
+                    query=retrieval_query,
                     limit=request.max_results * 2,
                     filters=None,
                 )
@@ -62,6 +71,7 @@ class RAGService:
                 session_results,
                 global_results,
                 request.max_results * 2,
+                query=retrieval_query,
                 product_context=product_context if isinstance(product_context, dict) else None,
             )
         except Exception as error:
@@ -79,18 +89,17 @@ class RAGService:
             return RAGResponse(answer=answer, sources=[])
 
         if not results:
-            has_product_context = bool((request.context or {}).get("product_context"))
-            if has_product_context:
+            if contextual_entries:
                 try:
                     llm = self.llm or get_llm_client()
                     answer = await llm.generate_with_context(
                         request.query,
-                        self._product_context_entries(product_context),
-                        system_prompt,
+                        contextual_entries,
+                        recovery_prompt,
                     )
-                    return RAGResponse(answer=answer, sources=[])
+                    return RAGResponse(answer=answer, sources=[], conversation_id=str(uuid.uuid4()))
                 except Exception as llm_error:
-                    logger.error(f"LLM product-context fallback unavailable: {llm_error}")
+                    logger.error(f"LLM contextual fallback unavailable: {llm_error}")
             return RAGResponse(
                 answer="Извините, я не нашёл релевантной информации в базе знаний.",
                 sources=[]
@@ -114,6 +123,12 @@ class RAGService:
 
         if reranked_indices is not None:
             results = [results[i] for i in reranked_indices if i < len(results)]
+            query_terms = self._extract_query_boost_terms(retrieval_query)
+            product_boost_terms = self._extract_product_boost_terms(product_context if isinstance(product_context, dict) else None)
+            results.sort(
+                key=lambda item: self._effective_score(item, product_boost_terms, query_terms),
+                reverse=True,
+            )
 
         logger.debug(
             "RAG retrieval debug: %s",
@@ -125,7 +140,7 @@ class RAGService:
             ),
         )
 
-        context = self._product_context_entries(product_context)
+        context = list(contextual_entries)
         for result in results:
             properties = result.get("properties", {})
             context.append({
@@ -152,8 +167,21 @@ class RAGService:
             confidence = "unknown"
             sources_used = list(range(len(results)))
 
+        direct_source_answer = self._build_direct_source_answer(request.query, results)
+        if direct_source_answer and self._looks_like_insufficient_answer(answer):
+            answer = direct_source_answer
+
         if confidence == "none":
-            answer = "Недостаточно данных."
+            answer = direct_source_answer or "Недостаточно данных."
+
+        if confidence == "none":
+            recovered_answer = await self._recover_contextual_answer(
+                query=request.query,
+                context=context,
+                recovery_prompt=recovery_prompt,
+            )
+            if recovered_answer:
+                answer = recovered_answer
 
         sources = []
         for i, result in enumerate(results):
@@ -178,6 +206,143 @@ class RAGService:
             "content": json.dumps(product_context, ensure_ascii=False),
             "category": "product_context",
         }]
+
+    def _recommendation_context_entries(self, recommendation_context: Any) -> List[Dict[str, str]]:
+        if not isinstance(recommendation_context, dict):
+            return []
+        return [{
+            "title": "РџРµСЂСЃРѕРЅР°Р»СЊРЅС‹Рµ РєР°РЅРґРёРґР°С‚С‹ РёР· РєР°С‚Р°Р»РѕРіР° Aura",
+            "content": json.dumps(recommendation_context, ensure_ascii=False),
+            "category": "recommendation_context",
+        }]
+
+    def _normalize_chat_history(self, chat_history: Any) -> List[Dict[str, str]]:
+        if not isinstance(chat_history, list):
+            return []
+        normalized = []
+        for item in chat_history[-10:]:
+            if not isinstance(item, dict):
+                continue
+            role = str(item.get("role") or "").strip().lower()
+            content = re.sub(r"\s+", " ", str(item.get("content") or "")).strip()
+            if role not in {"user", "assistant"} or not content:
+                continue
+            normalized.append({"role": role, "content": content[:1500]})
+        return normalized
+
+    def _chat_history_entries(self, chat_history: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        if not chat_history:
+            return []
+        return [{
+            "title": "История диалога",
+            "content": "\n".join(f"{item['role']}: {item['content']}" for item in chat_history),
+            "category": "chat_history",
+        }]
+
+    def _build_retrieval_query(
+        self,
+        query: str,
+        chat_history: List[Dict[str, str]],
+        product_context: Any,
+    ) -> str:
+        cleaned_query = re.sub(r"\s+", " ", query or "").strip()
+        if not chat_history or not self._is_follow_up_query(cleaned_query):
+            return cleaned_query
+
+        parts = [cleaned_query]
+        if isinstance(product_context, dict):
+            product = product_context.get("product") if isinstance(product_context.get("product"), dict) else {}
+            product_name = str(product.get("name") or "").strip()
+            if product_name:
+                parts.append(f"product: {product_name}")
+        parts.append(
+            "dialog: " + " | ".join(f"{item['role']}: {item['content']}" for item in chat_history[-4:])
+        )
+        return "\n".join(parts)[:2000]
+
+    def _is_follow_up_query(self, query: str) -> bool:
+        lowered = (query or "").strip().lower()
+        if len(lowered) <= 80:
+            return True
+        markers = [
+            "а как",
+            "а если",
+            "а можно",
+            "как часто",
+            "когда",
+            "утром или вечером",
+            "подойдет ли",
+            "подойдёт ли",
+            "он",
+            "она",
+            "оно",
+            "это",
+            "этот",
+            "эта",
+            "его",
+            "её",
+        ]
+        return any(marker in lowered for marker in markers)
+
+    async def _recover_contextual_answer(
+        self,
+        *,
+        query: str,
+        context: List[Dict[str, str]],
+        recovery_prompt: str,
+    ) -> Optional[str]:
+        if not context:
+            return None
+        try:
+            llm = self.llm or get_llm_client()
+            answer = await llm.generate_with_context(query, context, recovery_prompt)
+        except Exception as llm_error:
+            logger.warning(f"Context recovery fallback failed: {llm_error}")
+            return None
+        cleaned_answer = answer.strip()
+        if not cleaned_answer or "Недостаточно данных" in cleaned_answer:
+            return None
+        return cleaned_answer
+
+    def _build_direct_source_answer(self, query: str, results: List[Dict[str, Any]]) -> Optional[str]:
+        query_terms = self._extract_query_boost_terms(query)
+        preferred_categories = {"active_ingredient", "skincare_knowledge"}
+        for result in results:
+            properties = result.get("properties", {}) or {}
+            category = str(properties.get("category") or "").lower()
+            title = str(properties.get("title") or properties.get("name") or "")
+            content = str(properties.get("content") or properties.get("text") or properties.get("description") or "")
+            haystack = f"{title} {content}".lower()
+            if category not in preferred_categories:
+                continue
+            if query_terms and not any(term in haystack for term in query_terms):
+                continue
+            return self._summarize_source_content(content)
+        return None
+
+    def _summarize_source_content(self, content: str, max_sentences: int = 2, max_chars: int = 320) -> str:
+        cleaned = re.sub(r"\s+", " ", content or "").strip()
+        if not cleaned:
+            return ""
+        sentences = re.split(r"(?<=[.!?])\s+", cleaned)
+        summary = " ".join(sentence.strip() for sentence in sentences[:max_sentences] if sentence.strip())
+        if not summary:
+            summary = cleaned
+        return summary[:max_chars].rstrip()
+
+    def _looks_like_insufficient_answer(self, answer: str) -> bool:
+        lowered = re.sub(r"\s+", " ", answer or "").strip().lower()
+        if not lowered:
+            return True
+        markers = [
+            "недостаточно данных",
+            "информации недостаточно",
+            "уточните вопрос",
+            "задайте другой",
+            "не могу ответить",
+            "не могу точно ответить",
+        ]
+        return any(marker in lowered for marker in markers)
 
     def add_knowledge(self, documents: List[Dict[str, Any]]):
         chunk_documents = []
@@ -275,6 +440,38 @@ class RAGService:
                 "\nИспользуй этот контекст как приоритетный источник фактов о продукте: "
                 "состав, характеристики, назначение, совместимость, ограничения."
             )
+        recommendation_context = (context or {}).get("recommendation_context")
+        if recommendation_context:
+            prompt += (
+                "\n\nРџРµСЂСЃРѕРЅР°Р»СЊРЅС‹Рµ РєР°РЅРґРёРґР°С‚С‹ РёР· РІРЅСѓС‚СЂРµРЅРЅРµРіРѕ РєР°С‚Р°Р»РѕРіР° Aura "
+                f"(recommendation_context): {json.dumps(recommendation_context, ensure_ascii=False)}"
+                "\nР•СЃР»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ СЃРїСЂР°С€РёРІР°РµС‚ Рѕ РєРѕРЅРєСЂРµС‚РЅС‹С… РїРѕРґС…РѕРґСЏС‰РёС… "
+                "РµРјСѓ РїСЂРѕРґСѓРєС‚Р°С…, РѕРїРёСЂР°Р№СЃСЏ РІ РїРµСЂРІСѓСЋ РѕС‡РµСЂРµРґСЊ РЅР° СЌС‚Рё РєР°РЅРґРёРґР°С‚С‹ "
+                "Рё РЅР°Р·С‹РІР°Р№ product_name, brand, step Рё reason РёР· СЌС‚РѕРіРѕ РєРѕРЅС‚РµРєСЃС‚Р°."
+            )
+        return prompt
+
+    def _build_context_recovery_prompt(self, context: Optional[Dict[str, Any]] = None) -> str:
+        prompt = (
+            "Ты - эксперт по косметике и уходу за кожей. "
+            "Отвечай только на русском языке. "
+            "Используй только предоставленный контекст и выбирай самые релевантные фрагменты под вопрос пользователя. "
+            "Если среди источников есть частично релевантный ответ, дай практичную короткую рекомендацию по нему. "
+            "Если есть неопределенность, честно обозначь ее в формулировке, но не отвечай шаблонно 'Недостаточно данных', "
+            "пока в контексте есть хотя бы один полезный факт."
+        )
+        skin_passport = (context or {}).get("skin_passport")
+        if skin_passport:
+            prompt += f"\n\nПаспорт кожи пользователя (skin_passport): {skin_passport}"
+        product_context = (context or {}).get("product_context")
+        if product_context:
+            prompt += f"\n\nКонтекст текущего продукта (product_context): {json.dumps(product_context, ensure_ascii=False)}"
+        recommendation_context = (context or {}).get("recommendation_context")
+        if recommendation_context:
+            prompt += (
+                "\n\nРџРµСЂСЃРѕРЅР°Р»СЊРЅС‹Рµ РєР°РЅРґРёРґР°С‚С‹ РёР· РєР°С‚Р°Р»РѕРіР° Aura "
+                f"(recommendation_context): {json.dumps(recommendation_context, ensure_ascii=False)}"
+            )
         return prompt
 
     def _search_text(self, doc: Dict[str, Any]) -> str:
@@ -345,6 +542,7 @@ class RAGService:
         primary_results: Optional[List[Dict[str, Any]]],
         secondary_results: Optional[List[Dict[str, Any]]],
         limit: int,
+        query: str = "",
         product_context: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         merged: List[Dict[str, Any]] = []
@@ -356,8 +554,9 @@ class RAGService:
             seen_keys.add(key)
             merged.append(result)
         boost_terms = self._extract_product_boost_terms(product_context)
+        query_terms = self._extract_query_boost_terms(query)
         merged.sort(
-            key=lambda item: self._effective_score(item, boost_terms),
+            key=lambda item: self._effective_score(item, boost_terms, query_terms),
             reverse=True,
         )
         return merged[:limit]
@@ -391,20 +590,35 @@ class RAGService:
                 terms.append(text)
         return terms
 
-    def _effective_score(self, result: Dict[str, Any], boost_terms: List[str]) -> float:
+    def _extract_query_boost_terms(self, query: str) -> List[str]:
+        raw_terms = re.findall(r"[A-Za-zА-Яа-яЁё0-9-]+", (query or "").lower())
+        stop_terms = {
+            "как", "что", "это", "для", "при", "или", "мне", "подойдет", "подойдёт",
+            "можно", "если", "после", "перед", "утром", "вечером", "нужно", "ли",
+            "use", "using", "with", "when", "what",
+        }
+        terms = []
+        for term in raw_terms:
+            cleaned = term.strip("-")
+            if len(cleaned) < 4 or cleaned in stop_terms:
+                continue
+            if cleaned not in terms:
+                terms.append(cleaned)
+        return terms
+
+    def _effective_score(self, result: Dict[str, Any], boost_terms: List[str], query_terms: List[str]) -> float:
         base = float(result.get("score") or 0.0)
-        if not boost_terms:
-            return base
         properties = result.get("properties", {}) or {}
-        haystack = " ".join(
-            str(part or "")
-            for part in [
-                properties.get("title") or properties.get("name"),
-                properties.get("content") or properties.get("text") or properties.get("description"),
-            ]
-        ).lower()
-        if any(term in haystack for term in boost_terms):
-            return base + 0.35
+        title = str(properties.get("title") or properties.get("name") or "").lower()
+        content = str(properties.get("content") or properties.get("text") or properties.get("description") or "").lower()
+        haystack = f"{title} {content}"
+        if boost_terms and any(term in haystack for term in boost_terms):
+            base += 0.35
+        if query_terms:
+            title_hits = sum(1 for term in query_terms if term in title)
+            content_hits = sum(1 for term in query_terms if term in content)
+            base += title_hits * 0.9
+            base += min(content_hits, 4) * 0.2
         return base
 
 _rag_service: Optional[RAGService] = None

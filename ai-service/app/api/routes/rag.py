@@ -90,7 +90,7 @@ async def ingest_documents(documents: List[Document]):
 async def delete_knowledge():
     """Delete all knowledge."""
     try:
-        pipeline = get_rag_pipeline()
-        return pipeline.delete_knowledge_base()
+        service = get_rag_service()
+        return service.delete_knowledge()
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error))

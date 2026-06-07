@@ -152,6 +152,41 @@ class RecordingFallbackLlm(FallbackLlm):
         return await super().generate_with_context(query, context, system_prompt)
 
 
+class StructuredNoneRecoveringLlm(RecordingFallbackLlm):
+    async def generate_structured(self, query: str, context: list[dict], system_prompt: str, json_schema: dict) -> dict:
+        return {
+            "answer": "Недостаточно данных.",
+            "confidence": "none",
+            "sources_used": [],
+        }
+
+    async def generate_with_context(self, query: str, context: list[dict], system_prompt: str) -> str:
+        self.context = context
+        return "Можно начать с 1-2 раз в неделю вечером и следить за реакцией кожи."
+
+
+class StructuredNoneKnowledgeRecoveringLlm(RecordingFallbackLlm):
+    async def generate_structured(self, query: str, context: list[dict], system_prompt: str, json_schema: dict) -> dict:
+        return {
+            "answer": "Недостаточно данных.",
+            "confidence": "none",
+            "sources_used": [],
+        }
+
+    async def generate_with_context(self, query: str, context: list[dict], system_prompt: str) -> str:
+        self.context = context
+        return "Начинайте ретинол 2-3 раза в неделю вечером и обязательно используйте SPF днем."
+
+
+class StructuredLowInsufficientLlm(RecordingFallbackLlm):
+    async def generate_structured(self, query: str, context: list[dict], system_prompt: str, json_schema: dict) -> dict:
+        return {
+            "answer": "К сожалению, информации недостаточно для ответа на ваш вопрос. Пожалуйста, уточните его.",
+            "confidence": "low",
+            "sources_used": [0],
+        }
+
+
 class RecordingVectorStore:
     def __init__(self):
         self.documents = None
@@ -205,6 +240,37 @@ class ProductBoostVectorStore:
         ]
 
 
+class QueryBoostVectorStore:
+    def search(self, collection_name: str, query: str, limit: int = 5, filters=None):
+        return [
+            {
+                "id": "generic-doc",
+                "score": 0.91,
+                "properties": {"title": "Общие рекомендации", "content": "Базовый уход за кожей и общие советы.", "category": "skincare_knowledge"},
+            },
+            {
+                "id": "retinol-doc",
+                "score": 0.20,
+                "properties": {"title": "Ретинол (Vitamin A)", "content": "Начинать 2-3 раза в неделю вечером, использовать SPF.", "category": "active_ingredient"},
+            },
+        ]
+
+
+class RecordingSearchQueryVectorStore:
+    def __init__(self):
+        self.queries = []
+
+    def search(self, collection_name: str, query: str, limit: int = 5, filters=None):
+        self.queries.append(query)
+        return [
+            {
+                "id": "doc-1",
+                "score": 0.88,
+                "properties": {"title": "Retinol serum", "content": "Используйте 2 раза в неделю вечером"},
+            }
+        ]
+
+
 class RecordingAddVectorStore:
     def __init__(self):
         self.calls = []
@@ -251,6 +317,11 @@ class FakeEmbedder:
 class NoopReranker:
     async def rerank(self, query: str, documents: list[str], top_k: int):
         return None
+
+
+class ReverseReranker:
+    async def rerank(self, query: str, documents: list[str], top_k: int):
+        return list(reversed(range(min(len(documents), top_k))))
 
 
 @pytest.mark.anyio
@@ -327,6 +398,27 @@ async def test_rag_service_prompt_includes_skin_passport_context():
 
 
 @pytest.mark.anyio
+async def test_rag_service_prompt_includes_catalog_recommendation_context():
+    service = RAGService(vector_store=BrokenVectorStore(), llm=FallbackLlm())
+    request = RAGRequest(
+        query="какие продукты мне подходят",
+        user_id="42",
+        session_id="7",
+        context={
+            "recommendation_context": {
+                "status": "available",
+                "products": [{"product_id": 75, "product_name": "Vinoclean Moisturizing Toner", "brand": "Caudalie"}],
+            }
+        },
+    )
+
+    source = inspect.getsource(service._build_system_prompt)
+    assert "recommendation_context" in source
+    response = await service.query(request)
+    assert response.answer == "LLM fallback for какие продукты мне подходят"
+
+
+@pytest.mark.anyio
 async def test_rag_service_initializes_when_default_vector_store_is_unavailable(monkeypatch):
     import app.services.rag_service as rag_service
 
@@ -389,6 +481,36 @@ async def test_rag_service_boosts_product_related_sources_only_when_product_cont
 
 
 @pytest.mark.anyio
+async def test_rag_service_boosts_query_keyword_matches_above_generic_results():
+    service = RAGService(vector_store=QueryBoostVectorStore(), llm=FallbackLlm(), reranker=NoopReranker())
+
+    response = await service.query(
+        RAGRequest(
+            query="как использовать ретинол",
+            user_id="42",
+            max_results=5,
+        )
+    )
+
+    assert response.sources[0]["id"] == "retinol-doc"
+
+
+@pytest.mark.anyio
+async def test_rag_service_keeps_query_keyword_match_first_after_reranker():
+    service = RAGService(vector_store=QueryBoostVectorStore(), llm=FallbackLlm(), reranker=ReverseReranker())
+
+    response = await service.query(
+        RAGRequest(
+            query="как использовать ретинол",
+            user_id="42",
+            max_results=5,
+        )
+    )
+
+    assert response.sources[0]["id"] == "retinol-doc"
+
+
+@pytest.mark.anyio
 async def test_rag_service_passes_product_context_to_llm_when_search_has_no_results():
     llm = RecordingFallbackLlm()
     service = RAGService(vector_store=RecordingVectorStore(), llm=llm)
@@ -409,6 +531,138 @@ async def test_rag_service_passes_product_context_to_llm_when_search_has_no_resu
             "category": "product_context",
         }
     ]
+
+
+@pytest.mark.anyio
+async def test_rag_service_passes_chat_history_to_llm_when_search_has_no_results():
+    llm = RecordingFallbackLlm()
+    service = RAGService(vector_store=RecordingVectorStore(), llm=llm)
+
+    response = await service.query(
+        RAGRequest(
+            query="А как часто использовать?",
+            user_id="42",
+            session_id="7",
+            context={
+                "chat_history": [
+                    {"role": "user", "content": "Подойдет ли сыворотка Retinol Serum для новичка?"},
+                    {"role": "assistant", "content": "Да, но начинайте постепенно и наносите вечером."},
+                ]
+            },
+            max_results=5,
+        )
+    )
+
+    assert response.answer == "LLM fallback for А как часто использовать?"
+    assert llm.context == [
+        {
+            "title": "История диалога",
+            "content": "user: Подойдет ли сыворотка Retinol Serum для новичка?\nassistant: Да, но начинайте постепенно и наносите вечером.",
+            "category": "chat_history",
+        }
+    ]
+
+
+@pytest.mark.anyio
+async def test_rag_service_expands_follow_up_query_with_chat_history():
+    vector_store = RecordingSearchQueryVectorStore()
+    service = RAGService(vector_store=vector_store, llm=FallbackLlm(), reranker=NoopReranker())
+
+    await service.query(
+        RAGRequest(
+            query="А как часто использовать?",
+            user_id="42",
+            session_id="7",
+            context={
+                "chat_history": [
+                    {"role": "user", "content": "Подойдет ли сыворотка Retinol Serum для новичка?"},
+                    {"role": "assistant", "content": "Да, но начинайте постепенно и наносите вечером."},
+                ]
+            },
+            max_results=5,
+        )
+    )
+
+    assert len(vector_store.queries) == 2
+    assert vector_store.queries[0].startswith("А как часто использовать?")
+    assert "Retinol Serum" in vector_store.queries[0]
+    assert "начинайте постепенно" in vector_store.queries[0]
+
+@pytest.mark.anyio
+async def test_rag_service_recovers_answer_when_structured_output_returns_none_with_context():
+    llm = StructuredNoneRecoveringLlm()
+    service = RAGService(vector_store=RecordingSearchQueryVectorStore(), llm=llm, reranker=NoopReranker())
+
+    response = await service.query(
+        RAGRequest(
+            query="А как часто использовать?",
+            user_id="42",
+            session_id="7",
+            context={
+                "chat_history": [
+                    {"role": "user", "content": "Подойдет ли сыворотка Retinol Serum для новичка?"},
+                    {"role": "assistant", "content": "Да, но начинайте постепенно и наносите вечером."},
+                ]
+            },
+            max_results=5,
+        )
+    )
+
+    assert response.answer == "Можно начать с 1-2 раз в неделю вечером и следить за реакцией кожи."
+
+
+@pytest.mark.anyio
+async def test_rag_service_recovers_answer_when_structured_output_returns_none_with_knowledge_sources():
+    llm = StructuredNoneKnowledgeRecoveringLlm()
+    service = RAGService(vector_store=QueryBoostVectorStore(), llm=llm, reranker=NoopReranker())
+
+    response = await service.query(
+        RAGRequest(
+            query="как использовать ретинол",
+            user_id="42",
+            max_results=5,
+        )
+    )
+
+    assert response.answer == "Начинайте ретинол 2-3 раза в неделю вечером и обязательно используйте SPF днем."
+
+
+def test_rag_service_builds_direct_answer_from_matching_knowledge_source():
+    service = RAGService()
+    results = [
+        {
+            "id": "generic-doc",
+            "properties": {"title": "Керамиды", "content": "Поддерживают барьер кожи.", "category": "active_ingredient"},
+        },
+        {
+            "id": "retinol-doc",
+            "properties": {
+                "title": "Ретинол (Vitamin A)",
+                "content": "Ретинол — это форма витамина A. Начинать с низкой концентрации 2-3 раза в неделю. Обязательно использовать SPF днем.",
+                "category": "active_ingredient",
+            },
+        },
+    ]
+
+    answer = service._build_direct_source_answer("как использовать ретинол", results)
+
+    assert "2-3 раза в неделю" in answer
+
+
+@pytest.mark.anyio
+async def test_rag_service_replaces_insufficient_structured_answer_with_direct_source_summary():
+    llm = StructuredLowInsufficientLlm()
+    service = RAGService(vector_store=QueryBoostVectorStore(), llm=llm, reranker=NoopReranker())
+
+    response = await service.query(
+        RAGRequest(
+            query="как использовать ретинол",
+            user_id="42",
+            max_results=5,
+        )
+    )
+
+    assert "2-3 раза в неделю" in response.answer
 
 
 def test_rag_service_add_knowledge_uses_default_vector_store_when_not_injected(monkeypatch):

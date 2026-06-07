@@ -28,7 +28,7 @@ class Settings(BaseSettings):
 
     collection_products: str = "products"
     collection_ingredients: str = "ingredients"
-    collection_knowledge: str = "knowledge_base"
+    collection_knowledge: str = "AuraKnowledge"
     collection_knowledge_user_prefix: str = "knowledge_user_"
 
     class Config:

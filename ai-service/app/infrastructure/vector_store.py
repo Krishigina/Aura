@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 import weaviate
 from weaviate.classes.config import Configure, DataType, Property
 from weaviate.classes.data import DataObject
+from weaviate.classes.query import Filter
 
 from app.infrastructure.embedder import get_embedder
 
@@ -94,8 +95,16 @@ class VectorStore:
     def search(self, collection_name: str, query: str, limit: int = 5, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         self.create_collection(collection_name)
         collection = self.client.collections.get(collection_name)
-        query_vector = self.embedder.embed(query)
-        search = collection.query.hybrid(query=query, vector=query_vector, limit=limit)
+        embed_query = getattr(self.embedder, "embed", None) or getattr(self.embedder, "embed_query")
+        query_vector = embed_query(query)
+        metadata_filter = None
+        if filters:
+            for key, value in filters.items():
+                if value is None:
+                    continue
+                condition = Filter.by_property(key).equal(str(value))
+                metadata_filter = condition if metadata_filter is None else metadata_filter & condition
+        search = collection.query.hybrid(query=query, vector=query_vector, limit=limit, filters=metadata_filter)
         results = []
         for obj in search.objects:
             properties = obj.properties or {}
