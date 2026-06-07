@@ -329,7 +329,37 @@ def test_recommendation_steps_include_new_score_breakdown_and_evidence_explanati
 
     step = result["lines"][0]["routine"]["morning"][0]
     assert "ingredient_function_fit" in step["score_breakdown"]
-    assert "evidence_explanations" in step
+    assert step["evidence_explanations"]
+    assert any(evidence["source_ids"] == [7] for evidence in step["evidence_explanations"])
+
+
+def test_recommendation_function_signals_allow_nullable_source_ids():
+    product = ProductRecommendationInput(
+        id=10,
+        name="Calming Serum",
+        brand="Aura",
+        segment="budget",
+        product_type="serum",
+        purpose=["hydration"],
+        skin_type=[],
+        composition="Glycerin",
+        application_info="утром",
+        function_signals=[
+            {"function_key": "hydration", "score": 0.8, "evidence_status": "confirmed", "evidence_count": 1, "source_ids": None},
+        ],
+    )
+
+    result = build_recommendation(
+        answers={"concerns": ["dryness"]},
+        accepted_insights=[],
+        sensor_readings=[],
+        procedures=[],
+        products=[product],
+        rules=[],
+    )
+
+    step = result["lines"][0]["routine"]["morning"][0]
+    assert step["evidence_explanations"]
 
 
 def test_low_compatibility_reason_does_not_say_product_fits():

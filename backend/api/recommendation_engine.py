@@ -209,6 +209,18 @@ def _frequency(product: ProductRecommendationInput) -> str:
     return "по рекомендации специалиста"
 
 
+def _coerce_source_ids(value: Any) -> List[int]:
+    if not isinstance(value, list):
+        return []
+    source_ids: List[int] = []
+    for item in value:
+        try:
+            source_ids.append(int(item))
+        except (TypeError, ValueError):
+            continue
+    return source_ids
+
+
 def _product_function_signals(product: ProductRecommendationInput) -> List[ProductFunctionSignal]:
     signals: List[ProductFunctionSignal] = []
     for signal in product.function_signals or []:
@@ -221,7 +233,7 @@ def _product_function_signals(product: ProductRecommendationInput) -> List[Produ
                     score=float(signal.get("score") or 0),
                     evidence_status=str(signal.get("evidence_status") or "auto_only"),
                     evidence_count=int(signal.get("evidence_count") or 0),
-                    source_ids=[int(source_id) for source_id in signal.get("source_ids", []) if str(source_id).isdigit()],
+                    source_ids=_coerce_source_ids(signal.get("source_ids")),
                 )
             )
     return signals
