@@ -26,6 +26,8 @@ class ExtractedIngredientFact:
     source_id: int | None
     source_title: str | None
     evidence_quote: str
+    matching_weight_delta: float = 8.0
+    matched_alias: str | None = None
 
 
 @dataclass
@@ -115,7 +117,8 @@ def extract_ingredient_facts(
     for sentence in _sentences(text):
         normalized_sentence = normalize_key(sentence)
         for ingredient in SEED_INGREDIENTS:
-            if not _mentions_ingredient(normalized_sentence, ingredient):
+            matched_alias = _matched_ingredient_alias(normalized_sentence, ingredient)
+            if not matched_alias:
                 continue
 
             is_warning = _is_negated_recommendation(normalized_sentence)
@@ -136,6 +139,7 @@ def extract_ingredient_facts(
                     source_id=source_id,
                     source_title=source_title,
                     evidence_quote=sentence.strip(),
+                    matched_alias=matched_alias,
                 )
             )
 
@@ -170,8 +174,15 @@ def _sentences(text: str) -> list[str]:
 
 
 def _mentions_ingredient(normalized_sentence: str, ingredient: SeedIngredient) -> bool:
+    return _matched_ingredient_alias(normalized_sentence, ingredient) is not None
+
+
+def _matched_ingredient_alias(normalized_sentence: str, ingredient: SeedIngredient) -> str | None:
     aliases = (ingredient.canonical_name, *ingredient.aliases)
-    return any(_contains_phrase(normalized_sentence, normalize_key(alias)) for alias in aliases)
+    for alias in aliases:
+        if _contains_phrase(normalized_sentence, normalize_key(alias)):
+            return alias
+    return None
 
 
 def _contains_phrase(text: str, phrase: str) -> bool:
