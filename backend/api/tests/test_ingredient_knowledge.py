@@ -1,4 +1,5 @@
 from backend.api.ingredient_knowledge import (
+    ExtractedIngredientFact,
     aggregate_function_profile,
     extract_ingredient_facts,
     normalize_key,
@@ -47,15 +48,35 @@ def test_low_confidence_mentions_remain_draft():
 
 
 def test_aggregate_function_profile_weights_confirmed_above_auto_facts():
-    facts = extract_ingredient_facts(
-        "Глицерин рекомендуется при сухости кожи. Пантенол помогает поддерживать кожный барьер.",
+    confirmed_fact = ExtractedIngredientFact(
+        ingredient_key="glycerin",
+        effect_key="hydration",
+        condition_type="concern",
+        condition_value="dryness",
+        matching_effect="boost",
+        confidence=0.9,
+        evidence_status="confirmed",
         source_id=11,
-        source_title="source.docx",
+        source_title="confirmed.docx",
+        evidence_quote="Глицерин рекомендуется при сухости кожи.",
     )
-    facts[0].evidence_status = "confirmed"
+    auto_fact = ExtractedIngredientFact(
+        ingredient_key="urea",
+        effect_key="hydration",
+        condition_type="concern",
+        condition_value="dryness",
+        matching_effect="boost",
+        confidence=0.9,
+        evidence_status="auto_high_confidence",
+        source_id=12,
+        source_title="auto.docx",
+        evidence_quote="Мочевина рекомендуется при сухости кожи.",
+    )
 
-    profile = aggregate_function_profile(facts)
+    confirmed_profile = aggregate_function_profile([confirmed_fact])
+    auto_profile = aggregate_function_profile([auto_fact])
+    mixed_profile = aggregate_function_profile([confirmed_fact, auto_fact])
 
-    assert profile["hydration"].score > 0
-    assert profile["hydration"].evidence_count >= 1
-    assert profile["hydration"].evidence_status in {"confirmed", "mixed"}
+    assert confirmed_profile["hydration"].score > auto_profile["hydration"].score
+    assert mixed_profile["hydration"].evidence_count == 2
+    assert mixed_profile["hydration"].evidence_status == "mixed"
