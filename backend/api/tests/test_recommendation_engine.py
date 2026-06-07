@@ -300,6 +300,38 @@ def test_build_recommendation_uses_product_function_signals():
     assert "hydration" in item["matched_functions"]
 
 
+def test_recommendation_steps_include_new_score_breakdown_and_evidence_explanations():
+    from backend.api.recommendation_engine import ProductRecommendationInput, build_recommendation
+
+    product = ProductRecommendationInput(
+        id=1,
+        name="Hydration Serum",
+        brand="Aura",
+        segment="budget",
+        product_type="serum",
+        purpose=["hydration"],
+        skin_type=[],
+        composition="Glycerin, Panthenol",
+        application_info="утром",
+        function_signals=[
+            {"function_key": "hydration", "score": 0.9, "evidence_status": "confirmed", "evidence_count": 2, "source_ids": [7]},
+        ],
+    )
+
+    result = build_recommendation(
+        answers={"concerns": ["dryness"]},
+        accepted_insights=[],
+        sensor_readings=[],
+        procedures=[],
+        products=[product],
+        rules=[],
+    )
+
+    step = result["lines"][0]["routine"]["morning"][0]
+    assert "ingredient_function_fit" in step["score_breakdown"]
+    assert "evidence_explanations" in step
+
+
 def test_low_compatibility_reason_does_not_say_product_fits():
     products = [
         ProductRecommendationInput(

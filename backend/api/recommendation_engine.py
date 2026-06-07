@@ -61,7 +61,7 @@ class ProductRecommendationInput:
     skin_type: Optional[List[str]]
     composition: str
     application_info: str = ""
-    function_signals: List[ProductFunctionSignal] = field(default_factory=list)
+    function_signals: List[Any] = field(default_factory=list)
 
     def purpose_values(self) -> List[str]:
         return self.purpose or []
@@ -209,6 +209,24 @@ def _frequency(product: ProductRecommendationInput) -> str:
     return "по рекомендации специалиста"
 
 
+def _product_function_signals(product: ProductRecommendationInput) -> List[ProductFunctionSignal]:
+    signals: List[ProductFunctionSignal] = []
+    for signal in product.function_signals or []:
+        if isinstance(signal, ProductFunctionSignal):
+            signals.append(signal)
+        elif isinstance(signal, dict):
+            signals.append(
+                ProductFunctionSignal(
+                    function_key=str(signal.get("function_key") or ""),
+                    score=float(signal.get("score") or 0),
+                    evidence_status=str(signal.get("evidence_status") or "auto_only"),
+                    evidence_count=int(signal.get("evidence_count") or 0),
+                    source_ids=[int(source_id) for source_id in signal.get("source_ids", []) if str(source_id).isdigit()],
+                )
+            )
+    return signals
+
+
 def _reason(product: ProductRecommendationInput, match_result: Any) -> str:
     compatibility = int(getattr(match_result, "compatibility_percent", 0) or 0)
     if compatibility < 40:
@@ -305,7 +323,7 @@ def build_recommendation(
             product_type=product.product_type,
             purpose=", ".join(product.purpose_values()),
             skin_type=", ".join(product.skin_type_values()),
-            function_signals=product.function_signals,
+            function_signals=_product_function_signals(product),
         )
         match_result = match_product(candidate, profile, rules or [])
         if match_result.decision == "exclude":
@@ -329,6 +347,7 @@ def build_recommendation(
                 "reason": _reason(product, match_result),
                 "warnings": match_result.warnings,
                 "matched_functions": match_result.matched_functions,
+                "evidence_explanations": match_result.evidence_explanations,
             }
         )
 
