@@ -14,6 +14,7 @@ import Settings from './pages/Settings'
 import Dictionaries from './pages/Dictionaries'
 import KnowledgeSources from './pages/KnowledgeSources'
 import MatchingRules from './pages/MatchingRules'
+import IngredientKnowledge from './pages/IngredientKnowledge'
 import { useAuth } from './context/AuthContext'
 
 function ProtectedRoute({ children }) {
@@ -48,6 +49,7 @@ function AppRoutes() {
         <Route path="dictionaries" element={<Dictionaries />} />
         <Route path="knowledge-sources" element={<KnowledgeSources />} />
         <Route path="matching-rules" element={<MatchingRules />} />
+        <Route path="ingredient-knowledge" element={<IngredientKnowledge />} />
         <Route path="settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

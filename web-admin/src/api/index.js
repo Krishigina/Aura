@@ -325,6 +325,12 @@ export const matchingApi = {
   matchProducts: (data = {}) => request('/matching/products', { method: 'POST', body: JSON.stringify(data) }),
 }
 
+export const ingredientKnowledgeApi = {
+  listIngredients: () => request('/admin/ingredient-knowledge/ingredients'),
+  listFacts: (status) => request(`/admin/ingredient-knowledge/facts?status=${encodeURIComponent(status)}`),
+  updateFact: (id, data) => request(`/admin/ingredient-knowledge/facts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+}
+
 export const passportSuggestionsApi = {
   list: () => request('/profile/skin-passport/suggestions'),
   create: (data) => request('/profile/skin-passport/suggestions', { method: 'POST', body: JSON.stringify(data) }),
