@@ -331,6 +331,10 @@ export const ingredientKnowledgeApi = {
   updateFact: (id, data) => request(`/admin/ingredient-knowledge/facts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 }
 
+export const rulesIngredientsApi = {
+  getOverview: () => request('/admin/rules-ingredients/overview'),
+}
+
 export const passportSuggestionsApi = {
   list: () => request('/profile/skin-passport/suggestions'),
   create: (data) => request('/profile/skin-passport/suggestions', { method: 'POST', body: JSON.stringify(data) }),
