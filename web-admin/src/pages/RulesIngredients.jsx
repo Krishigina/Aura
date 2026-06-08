@@ -78,6 +78,11 @@ export default function RulesIngredients() {
     loadOverview()
   }, [])
 
+  useEffect(() => {
+    const tab = searchParams.get('tab') || 'overview'
+    setActiveTab(TABS.some((item) => item.key === tab) ? tab : 'overview')
+  }, [searchParams])
+
   const setTab = (tab) => {
     setActiveTab(tab)
     setSearchParams({ tab })
