@@ -67,3 +67,22 @@ def test_build_source_card_keeps_traceability():
     assert "URL: https://dermnetnz.org/topics/salicylic-acid" in card
     assert "Evidence tier: tier_2_reference" in card
     assert "Salicylic acid is a keratolytic used in acne." in card
+
+
+def test_build_source_card_includes_verified_summary_before_full_text():
+    source = {
+        "title": "DermNet Azelaic acid",
+        "organization": "DermNet",
+        "year": 2024,
+        "url": "https://dermnetnz.org/topics/azelaic-acid",
+        "topic": "azelaic acid acne rosacea",
+        "source_type": "html",
+        "evidence_tier": "tier_2_reference",
+        "fallback_excerpt": "Azelaic acid is recommended for acne and rosacea.",
+    }
+
+    card = build_source_card(source, "Full public page text follows.")
+
+    assert card.index("Clinical extraction summary:") < card.index("Full public text:")
+    assert "Azelaic acid is recommended for acne and rosacea." in card
+    assert "Full public page text follows." in card

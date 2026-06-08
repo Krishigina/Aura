@@ -130,6 +130,7 @@ def clean_html_text(html: str) -> str:
 
 def build_source_card(source: Dict[str, object], body: str) -> str:
     retrieved_at = datetime.now(timezone.utc).isoformat()
+    summary = str(source.get("fallback_excerpt", "")).strip()
     header = [
         f"Title: {source['title']}",
         f"Organization: {source['organization']}",
@@ -138,7 +139,8 @@ def build_source_card(source: Dict[str, object], body: str) -> str:
         f"URL: {source['url']}",
         f"Evidence tier: {source['evidence_tier']}",
         f"Retrieved at: {retrieved_at}",
-        "Content:",
+        f"Clinical extraction summary: Recommended: {summary}",
+        "Full public text:",
     ]
     return "\n".join(header + [body.strip()])
 
