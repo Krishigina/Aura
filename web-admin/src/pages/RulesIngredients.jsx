@@ -75,8 +75,10 @@ export default function RulesIngredients() {
   }
 
   useEffect(() => {
-    loadOverview()
-  }, [])
+    if (activeTab === 'overview' || activeTab === 'active') {
+      loadOverview()
+    }
+  }, [activeTab])
 
   useEffect(() => {
     const tab = searchParams.get('tab') || 'overview'
