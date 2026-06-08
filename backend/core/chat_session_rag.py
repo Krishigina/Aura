@@ -24,6 +24,30 @@ async def get_owned_chat_session_overview(conn, session_id: int, user_id: int):
     )
 
 
+async def load_recent_chat_history(conn, session_id: int, limit: int = 10):
+    rows = await conn.fetch(
+        """
+        SELECT
+            COALESCE(role, CASE WHEN is_from_user THEN 'user' ELSE 'assistant' END) AS role,
+            COALESCE(content, text, '') AS content
+        FROM chat_messages
+        WHERE session_id=$1
+        ORDER BY created_at DESC, id DESC
+        LIMIT $2
+        """,
+        session_id,
+        limit,
+    )
+    history = []
+    for row in reversed(rows):
+        role = str(row["role"] or "").strip().lower()
+        content = str(row["content"] or "").strip()
+        if role not in {"user", "assistant"} or not content:
+            continue
+        history.append({"role": role, "content": content})
+    return history
+
+
 async def persist_rag_chat_messages(
     conn,
     *,

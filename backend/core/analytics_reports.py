@@ -1,4 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
+
+from backend.core.chat_recommendations import should_attach_catalog_context
 
 
 _RU_SHORT_MONTHS = {
@@ -36,6 +38,54 @@ def _format_datetime(value: datetime) -> str:
     return value.strftime("%d.%m.%Y %H:%M")
 
 
+def _normalize_anchor_day(value) -> date:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return datetime.utcnow().date()
+
+
+def _build_daily_series(anchor_day: date, values_by_day: dict[str, int], field_name: str) -> list[dict]:
+    rows = []
+    for offset in range(6, -1, -1):
+        day = date.fromordinal(anchor_day.toordinal() - offset)
+        rows.append(
+            {
+                "date": _format_chart_date(day),
+                field_name: int(values_by_day.get(day.isoformat(), 0) or 0),
+            }
+        )
+    return rows
+
+
+def _count_recommendation_requests(message_rows, *, window_start: date, window_end: date) -> dict[str, int]:
+    history_by_session: dict[int, list[dict]] = {}
+    values_by_day: dict[str, int] = {}
+
+    for row in message_rows:
+        session_id = int(row["session_id"])
+        role = str(row["role"] or "").strip().lower()
+        content = str(row["content"] or "").strip()
+        created_at = row["created_at"]
+        history = history_by_session.setdefault(session_id, [])
+
+        if role == "user" and content:
+            created_day = created_at.date() if isinstance(created_at, datetime) else created_at
+            if window_start <= created_day <= window_end and should_attach_catalog_context(
+                content,
+                chat_history=history,
+                product_context=None,
+            ):
+                day_key = created_day.isoformat()
+                values_by_day[day_key] = values_by_day.get(day_key, 0) + 1
+
+        if role in {"user", "assistant"} and content:
+            history.append({"role": role, "content": content})
+
+    return values_by_day
+
+
 async def build_dashboard_analytics_payload(conn) -> dict:
     totals_row = await conn.fetchrow(
         """
@@ -46,38 +96,73 @@ async def build_dashboard_analytics_payload(conn) -> dict:
             (SELECT COUNT(*)::int FROM content) AS content
         """
     )
-    activity_rows = await conn.fetch(
+    requests_anchor_day = _normalize_anchor_day(
+        await conn.fetchval(
+            """
+            SELECT COALESCE(MAX(created_at), CURRENT_DATE)::date
+            FROM chat_messages
+            WHERE COALESCE(is_from_user, false) = true
+               OR COALESCE(role, '') = 'user'
+            """
+        )
+    )
+    user_activity_rows = await conn.fetch(
         """
         WITH days AS (
-            SELECT generate_series((CURRENT_DATE - INTERVAL '6 days')::date, CURRENT_DATE::date, INTERVAL '1 day')::date AS day
+            SELECT generate_series(($1::date - INTERVAL '6 days')::date, $1::date, INTERVAL '1 day')::date AS day
         ),
-        users_daily AS (
-            SELECT DATE(created_at) AS day, COUNT(*)::int AS users
-            FROM users
-            WHERE created_at >= (CURRENT_DATE - INTERVAL '6 days')
-            GROUP BY DATE(created_at)
-        ),
-        recommendations_daily AS (
-            SELECT DATE(created_at) AS day, COUNT(*)::int AS recommendations
-            FROM (
-                SELECT created_at FROM products
-                UNION ALL
-                SELECT created_at FROM procedures
-                UNION ALL
-                SELECT created_at FROM content
-            ) AS recommendation_events
-            WHERE created_at >= (CURRENT_DATE - INTERVAL '6 days')
+        requests_daily AS (
+            SELECT DATE(created_at) AS day, COUNT(*)::int AS requests
+            FROM chat_messages
+            WHERE created_at >= ($1::date - INTERVAL '6 days')
+              AND created_at < ($1::date + INTERVAL '1 day')
+              AND (
+                  COALESCE(is_from_user, false) = true
+                  OR COALESCE(role, '') = 'user'
+              )
             GROUP BY DATE(created_at)
         )
         SELECT
             days.day,
-            COALESCE(users_daily.users, 0) AS users,
-            COALESCE(recommendations_daily.recommendations, 0) AS recommendations
+            COALESCE(requests_daily.requests, 0) AS requests
         FROM days
-        LEFT JOIN users_daily ON users_daily.day = days.day
-        LEFT JOIN recommendations_daily ON recommendations_daily.day = days.day
+        LEFT JOIN requests_daily ON requests_daily.day = days.day
         ORDER BY days.day
+        """,
+        requests_anchor_day,
+    )
+    recommendation_message_rows = await conn.fetch(
         """
+        SELECT
+            session_id,
+            created_at,
+            COALESCE(role, CASE WHEN is_from_user THEN 'user' ELSE 'assistant' END) AS role,
+            COALESCE(content, text, '') AS content
+        FROM chat_messages
+        WHERE session_id IN (
+            SELECT DISTINCT session_id
+            FROM chat_messages
+            WHERE created_at >= ($1::date - INTERVAL '6 days')
+              AND created_at < ($1::date + INTERVAL '1 day')
+              AND (
+                  COALESCE(is_from_user, false) = true
+                  OR COALESCE(role, '') = 'user'
+              )
+        )
+          AND created_at < ($1::date + INTERVAL '1 day')
+        ORDER BY session_id ASC, created_at ASC, id ASC
+        """,
+        requests_anchor_day,
+    )
+    recommendation_values_by_day = _count_recommendation_requests(
+        recommendation_message_rows,
+        window_start=date.fromordinal(requests_anchor_day.toordinal() - 6),
+        window_end=requests_anchor_day,
+    )
+    recommendation_activity_rows = _build_daily_series(
+        requests_anchor_day,
+        recommendation_values_by_day,
+        "recommendations",
     )
     recent_rows = await conn.fetch(
         """
@@ -102,13 +187,20 @@ async def build_dashboard_analytics_payload(conn) -> dict:
             "procedures": int(totals_row["procedures"]) if totals_row else 0,
             "content": int(totals_row["content"]) if totals_row else 0,
         },
-        "activityData": [
+        "userActivityData": [
             {
                 "date": _format_chart_date(row["day"]),
-                "users": int(row["users"] or 0),
-                "recommendations": int(row["recommendations"] or 0),
+                "requests": int(row["requests"] or 0),
             }
-            for row in activity_rows
+            for row in user_activity_rows
+        ],
+        "recommendationActivityData": [
+            dict(row)
+            for row in recommendation_activity_rows
+        ],
+        "activityData": [
+            dict(row)
+            for row in recommendation_activity_rows
         ],
         "recentActivity": [
             {

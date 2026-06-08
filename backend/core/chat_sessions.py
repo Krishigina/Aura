@@ -17,6 +17,7 @@ from backend.core.chat_session_listing import (
 )
 from backend.core.chat_session_rag import (
     get_owned_chat_session_overview,
+    load_recent_chat_history,
     normalize_rag_sources,
     persist_rag_chat_messages,
 )

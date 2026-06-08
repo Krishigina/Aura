@@ -7,6 +7,7 @@ from backend.core.assistant_knowledge_admin import (
     create_admin_knowledge_document,
     create_user_knowledge_document,
     list_knowledge_sources_for_admin,
+    reindex_knowledge_sources_to_ai,
     update_knowledge_source_for_admin,
 )
 from backend.core.knowledge import (
@@ -83,4 +84,4 @@ async def upload_user_knowledge_document(file: UploadFile = File(...), current_u
 @router.post("/api/assistant/knowledge/reindex")
 async def reindex_knowledge_sources(current_user: dict = Depends(get_current_user), db=Depends(get_db)):
     async with db.acquire() as conn:
-        return await count_reindexable_knowledge_sources(conn)
+        return await reindex_knowledge_sources_to_ai(conn)

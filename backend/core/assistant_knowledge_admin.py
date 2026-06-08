@@ -1,6 +1,14 @@
-from typing import Dict
+import json
+from typing import Dict, List
+
+import aiohttp
 
 from fastapi import HTTPException
+
+from backend.core.config import AI_SERVICE_URL
+
+
+REINDEX_BATCH_SIZE = 5
 
 
 async def ensure_assistant_knowledge_schema(conn):
@@ -125,6 +133,68 @@ async def count_reindexable_knowledge_sources(conn):
         WHERE enabled = true AND owner_user_id IS NULL
     """)
     return {"indexed_count": indexed_count or 0}
+
+
+async def reindex_knowledge_sources_to_ai(conn):
+    await ensure_assistant_knowledge_schema(conn)
+    rows = await conn.fetch(
+        """
+        SELECT id, title, source_type, scope, weight, content
+        FROM knowledge_sources
+        WHERE enabled = true
+          AND owner_user_id IS NULL
+          AND COALESCE(content, '') <> ''
+        ORDER BY id ASC
+        """
+    )
+    documents = [build_reindex_document(row) for row in rows]
+    await delete_ai_knowledge()
+
+    vector_documents_indexed = 0
+    batches = 0
+    for batch_start in range(0, len(documents), REINDEX_BATCH_SIZE):
+        batch = documents[batch_start:batch_start + REINDEX_BATCH_SIZE]
+        result = await ingest_ai_knowledge_documents(batch)
+        vector_documents_indexed += int(result.get("indexed_count") or 0)
+        batches += 1
+
+    return {
+        "indexed_count": len(documents),
+        "vector_documents_indexed": vector_documents_indexed,
+        "batches": batches,
+    }
+
+
+def build_reindex_document(row) -> Dict:
+    return {
+        "title": str(row["title"] or "").strip() or f"knowledge-source-{row['id']}",
+        "content": str(row["content"] or "").strip(),
+        "category": str(row["source_type"] or "knowledge_source"),
+        "source_type": "knowledge_source",
+        "source_id": int(row["id"]),
+        "source_scope": str(row["scope"] or "global"),
+        "weight": float(row["weight"] or 1.0),
+    }
+
+
+async def delete_ai_knowledge() -> Dict:
+    timeout = aiohttp.ClientTimeout(total=300)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.delete(f"{AI_SERVICE_URL}/api/v1/rag/knowledge") as response:
+            response_text = await response.text()
+            if response.status >= 400:
+                raise HTTPException(status_code=502, detail="AI reindex delete failed")
+            return {"status": response.status, "body": response_text}
+
+
+async def ingest_ai_knowledge_documents(documents: List[Dict]) -> Dict:
+    timeout = aiohttp.ClientTimeout(total=600)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.post(f"{AI_SERVICE_URL}/api/v1/rag/ingest", json=documents) as response:
+            response_text = await response.text()
+            if response.status >= 400:
+                raise HTTPException(status_code=502, detail="AI reindex ingest failed")
+            return json.loads(response_text) if response_text.strip() else {}
 
 
 def extract_knowledge_document_payload(*, filename: str, content: bytes, get_knowledge_source_type, extract_knowledge_text):

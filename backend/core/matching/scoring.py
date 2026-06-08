@@ -55,7 +55,10 @@ def match_product(
     safety_score, safety_warnings, safety_explanations = score_safety(signals, profile)
     evidence_score, evidence_explanations = score_evidence_quality(signals, matched_functions)
     if (result.matched_concerns or result.matched_goals) and result.evidence_sources:
-        evidence_score = max(evidence_score, min(10, 6 + min(len(result.evidence_sources), 3)))
+        evidence_score = max(
+            evidence_score,
+            min(SCORE_MAX["evidence_quality"], 6 + min(len(result.evidence_sources), 3)),
+        )
     metadata_score, metadata_explanations = score_metadata_confirmation(product, matched_functions)
 
     result.score_breakdown["safety_fit"] = min(result.score_breakdown["safety_fit"], safety_score)

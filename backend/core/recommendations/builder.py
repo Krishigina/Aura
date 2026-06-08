@@ -155,6 +155,11 @@ def build_recommendation(
         if expert_percent < MIN_ALTERNATIVE_COMPATIBILITY_PERCENT:
             excluded_products.append(excluded_product(product, match_result, "Совместимость ниже экспертного минимума"))
             continue
+        if usage_kind == "weekly":
+            line = lines_by_key[line_key]
+            item["sequence"] = len(line["routine"]["weekly"]) + 1
+            line["routine"]["weekly"].append(item)
+            continue
         if expert_percent < MIN_RECOMMENDATION_COMPATIBILITY_PERCENT:
             add_alternative(alternatives, line_key, item)
             continue

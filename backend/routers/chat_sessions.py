@@ -1,9 +1,17 @@
 from fastapi import APIRouter, Depends, File, UploadFile
 
 from backend.core import chat as chat_core
+from backend.core import chat_product_context as chat_product_context_core
+from backend.core import chat_recommendations as chat_recommendations_core
 from backend.core import chat_session_service as chat_service_core
 from backend.core import chat_sessions as chat_sessions_core
+from backend.core import passport_updates as passport_updates_core
 from backend.core import security as security_core
+from backend.core import skin_journal as skin_journal_core
+from backend.core.matching import helpers as matching_helpers_core
+from backend.core.matching import recommendations as matching_recommendations_core
+from backend.core.matching import route_service as matching_route_service_core
+from backend.core.matching import router_support as matching_router_support_core
 from backend.core import skin_passport as skin_passport_core
 from backend.db.pool import get_db
 from backend.schemas import chat as chat_schemas
@@ -125,6 +133,7 @@ async def query_rag_chat(
 ):
     session_id = payload.session_id
     session_row = None
+    chat_history = []
 
     if session_id is not None:
         async with db.acquire() as conn:
@@ -134,19 +143,51 @@ async def query_rag_chat(
                 user_id=current_user["id"],
                 get_owned_chat_session_overview=chat_sessions_core.get_owned_chat_session_overview,
             )
+            chat_history = await chat_sessions_core.load_recent_chat_history(conn, session_id)
 
+    resolved_product_context = payload.product_context
     async with db.acquire() as conn:
+        if resolved_product_context is None:
+            resolved_product_context = await chat_product_context_core.resolve_catalog_product_context(
+                conn,
+                message=payload.message,
+                chat_history=chat_history,
+            )
         skin_passport = await chat_sessions_core.load_skin_passport_context(
             conn,
             current_user["id"],
             skin_passport_core.sanitize_skin_passport_answers,
         )
+        recommendation_context = None
+        if chat_recommendations_core.should_attach_catalog_context(
+            payload.message,
+            chat_history=chat_history,
+            product_context=resolved_product_context,
+        ):
+            runtime_dependencies = await matching_route_service_core.build_recommendation_runtime_dependencies(
+                conn,
+                matching_router_support_core=matching_router_support_core,
+                passport_updates_core=passport_updates_core,
+                skin_passport_core=skin_passport_core,
+                matching_helpers_core=matching_helpers_core,
+                skin_journal_core=skin_journal_core,
+            )
+            recommendation_context = await chat_recommendations_core.build_catalog_recommendation_context(
+                conn,
+                user_id=current_user["id"],
+                query=payload.message,
+                skin_passport=skin_passport,
+                generate_recommendation_for_user=matching_recommendations_core.generate_recommendation_for_user,
+                recommendation_runtime_dependencies=runtime_dependencies,
+            )
     rag_payload = chat_core.build_rag_query_payload(
         payload.message,
         current_user["id"],
         session_id=session_id,
         skin_passport=skin_passport,
-        product_context=payload.product_context,
+        product_context=resolved_product_context,
+        recommendation_context=recommendation_context,
+        chat_history=chat_history,
     )
 
     try:

@@ -1,7 +1,7 @@
 import base64
 import json
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import aiohttp
 from fastapi import HTTPException
@@ -76,6 +76,19 @@ def compact_product_context(value: Any) -> Any:
     return value
 
 
+def compact_chat_history(messages: List[Dict[str, Any]], limit: int = 10) -> List[Dict[str, str]]:
+    compacted = []
+    for item in messages[-limit:]:
+        if not isinstance(item, dict):
+            continue
+        role = str(item.get("role") or "").strip().lower()
+        content = re.sub(r"\s+", " ", str(item.get("content") or "")).strip()
+        if role not in {"user", "assistant"} or not content:
+            continue
+        compacted.append({"role": role, "content": content[:1500]})
+    return compacted
+
+
 def build_rag_query_payload(
     query: str,
     user_id: int,
@@ -83,6 +96,8 @@ def build_rag_query_payload(
     session_id: Optional[int] = None,
     skin_passport: Optional[Dict[str, Any]] = None,
     product_context: Optional[Dict[str, Any]] = None,
+    recommendation_context: Optional[Dict[str, Any]] = None,
+    chat_history: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict:
     cleaned_query = (query or "").strip()
     if not cleaned_query:
@@ -100,6 +115,11 @@ def build_rag_query_payload(
         context["skin_passport"] = skin_passport
     if product_context:
         context["product_context"] = compact_product_context(product_context)
+    if recommendation_context:
+        context["recommendation_context"] = compact_product_context(recommendation_context)
+    compacted_history = compact_chat_history(chat_history or [])
+    if compacted_history:
+        context["chat_history"] = compacted_history
     if context:
         payload["context"] = context
     return payload
@@ -150,7 +170,9 @@ async def ingest_chat_attachment(
 
 
 async def query_ai_service_rag(payload: Dict) -> Dict:
-    timeout = aiohttp.ClientTimeout(total=60)
+    # Product-recommendation prompts can be noticeably heavier because they combine
+    # skin passport, chat history, and compact catalog recommendations.
+    timeout = aiohttp.ClientTimeout(total=180)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.post(f"{AI_SERVICE_URL}/api/v1/rag/query", json=payload) as response:
             response_text = await response.text()

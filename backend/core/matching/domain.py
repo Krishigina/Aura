@@ -4,11 +4,11 @@ from typing import Dict, List, Optional
 
 
 SCORE_MAX = {
-    "ingredient_function_fit": 45,
-    "skin_state_fit": 20,
-    "safety_fit": 20,
-    "evidence_quality": 10,
-    "metadata_confirmation": 5,
+    "ingredient_function_fit": 34,
+    "skin_state_fit": 24,
+    "evidence_quality": 20,
+    "safety_fit": 15,
+    "metadata_confirmation": 7,
 }
 
 HYDRATION_TERMS = {"glycerin", "hyaluronic acid", "sodium hyaluronate", "ceramide", "ceramides", "panthenol"}
