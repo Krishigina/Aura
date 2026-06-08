@@ -26,8 +26,7 @@ const menuItems = [
   { path: '/reports', icon: BarChart3, label: 'Отчеты', permission: 'reports' },
   { path: '/dictionaries', icon: BookA, label: 'Справочники', permission: 'dictionaries' },
   { path: '/knowledge-sources', icon: BookOpen, label: 'Источники знаний', permission: 'content' },
-  { path: '/matching-rules', icon: BookOpen, label: 'Правила подбора', permission: 'content' },
-  { path: '/ingredient-knowledge', icon: BookA, label: 'База ингредиентов', permission: 'content' },
+  { path: '/rules-ingredients', icon: BookA, label: 'Правила и ингредиенты', permission: 'content' },
   { path: '/settings', icon: Settings, label: 'Настройки', permission: 'settings' },
 ]
 
