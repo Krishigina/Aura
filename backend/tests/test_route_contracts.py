@@ -682,6 +682,51 @@ def test_build_rag_query_payload_includes_skin_passport_context():
     assert payload["context"] == {"skin_passport": {"answers": {"skin_type": ["сухая"]}}}
 
 
+def test_build_rag_query_payload_includes_recent_chat_history():
+    payload = build_rag_query_payload(
+        query="А как часто использовать?",
+        user_id=42,
+        session_id=7,
+        chat_history=[
+            {"role": "user", "content": "Расскажи про сыворотку с ретинолом"},
+            {"role": "assistant", "content": "Это средство лучше вводить постепенно."},
+        ],
+    )
+
+    assert payload["context"]["chat_history"] == [
+        {"role": "user", "content": "Расскажи про сыворотку с ретинолом"},
+        {"role": "assistant", "content": "Это средство лучше вводить постепенно."},
+    ]
+
+
+def test_build_rag_query_payload_includes_recommendation_context():
+    payload = build_rag_query_payload(
+        query="Какие продукты мне подходят?",
+        user_id=42,
+        session_id=7,
+        recommendation_context={
+            "status": "available",
+            "products": [
+                {"product_id": 75, "product_name": "Vinoclean Moisturizing Toner", "brand": "Caudalie"},
+            ],
+        },
+    )
+
+    assert payload["context"]["recommendation_context"] == {
+        "status": "available",
+        "products": [
+            {"product_id": 75, "product_name": "Vinoclean Moisturizing Toner", "brand": "Caudalie"},
+        ],
+    }
+
+
+def test_assistant_knowledge_reindex_route_triggers_real_reindex():
+    source = inspect.getsource(__import__("backend.routers.assistant_knowledge", fromlist=["reindex_knowledge_sources"]).reindex_knowledge_sources)
+
+    assert "reindex_knowledge_sources_to_ai" in source
+    assert "count_reindexable_knowledge_sources" not in source
+
+
 def test_build_rag_query_payload_compacts_product_context_media():
     payload = build_rag_query_payload(
         query="Подходит ли мне продукт?",
@@ -883,6 +928,13 @@ def test_rag_chat_payload_includes_skin_passport_before_ai_call():
 
     assert "load_skin_passport_context" in source
     assert source.index("skin_passport") < source.index("rag_response = await query_ai_service_rag")
+
+
+def test_rag_chat_route_resolves_catalog_product_context_before_ai_call():
+    source = inspect.getsource(query_rag_chat)
+
+    assert "resolve_catalog_product_context" in source
+    assert source.index("resolved_product_context") < source.index("rag_response = await query_ai_service_rag")
 
 
 def test_build_chat_session_title_trims_whitespace():

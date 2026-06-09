@@ -53,7 +53,7 @@ def test_fuzzy_hydration_rewards_moisturizing_products_proportionally():
 
     result = match_product(product, profile, [])
 
-    assert result.score_breakdown["skin_state_fit"] == 8
+    assert result.score_breakdown["skin_state_fit"] == 10
     assert any("нечетк" in item.lower() or "fuzzy" in item.lower() for item in result.explanations)
 
 
@@ -127,7 +127,7 @@ def test_warning_rule_marks_product_as_caution_and_penalizes_score():
 
     assert result.decision == "caution"
     assert result.score_breakdown["ingredient_function_fit"] > 0
-    assert result.score_breakdown["safety_fit"] < 20
+    assert result.score_breakdown["safety_fit"] < 15
     assert result.compatibility_percent <= 69
     assert result.warnings == ["Acids can irritate damaged barrier."]
 
@@ -164,7 +164,7 @@ def test_warning_rule_never_increases_score():
 
     assert result.decision == "caution"
     assert result.score_breakdown["ingredient_function_fit"] == 0
-    assert result.score_breakdown["safety_fit"] == 20
+    assert result.score_breakdown["safety_fit"] == 15
     assert result.compatibility_percent <= 69
     assert result.warnings == ["Warning should not boost."]
 
@@ -219,7 +219,7 @@ def test_match_result_exposes_score_breakdown_and_explanations():
         "evidence_quality",
         "metadata_confirmation",
     }
-    assert result.score_breakdown["safety_fit"] == 20
+    assert result.score_breakdown["safety_fit"] == 15
     assert result.score_breakdown["ingredient_function_fit"] > 0
     assert result.score_breakdown["skin_state_fit"] > 0
     assert result.score_breakdown["evidence_quality"] > 0
@@ -296,7 +296,7 @@ def test_sensitive_skin_with_irritation_risk_gets_caution():
     result = match_product(product, profile, rules=[])
 
     assert result.decision == "caution"
-    assert result.score_breakdown["safety_fit"] < 20
+    assert result.score_breakdown["safety_fit"] < 15
     assert result.warnings
 
 
@@ -325,7 +325,7 @@ def test_auto_warning_ingredient_evidence_creates_safety_caution():
 
     assert entries[0]["function_key"] == "irritation_risk"
     assert result.decision == "caution"
-    assert result.score_breakdown["safety_fit"] < 20
+    assert result.score_breakdown["safety_fit"] < 15
     assert result.warnings
 
 
@@ -344,5 +344,5 @@ def test_sensitive_skin_with_glycolic_acid_gets_caution_without_explicit_risk_si
     result = match_product(product, profile, rules=[])
 
     assert result.decision == "caution"
-    assert result.score_breakdown["safety_fit"] < 20
+    assert result.score_breakdown["safety_fit"] < 15
     assert result.warnings
