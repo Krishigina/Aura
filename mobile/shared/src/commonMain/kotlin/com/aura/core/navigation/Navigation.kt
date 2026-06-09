@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.navigation.NavHostController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -34,6 +35,7 @@ import com.aura.feature.auth.AuthScreen
 import com.aura.feature.auth.presentation.AuthSessionViewModel
 import com.aura.feature.catalog.CatalogProductFilters
 import com.aura.feature.chat.presentation.ChatNavigationState
+import com.aura.feature.chat.presentation.ChatViewModel
 import org.koin.compose.koinInject
 
 object Routes {
@@ -100,11 +102,15 @@ fun AuraNavigation(sessionViewModel: AuthSessionViewModel = koinInject()) {
             }
         }
     } else {
+        val chatNavigationState: ChatNavigationState = koinInject()
+        val chatViewModel: ChatViewModel = koinInject()
         MainShell(
             navController = navController,
             startRoute = if (startDest == Routes.SKIN_SURVEY) Routes.SKIN_SURVEY else Routes.HOME,
             initialSurveySkippable = shouldAllowSurveySkip,
             onLogout = {
+                chatViewModel.reset()
+                chatNavigationState.reset()
                 sessionViewModel.clear()
                 SkinJournalStore.clear()
                 startDest = Routes.AUTH
@@ -179,12 +185,28 @@ private fun MainShell(
                 textBody = textBody,
                 textMuted = textMuted,
                 onNavigate = { route ->
+                    if (currentRoute.isSameBottomTab(route)) {
+                        return@AuraBottomNavigationBar
+                    }
                     navController.navigate(route) {
-                        popUpTo(Routes.HOME) { inclusive = false }
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = true
+                        }
                         launchSingleTop = true
+                        restoreState = true
                     }
                 },
             )
         }
     }
+}
+
+private fun String?.isSameBottomTab(route: String): Boolean = this.toBottomTabRoute() == route
+
+private fun String?.toBottomTabRoute(): String? = when (this) {
+    Routes.HOME, Routes.RECOMMENDATIONS -> Routes.HOME
+    Routes.CATALOG, Routes.CATALOG_FILTERS, Routes.PRODUCT_DETAIL -> Routes.CATALOG
+    Routes.CHAT, Routes.CHAT_SESSIONS, Routes.CHAT_SESSION -> Routes.CHAT
+    Routes.PROFILE, Routes.PROFILE_PARAMETERS, Routes.PROFILE_SETTINGS, Routes.PROFILE_ROUTINE, Routes.PROFILE_NOTIFICATIONS, Routes.PROFILE_RECOMMENDATION_FAVORITE, Routes.SKIN_JOURNAL -> Routes.PROFILE
+    else -> null
 }

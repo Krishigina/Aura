@@ -1,5 +1,6 @@
 package com.aura.feature.chat
 
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
@@ -19,10 +21,16 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import com.aura.core.ui.components.SoftPastelBackground
 import com.aura.core.ui.components.SoftPastelVariant
 import com.aura.core.ui.theme.aura
@@ -54,6 +62,12 @@ fun ChatScreen(
     val density = LocalDensity.current
     val keyboardVisible = WindowInsets.ime.getBottom(density) > 0
     val chatTokens = MaterialTheme.aura.chat
+    var rootHeightPx by remember { mutableIntStateOf(0) }
+    var dockTopPx by remember { mutableIntStateOf(0) }
+    val dynamicBottomInset = with(density) {
+        val occupiedBottomPx = (rootHeightPx - dockTopPx).coerceAtLeast(0)
+        maxOf(chatTokens.chatAreaBottomPadding.roundToPx(), occupiedBottomPx).toDp()
+    }
 
     DisposableEffect(viewModel) {
         ChatAttachmentPickerBridge.onPicked = { picked ->
@@ -73,22 +87,39 @@ fun ChatScreen(
     }
 
     LaunchedEffect(rememberedSessionId, productContextRequestKey) {
-        viewModel.load(rememberedSessionId, initialProductContext)
+        viewModel.load(
+            sessionId = rememberedSessionId,
+            initialProductContext = initialProductContext,
+            requestKey = productContextRequestKey,
+        )
     }
 
     LaunchedEffect(uiState.activeSessionId) {
         navigationState.setActiveSession(uiState.activeSessionId)
     }
 
-    LaunchedEffect(uiState.messages.size) {
-        if (uiState.messages.isNotEmpty()) {
-            listState.animateScrollToItem(uiState.messages.size - 1)
+    val lastMessageLength = uiState.messages.lastOrNull()?.text?.length ?: 0
+    val leadingItemsCount = 1 + if (uiState.productContextActive) 1 else 0
+    val lastContentIndex = when {
+        uiState.isLoading && uiState.messages.isNotEmpty() -> leadingItemsCount + uiState.messages.size
+        uiState.messages.isNotEmpty() -> leadingItemsCount + uiState.messages.lastIndex
+        else -> leadingItemsCount
+    }
+
+    LaunchedEffect(uiState.messages.size, uiState.isLoading, uiState.productContextActive) {
+        listState.scrollToChatBottom(lastContentIndex, animated = true)
+    }
+
+    LaunchedEffect(lastMessageLength, uiState.isResponding, uiState.productContextActive) {
+        if (uiState.isResponding && uiState.messages.isNotEmpty()) {
+            listState.scrollToChatBottom(leadingItemsCount + uiState.messages.lastIndex, animated = false)
         }
     }
 
     Box(
         modifier = modifier
-            .fillMaxSize(),
+            .fillMaxSize()
+            .onSizeChanged { rootHeightPx = it.height },
     ) {
         SoftPastelBackground(variant = SoftPastelVariant.Chat)
 
@@ -97,6 +128,7 @@ fun ChatScreen(
             listState = listState,
             isLoading = uiState.isLoading,
             productContextActive = uiState.productContextActive,
+            bottomInset = dynamicBottomInset + 8.dp,
             modifier = Modifier.fillMaxSize(),
         )
         ChatHeader(
@@ -111,7 +143,10 @@ fun ChatScreen(
                 .fillMaxWidth()
                 .padding(horizontal = chatTokens.screenHorizontalPadding)
                 .imePadding()
-                .padding(bottom = chatInputBottomPadding(keyboardVisible)),
+                .padding(bottom = chatInputBottomPadding(keyboardVisible))
+                .onGloballyPositioned { coordinates ->
+                    dockTopPx = coordinates.boundsInRoot().top.toInt()
+                },
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(chatTokens.attachmentRowGap)) {
                 if (uiState.attachments.isNotEmpty()) {
@@ -130,7 +165,7 @@ fun ChatScreen(
                 ChatInput(
                     value = uiState.draftMessage,
                     onValueChange = viewModel::updateDraftMessage,
-                    isSending = uiState.isLoading,
+                    isSending = uiState.isLoading || uiState.isResponding,
                     onAttachClick = {
                         ChatAttachmentPickerBridge.openPicker()
                     },
@@ -138,5 +173,22 @@ fun ChatScreen(
                 )
             }
         }
+    }
+}
+
+private suspend fun LazyListState.scrollToChatBottom(targetIndex: Int, animated: Boolean) {
+    if (targetIndex < 0) return
+
+    if (animated) {
+        animateScrollToItem(targetIndex)
+    } else {
+        scrollToItem(targetIndex)
+    }
+
+    val targetItem = layoutInfo.visibleItemsInfo.lastOrNull { it.index == targetIndex } ?: return
+    val desiredBottom = layoutInfo.viewportEndOffset - layoutInfo.afterContentPadding
+    val overflow = (targetItem.offset + targetItem.size) - desiredBottom
+    if (overflow > 0) {
+        scrollBy(overflow.toFloat())
     }
 }

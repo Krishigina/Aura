@@ -36,4 +36,10 @@ class ChatNavigationState {
         pendingProductContext = null
         return value
     }
+
+    fun reset() {
+        activeSessionId = null
+        pendingProductContext = null
+        productContextRequestKey = 0
+    }
 }

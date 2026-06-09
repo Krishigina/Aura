@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -29,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -93,6 +94,7 @@ fun ChatArea(
     listState: LazyListState,
     isLoading: Boolean,
     productContextActive: Boolean,
+    bottomInset: androidx.compose.ui.unit.Dp,
     modifier: Modifier = Modifier,
 ) {
     val chat = MaterialTheme.aura.chat
@@ -104,7 +106,7 @@ fun ChatArea(
             .padding(horizontal = chat.chatAreaHorizontalPadding),
         contentPadding = PaddingValues(
             top = auraToolbarContentTopPadding(chat.chatAreaTopPaddingBase),
-            bottom = chat.chatAreaBottomPadding,
+            bottom = bottomInset,
         ),
         verticalArrangement = Arrangement.spacedBy(chat.chatAreaMessageGap),
     ) {
@@ -140,7 +142,10 @@ fun ChatArea(
             }
         }
 
-        items(messages) { message ->
+        itemsIndexed(
+            items = messages,
+            key = { index, message -> "${message.timestamp}_${message.isFromUser}_$index" },
+        ) { _, message ->
             when {
                 message.isFromUser -> UserMessage(text = message.text, time = message.timestamp)
                 message.text.contains("Можете загрузить") -> AiMessageWithAction(text = message.text, time = message.timestamp)
@@ -181,7 +186,7 @@ fun AiMessage(text: String, time: String) {
 
     Row(
         modifier = Modifier.fillMaxWidth(chat.messageMaxWidthFraction),
-        verticalAlignment = Alignment.Bottom,
+        verticalAlignment = Alignment.Top,
     ) {
         AiAvatar()
         Spacer(modifier = Modifier.width(chat.messageAvatarGap))
@@ -210,7 +215,7 @@ fun AiTypingMessage() {
 
     Row(
         modifier = Modifier.fillMaxWidth(chat.messageMaxWidthFraction),
-        verticalAlignment = Alignment.Bottom,
+        verticalAlignment = Alignment.Top,
     ) {
         AiAvatar()
         Spacer(modifier = Modifier.width(chat.messageAvatarGap))
@@ -237,9 +242,10 @@ fun AiTypingMessage() {
 @Composable
 fun MarkdownText(text: String) {
     val chat = MaterialTheme.aura.chat
+    val blocks = remember(text) { parseChatMarkdown(text) }
 
     Column(verticalArrangement = Arrangement.spacedBy(chat.markdownLineGap)) {
-        parseChatMarkdown(text).forEach { block ->
+        blocks.forEach { block ->
             when (block) {
                 ChatMarkdownBlock.Blank -> Spacer(modifier = Modifier.height(chat.markdownBlankLineHeight))
                 is ChatMarkdownBlock.Heading -> Text(
@@ -324,7 +330,7 @@ fun AiMessageWithAction(text: String, time: String) {
 
     Row(
         modifier = Modifier.fillMaxWidth(chat.messageMaxWidthFraction),
-        verticalAlignment = Alignment.Bottom,
+        verticalAlignment = Alignment.Top,
     ) {
         AiAvatar()
         Spacer(modifier = Modifier.width(chat.messageAvatarGap))

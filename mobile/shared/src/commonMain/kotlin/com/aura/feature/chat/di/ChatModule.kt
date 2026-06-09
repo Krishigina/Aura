@@ -24,6 +24,6 @@ val chatModule = module {
     factory { SendChatMessageUseCase(get()) }
     factory { UploadChatAttachmentUseCase(get()) }
     factory { GetChatSessionsUseCase(get()) }
-    factory { ChatViewModel(get(), get(), get()) }
+    single { ChatViewModel(get(), get(), get()) }
     factory { ChatSessionsViewModel(get()) }
 }

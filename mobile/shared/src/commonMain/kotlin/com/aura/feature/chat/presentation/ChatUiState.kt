@@ -8,6 +8,7 @@ data class ChatUiState(
     val attachments: List<ChatAttachmentUi> = emptyList(),
     val draftMessage: String = "",
     val isLoading: Boolean = false,
+    val isResponding: Boolean = false,
     val activeSessionId: Int? = null,
     val productContextActive: Boolean = false,
 )
