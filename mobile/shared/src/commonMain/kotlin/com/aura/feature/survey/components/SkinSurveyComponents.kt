@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -41,6 +42,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.aura.core.data.api.model.SurveyQuestionSchema
 import com.aura.core.i18n.StringsRu
@@ -145,25 +147,43 @@ fun SurveyHeader(
             Row(
                 modifier = Modifier.fillMaxWidth().height(survey.headerHeight),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                IconButton(onClick = onBack, modifier = Modifier.size(survey.headerIconButtonSize)) {
-                    Icon(Icons.Rounded.ArrowBack, contentDescription = StringsRu.Common.back, tint = survey.textBody)
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    IconButton(onClick = onBack, modifier = Modifier.size(survey.headerIconButtonSize)) {
+                        Icon(Icons.Rounded.ArrowBack, contentDescription = StringsRu.Common.back, tint = survey.textBody)
+                    }
                 }
-                Text(StringsRu.Survey.title, fontSize = survey.headerTitleFontSize, fontWeight = FontWeight.Bold, color = survey.textStrong)
-                if (allowSkip) {
-                    Text(
-                        text = StringsRu.Common.skip,
-                        fontSize = survey.skipFontSize,
-                        fontWeight = FontWeight.SemiBold,
-                        color = survey.textBody,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(survey.skipRadius))
-                            .clickable { onSkip() }
-                            .padding(horizontal = survey.skipHorizontalPadding, vertical = survey.skipVerticalPadding),
-                    )
-                } else {
-                    Spacer(modifier = Modifier.size(survey.headerIconButtonSize))
+
+                Text(
+                    text = StringsRu.Survey.title,
+                    fontSize = survey.headerTitleFontSize,
+                    fontWeight = FontWeight.Bold,
+                    color = survey.textStrong,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f),
+                )
+
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    if (allowSkip) {
+                        Text(
+                            text = StringsRu.Common.skip,
+                            fontSize = survey.skipFontSize,
+                            fontWeight = FontWeight.SemiBold,
+                            color = survey.textBody,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(survey.skipRadius))
+                                .clickable { onSkip() }
+                                .padding(horizontal = survey.skipHorizontalPadding, vertical = survey.skipVerticalPadding),
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.width(survey.headerIconButtonSize))
+                    }
                 }
             }
 

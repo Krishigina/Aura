@@ -23,8 +23,8 @@ import io.ktor.util.encodeBase64
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
@@ -82,7 +82,7 @@ internal class ProductNetworkClient(
         }
         val responseText = response.bodyTextOrThrow(extractErrorMessage)
         if (responseText.isBlank()) return emptyList()
-        return parseRoutineProductOptions(responseText)
+        return parseRoutineProductOptions(responseText, json)
     }
 
     suspend fun getProductPhotos(productId: Int): List<ProductPhoto> {
@@ -135,25 +135,6 @@ internal class ProductNetworkClient(
     private suspend fun hydrateProductDetailPhotos(detail: ProductDetailResponse): ProductDetailResponse {
         val photos = detail.product.photos.orEmpty().map { photo -> hydratePhotoDataFromUrl(photo) }
         return detail.copy(product = detail.product.copy(photos = photos))
-    }
-
-    private fun parseRoutineProductOptions(responseText: String): List<RoutineProductOption> {
-        return runCatching { json.decodeFromString<List<RoutineProductOption>>(responseText) }.getOrElse {
-            runCatching {
-                val element = json.parseToJsonElement(responseText)
-                (element as? JsonArray).orEmpty().mapNotNull { item ->
-                    runCatching parseItem@{
-                        val obj = item as? JsonObject ?: return@parseItem null
-                        val id = obj["id"].primitiveContentOrNull()?.toIntOrNull() ?: return@parseItem null
-                        RoutineProductOption(id = id, brand = obj["brand"].primitiveContentOrNull(), name = obj["name"].primitiveContentOrNull())
-                    }.getOrNull()
-                }
-            }.getOrDefault(emptyList())
-        }
-    }
-
-    private fun JsonElement?.primitiveContentOrNull(): String? {
-        return runCatching { this?.jsonPrimitive?.contentOrNull }.getOrNull()
     }
 
     private fun parseProductsManually(text: String): List<Product> {
@@ -216,4 +197,28 @@ internal class ProductNetworkClient(
             emptyList()
         }
     }
+}
+
+internal fun parseRoutineProductOptions(responseText: String, json: Json): List<RoutineProductOption> {
+    return runCatching {
+        val element = json.parseToJsonElement(responseText)
+        (element as? JsonArray).orEmpty().mapNotNull { item ->
+            val obj = item as? JsonObject ?: return@mapNotNull null
+            val id = obj.primitiveString("id")?.toIntOrNull() ?: return@mapNotNull null
+            if (!obj.hasOnlyPrimitiveValue("brand") || !obj.hasOnlyPrimitiveValue("name")) return@mapNotNull null
+            val brand = obj.primitiveString("brand")
+            val name = obj.primitiveString("name")
+            RoutineProductOption(id = id, brand = brand, name = name)
+        }
+    }.getOrDefault(emptyList())
+}
+
+private fun JsonObject.primitiveString(key: String): String? {
+    val value = this[key] ?: return null
+    return (value as? JsonPrimitive)?.contentOrNull
+}
+
+private fun JsonObject.hasOnlyPrimitiveValue(key: String): Boolean {
+    val value = this[key] ?: return true
+    return value is JsonPrimitive
 }

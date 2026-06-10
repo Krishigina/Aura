@@ -1,5 +1,6 @@
 package com.aura.core.domain.model
 
+import com.aura.core.data.api.model.RecommendationFavoritesResponse
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals

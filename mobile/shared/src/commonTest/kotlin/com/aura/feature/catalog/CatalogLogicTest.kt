@@ -106,10 +106,10 @@ class CatalogLogicTest {
 
     @Test
     fun compatibilityRangeLabelFormatsCorrectly() {
-        assertEquals("0–25%", compatibilityRangeLabel("0-25"))
-        assertEquals("25–50%", compatibilityRangeLabel("25-50"))
-        assertEquals("50–75%", compatibilityRangeLabel("50-75"))
-        assertEquals("75–100%", compatibilityRangeLabel("75-100"))
+        assertEquals("0-25%", compatibilityRangeLabel("0-25"))
+        assertEquals("25-50%", compatibilityRangeLabel("25-50"))
+        assertEquals("50-75%", compatibilityRangeLabel("50-75"))
+        assertEquals("75-100%", compatibilityRangeLabel("75-100"))
     }
 
     private fun catalogProduct(

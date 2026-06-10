@@ -40,7 +40,6 @@ class ProfileSettingsLogicTest {
                     reminder_time = "09:00",
                 ),
             ),
-            routineStepsCount = 0,
         )
 
         assertEquals(null, error)
@@ -55,7 +54,6 @@ class ProfileSettingsLogicTest {
                     reminder_time = null,
                 ),
             ),
-            routineStepsCount = 0,
         )
 
         assertEquals(null, error)
@@ -71,7 +69,6 @@ class ProfileSettingsLogicTest {
                     reminder_time = "09:00",
                 ),
             ),
-            routineStepsCount = 0,
         )
 
         assertEquals(null, error)
@@ -87,7 +84,6 @@ class ProfileSettingsLogicTest {
                     reminder_time = "09:00",
                 ),
             ),
-            routineStepsCount = 0,
         )
 
         assertEquals("Выберите день недели для рутины", error)
@@ -102,7 +98,6 @@ class ProfileSettingsLogicTest {
                     reminder_time = "99:77",
                 ),
             ),
-            routineStepsCount = 0,
         )
 
         assertEquals("Укажите корректное время для рутины", error)

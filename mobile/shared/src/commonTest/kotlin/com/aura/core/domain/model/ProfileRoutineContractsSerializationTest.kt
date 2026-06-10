@@ -19,10 +19,10 @@ class ProfileRoutineContractsSerializationTest {
     }
 
     @Test
-    fun encodesNoneFrequencyAsLowercaseToken() {
+    fun omitsDefaultNoneFrequency() {
         val encoded = json.encodeToString(ReminderPreference(frequency = ReminderFrequency.NONE))
 
-        assertEquals("""{"frequency":"none","reminder_time":null}""", encoded)
+        assertEquals("""{}""", encoded)
     }
 
     @Test

@@ -1,11 +1,13 @@
 package com.aura.core.data.api
 
+import com.aura.core.data.api.client.parseRoutineProductOptions
+import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class RoutineProductOptionParsingTest {
 
-    private val apiClient = AuraApiClient("http://localhost")
+    private val json = Json { ignoreUnknownKeys = true }
 
     @Test
     fun displayLabelFallsBackWhenFieldsMissing() {
@@ -16,7 +18,7 @@ class RoutineProductOptionParsingTest {
 
     @Test
     fun parseRoutineProductOptionsReturnsEmptyListForMalformedPayload() {
-        val parsed = apiClient.parseRoutineProductOptions("not-json")
+        val parsed = parseRoutineProductOptions("not-json", json)
 
         assertEquals(emptyList(), parsed)
     }
@@ -33,7 +35,7 @@ class RoutineProductOptionParsingTest {
             ]
             """.trimIndent()
 
-        val parsed = apiClient.parseRoutineProductOptions(payload)
+        val parsed = parseRoutineProductOptions(payload, json)
 
         assertEquals(2, parsed.size)
         assertEquals(11, parsed[0].id)
@@ -55,7 +57,7 @@ class RoutineProductOptionParsingTest {
             ]
             """.trimIndent()
 
-        val parsed = apiClient.parseRoutineProductOptions(payload)
+        val parsed = parseRoutineProductOptions(payload, json)
 
         assertEquals(2, parsed.size)
         assertEquals(31, parsed[0].id)

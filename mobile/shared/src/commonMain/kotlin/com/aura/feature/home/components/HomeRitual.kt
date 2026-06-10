@@ -34,6 +34,9 @@ import androidx.compose.ui.text.style.TextDecoration
 import com.aura.core.data.api.model.HomeRitualItem
 import com.aura.core.i18n.StringsRu
 import com.aura.core.ui.theme.aura
+
+fun shouldShowRitualGlow(hasRitualItems: Boolean): Boolean = hasRitualItems
+
 @Composable
 fun RitualSection(
     textSecondary: Color,
