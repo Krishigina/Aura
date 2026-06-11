@@ -5,6 +5,7 @@ import logging
 
 from app.core.config import settings
 from app.api.routes import rag_router, recommendations_router, hybrid_recommendations_router, ingredients_router
+from app.infrastructure.reranker_client import get_reranker
 from app.models.schemas import HealthResponse
 
 logging.basicConfig(
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.app_name}")
+    get_reranker().warm_up()
     yield
     logger.info("Shutting down")
 

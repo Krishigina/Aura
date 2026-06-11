@@ -8,7 +8,6 @@ class RAGRequest(BaseModel):
     context: Optional[Dict[str, Any]] = None
     max_results: int = 5
 
-
 class RAGAttachmentIngestRequest(BaseModel):
     attachment_id: str
     user_id: str
@@ -17,17 +16,32 @@ class RAGAttachmentIngestRequest(BaseModel):
     content_type: str
     content_base64: str
 
-
 class AttachmentIngestResponse(BaseModel):
     attachment_id: str
     summary: str
     extracted_text: str = ""
     indexed: bool = True
 
+class Source(BaseModel):
+    id: str
+    title: str
+    content: str = ""
+    score: Optional[float] = None
+    source_type: Optional[str] = None
+    category: Optional[str] = None
+
+    def __getitem__(self, key: str) -> Any:
+        return getattr(self, key)
+
 class RAGResponse(BaseModel):
     answer: str
-    sources: List[Dict[str, Any]]
+    sources: List[Source]
     conversation_id: Optional[str] = None
+
+class LLMStructuredAnswer(BaseModel):
+    answer: str
+    confidence: str = Field(..., pattern=r"^(high|medium|low|none)$")
+    sources_used: List[int]
 
 class RecommendationRequest(BaseModel):
     user_id: str

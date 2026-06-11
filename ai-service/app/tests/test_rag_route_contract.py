@@ -1,9 +1,11 @@
+import base64
 import inspect
 import pytest
 
 from app.api.routes import rag
 from app.models.schemas import AttachmentIngestResponse, RAGAttachmentIngestRequest, RAGRequest
 from app.infrastructure.llm_client import OpenRouterClient
+from app.infrastructure.vector_store import VectorStore
 from app.services.rag_service import RAGService
 
 
@@ -32,6 +34,13 @@ def test_attachment_ingest_route_exists_and_uses_service():
     assert "@router.post(\"/attachments/ingest\"" in inspect.getsource(rag)
     assert "ingest_attachment" in source
     assert "get_rag_service" in source
+
+
+def test_delete_knowledge_route_uses_rag_service_not_legacy_pipeline():
+    source = inspect.getsource(rag.delete_knowledge)
+
+    assert "get_rag_service" in source
+    assert "get_rag_pipeline" not in source
 
 
 def test_attachment_ingest_schema_carries_user_session_metadata():
@@ -64,6 +73,63 @@ def test_llm_client_exposes_vision_summary_helper():
     assert hasattr(OpenRouterClient, "summarize_image")
 
 
+def test_rag_v1_defaults_use_aura_knowledge_and_available_embeddings():
+    from app.core.config import Settings
+
+    settings = Settings(_env_file=None)
+
+    assert settings.collection_knowledge == "AuraKnowledge"
+    assert settings.embedding_model == "sentence-transformers/all-MiniLM-L6-v2"
+    assert settings.embedding_dimension == 384
+
+
+def test_embedder_raises_when_embedding_service_returns_error(monkeypatch):
+    from app.infrastructure.embedder import Embedder, EmbeddingError
+
+    class FakeClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, *args, **kwargs):
+            return type("Response", (), {"status_code": 500, "text": "bad gateway"})()
+
+    monkeypatch.setattr("app.infrastructure.embedder.httpx.Client", lambda: FakeClient())
+
+    with pytest.raises(EmbeddingError):
+        Embedder("http://embedder", 1024).embed_query("ретинол")
+
+
+def test_embedder_supports_huggingface_tei_embed_endpoint(monkeypatch):
+    from app.infrastructure.embedder import Embedder
+
+    class FakeResponse:
+        def __init__(self, status_code, payload=None):
+            self.status_code = status_code
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    class FakeClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, *args, **kwargs):
+            if url.endswith("/vectors"):
+                return FakeResponse(404, {"error": "not found"})
+            return FakeResponse(200, [[0.1, 0.2, 0.3]])
+
+    monkeypatch.setattr("app.infrastructure.embedder.httpx.Client", lambda: FakeClient())
+
+    assert Embedder("http://embedder", 3).embed_query("ретинол") == [0.1, 0.2, 0.3]
+
+
 class BrokenVectorStore:
     def search(self, collection_name: str, query: str, limit: int = 5):
         raise RuntimeError("leader not found")
@@ -75,6 +141,15 @@ class FallbackLlm:
 
     async def summarize_image(self, image_bytes: bytes, content_type: str, prompt: str) -> str:
         return "image summary"
+
+
+class RecordingFallbackLlm(FallbackLlm):
+    def __init__(self):
+        self.context = None
+
+    async def generate_with_context(self, query: str, context: list[dict], system_prompt: str) -> str:
+        self.context = context
+        return await super().generate_with_context(query, context, system_prompt)
 
 
 class RecordingVectorStore:
@@ -138,6 +213,46 @@ class RecordingAddVectorStore:
         self.calls.append({"collection_name": collection_name, "documents": documents, "texts": texts})
 
 
+class FakeWeaviateCollections:
+    def __init__(self, collection):
+        self.collection = collection
+
+    def exists(self, name: str) -> bool:
+        return True
+
+    def get(self, name: str):
+        return self.collection
+
+
+class FakeWeaviateClient:
+    def __init__(self, collection):
+        self.collections = FakeWeaviateCollections(collection)
+
+
+class FakeQuery:
+    def __init__(self):
+        self.hybrid_kwargs = None
+
+    def hybrid(self, **kwargs):
+        self.hybrid_kwargs = kwargs
+        return type("SearchResult", (), {"objects": []})()
+
+
+class FakeCollection:
+    def __init__(self):
+        self.query = FakeQuery()
+
+
+class FakeEmbedder:
+    def embed_query(self, text: str) -> list[float]:
+        return [0.1, 0.2, 0.3]
+
+
+class NoopReranker:
+    async def rerank(self, query: str, documents: list[str], top_k: int):
+        return None
+
+
 @pytest.mark.anyio
 async def test_rag_service_returns_answer_when_vector_store_is_unavailable():
     service = RAGService(vector_store=BrokenVectorStore(), llm=FallbackLlm())
@@ -168,6 +283,30 @@ async def test_rag_service_indexes_attachment_with_user_session_metadata():
     assert vector_store.documents[0]["source_type"] == "user_attachment"
     assert vector_store.documents[0]["user_id"] == "42"
     assert vector_store.documents[0]["session_id"] == "7"
+
+
+@pytest.mark.anyio
+async def test_rag_service_indexes_attachment_chunks_with_session_metadata():
+    vector_store = RecordingVectorStore()
+    service = RAGService(vector_store=vector_store, llm=FallbackLlm(), reranker=NoopReranker())
+    content = " ".join(["ниацинамид"] * 250)
+
+    await service.ingest_attachment(
+        RAGAttachmentIngestRequest(
+            attachment_id="3",
+            user_id="42",
+            session_id="7",
+            filename="routine.txt",
+            content_type="text/plain",
+            content_base64=base64.b64encode(content.encode("utf-8")).decode("ascii"),
+        )
+    )
+
+    assert len(vector_store.documents) > 1
+    assert vector_store.documents[0]["source_type"] == "user_attachment"
+    assert vector_store.documents[0]["user_id"] == "42"
+    assert vector_store.documents[0]["session_id"] == "7"
+    assert vector_store.documents[0]["chunk_index"] == 0
 
 
 @pytest.mark.anyio
@@ -205,7 +344,7 @@ async def test_rag_service_initializes_when_default_vector_store_is_unavailable(
 @pytest.mark.anyio
 async def test_rag_service_combines_session_and_global_knowledge_when_session_exists():
     vector_store = SplitResultsVectorStore()
-    service = RAGService(vector_store=vector_store, llm=FallbackLlm())
+    service = RAGService(vector_store=vector_store, llm=FallbackLlm(), reranker=NoopReranker())
 
     response = await service.query(
         RAGRequest(
@@ -225,7 +364,7 @@ async def test_rag_service_combines_session_and_global_knowledge_when_session_ex
 
 @pytest.mark.anyio
 async def test_rag_service_boosts_product_related_sources_only_when_product_context_present():
-    service = RAGService(vector_store=ProductBoostVectorStore(), llm=FallbackLlm())
+    service = RAGService(vector_store=ProductBoostVectorStore(), llm=FallbackLlm(), reranker=NoopReranker())
 
     with_product_context = await service.query(
         RAGRequest(
@@ -249,6 +388,29 @@ async def test_rag_service_boosts_product_related_sources_only_when_product_cont
     assert without_product_context.sources[0]["id"] == "global-generic-doc"
 
 
+@pytest.mark.anyio
+async def test_rag_service_passes_product_context_to_llm_when_search_has_no_results():
+    llm = RecordingFallbackLlm()
+    service = RAGService(vector_store=RecordingVectorStore(), llm=llm)
+
+    await service.query(
+        RAGRequest(
+            query="подходит ли мне этот продукт",
+            user_id="42",
+            context={"product_context": {"product": {"name": "Ultra Cream", "composition": "Aqua, Panthenol"}}},
+            max_results=5,
+        )
+    )
+
+    assert llm.context == [
+        {
+            "title": "Контекст текущего продукта",
+            "content": '{"product": {"name": "Ultra Cream", "composition": "Aqua, Panthenol"}}',
+            "category": "product_context",
+        }
+    ]
+
+
 def test_rag_service_add_knowledge_uses_default_vector_store_when_not_injected(monkeypatch):
     import app.services.rag_service as rag_service
 
@@ -263,3 +425,63 @@ def test_rag_service_add_knowledge_uses_default_vector_store_when_not_injected(m
     assert result["status"] == "success"
     assert result["indexed_count"] == 1
     assert len(recorder.calls) == 1
+
+
+def test_rag_service_chunks_long_text_with_overlap():
+    service = RAGService(vector_store=RecordingAddVectorStore(), llm=FallbackLlm(), reranker=NoopReranker())
+    text = " ".join(["ретинол"] * 300)
+
+    chunks = service._chunk_text(text, chunk_size=120, overlap=20)
+
+    assert len(chunks) > 1
+    assert all(chunk.strip() for chunk in chunks)
+    assert chunks[0][-20:] in chunks[1]
+
+
+def test_rag_service_add_knowledge_indexes_chunks_with_metadata():
+    recorder = RecordingAddVectorStore()
+    service = RAGService(vector_store=recorder, llm=FallbackLlm(), reranker=NoopReranker())
+    long_content = " ".join(["гиалуроновая кислота"] * 250)
+
+    result = service.add_knowledge([{"title": "Hydration", "content": long_content, "category": "care"}])
+
+    assert result["indexed_count"] > 1
+    first = recorder.calls[0]["documents"][0]
+    assert first["document_id"]
+    assert first["chunk_index"] == 0
+    assert first["chunk_count"] == result["indexed_count"]
+    assert first["embedding_model"] == "sentence-transformers/all-MiniLM-L6-v2"
+    assert first["schema_version"] == "rag_v1"
+
+
+def test_rag_service_builds_retrieval_debug_snapshot():
+    service = RAGService(vector_store=RecordingVectorStore(), llm=FallbackLlm(), reranker=NoopReranker())
+
+    debug = service._build_retrieval_debug(
+        filters={"user_id": "42", "session_id": "7"},
+        session_results=[{"id": "s1", "score": 0.9}],
+        global_results=[{"id": "g1", "score": 0.8}],
+        reranker_used=False,
+    )
+
+    assert debug["collection"] == "AuraKnowledge"
+    assert debug["filters"] == {"user_id": "42", "session_id": "7"}
+    assert debug["session_result_count"] == 1
+    assert debug["global_result_count"] == 1
+    assert debug["source_ids"] == ["s1", "g1"]
+    assert debug["reranker_used"] is False
+
+
+def test_vector_store_search_passes_metadata_filters_to_weaviate():
+    collection = FakeCollection()
+    store = VectorStore.__new__(VectorStore)
+    store.client = FakeWeaviateClient(collection)
+    store.embedder = FakeEmbedder()
+
+    store.search(
+        collection_name="KnowledgeBase",
+        query="ретинол",
+        filters={"user_id": "42", "session_id": "7"},
+    )
+
+    assert collection.query.hybrid_kwargs["filters"] is not None

@@ -33,41 +33,26 @@ class OpenRouterClient:
     async def generate_with_context(
         self, query: str, context: list[dict], system_prompt: str
     ) -> str:
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": self.site_url,
-            "X-Title": self.app_name,
-        }
-        payload = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": self._build_user_message(query, context)},
-            ],
-            "temperature": 0.2,
-        }
+        payload = self._build_payload(query, context, system_prompt)
+        return await self._call_api(payload)
 
-        try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.post(
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    headers=headers,
-                    json=payload,
-                )
-                response.raise_for_status()
-                data = response.json()
-                return data["choices"][0]["message"]["content"].strip()
-        except (httpx.HTTPError, KeyError, IndexError, TypeError, AttributeError) as exc:
-            raise LLMRequestError("OpenRouter request failed") from exc
+    async def generate_structured(
+        self, query: str, context: list[dict], system_prompt: str, json_schema: dict
+    ) -> dict:
+        payload = self._build_payload(query, context, system_prompt)
+        payload["response_format"] = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "structured_answer",
+                "strict": True,
+                "schema": json_schema,
+            },
+        }
+        result = await self._call_api(payload)
+        return json.loads(result)
 
     async def summarize_image(self, image_bytes: bytes, content_type: str, prompt: str) -> str:
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": self.site_url,
-            "X-Title": self.app_name,
-        }
+        headers = self._headers()
         image_base64 = base64.b64encode(image_bytes).decode("ascii")
         payload = {
             "model": self.model,
@@ -98,6 +83,39 @@ class OpenRouterClient:
                 return data["choices"][0]["message"]["content"].strip()
         except (httpx.HTTPError, KeyError, IndexError, TypeError, AttributeError) as exc:
             raise LLMRequestError("OpenRouter vision request failed") from exc
+
+    def _headers(self) -> dict:
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": self.site_url,
+            "X-Title": self.app_name,
+        }
+
+    def _build_payload(self, query: str, context: list[dict], system_prompt: str) -> dict:
+        return {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": self._build_user_message(query, context)},
+            ],
+            "temperature": 0.2,
+        }
+
+    async def _call_api(self, payload: dict) -> str:
+        headers = self._headers()
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers=headers,
+                    json=payload,
+                )
+                response.raise_for_status()
+                data = response.json()
+                return data["choices"][0]["message"]["content"].strip()
+        except (httpx.HTTPError, KeyError, IndexError, TypeError, AttributeError) as exc:
+            raise LLMRequestError("OpenRouter request failed") from exc
 
     def _build_user_message(self, query: str, context: list[dict]) -> str:
         formatted_context = json.dumps(context, ensure_ascii=False, indent=2)
