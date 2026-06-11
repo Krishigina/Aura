@@ -24,6 +24,8 @@ const productEnums = {
   areas: ['Лицо', 'Тело', 'Волосы', 'Губы', 'Руки', 'Веки', 'Зона вокруг глаз']
 }
 
+const isBrokenCategoryFilter = (value) => typeof value === 'string' && /^\?+$/.test(value.trim())
+
 export default function Products() {
   const { hasPermission } = useAuth()
   const { success, error, danger } = useToast()
@@ -86,11 +88,14 @@ export default function Products() {
       const skin_typesData = await dictionariesApi.get('skin_types').catch(e => { console.error('skin_types error:', e); return productEnums.skin_types })
       const applicationTimesData = await dictionariesApi.get('application_times').catch(e => { console.error('application_times error:', e); return productEnums.application_times })
       const areasData = await dictionariesApi.get('areas').catch(e => { console.error('areas error:', e); return productEnums.areas })
+      const sanitizedCategories = (Array.isArray(categoriesData) ? categoriesData : []).filter(
+        (item) => !isBrokenCategoryFilter(typeof item === 'object' ? item?.value : item)
+      )
       
       setProducts(productsData)
       setEnums({
         brands: brandsData,
-        categories: categoriesData,
+        categories: sanitizedCategories,
         segments: segmentsData,
         volumes: volumesData,
         countries: countriesData,

@@ -8,7 +8,8 @@ import './Dashboard.css'
 export default function Dashboard() {
   const { user } = useAuth()
   const [stats, setStats] = useState({ users: 0, products: 0, procedures: 0, content: 0 })
-  const [activityData, setActivityData] = useState([])
+  const [userActivityData, setUserActivityData] = useState([])
+  const [recommendationActivityData, setRecommendationActivityData] = useState([])
   const [recentActivity, setRecentActivity] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -30,7 +31,14 @@ export default function Dashboard() {
           procedures: Number(data?.stats?.procedures || 0),
           content: Number(data?.stats?.content || 0),
         })
-        setActivityData(Array.isArray(data?.activityData) ? data.activityData : [])
+        setUserActivityData(Array.isArray(data?.userActivityData) ? data.userActivityData : [])
+        setRecommendationActivityData(
+          Array.isArray(data?.recommendationActivityData)
+            ? data.recommendationActivityData
+            : Array.isArray(data?.activityData)
+              ? data.activityData
+              : []
+        )
         setRecentActivity(Array.isArray(data?.recentActivity) ? data.recentActivity : [])
       } catch (fetchError) {
         if (!isMounted) return
@@ -65,6 +73,8 @@ export default function Dashboard() {
     }
   }
 
+  const formatTooltipValue = (value, name) => [new Intl.NumberFormat('ru-RU').format(Number(value || 0)), name]
+
   return (
     <div className="dashboard">
       <div className="dashboard-header">
@@ -94,11 +104,11 @@ export default function Dashboard() {
           <div className="chart-container">
             {loading ? (
               <p>Загрузка...</p>
-            ) : activityData.length === 0 ? (
+            ) : userActivityData.length === 0 ? (
               <p>Данных пока нет</p>
             ) : (
               <ResponsiveContainer width="100%" height={280}>
-                <AreaChart data={activityData}>
+                <AreaChart data={userActivityData}>
                   <defs>
                     <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#A7F3D0" stopOpacity={0.3}/>
@@ -109,6 +119,7 @@ export default function Dashboard() {
                   <XAxis dataKey="date" stroke="#9CA3AF" fontSize={12} />
                   <YAxis stroke="#9CA3AF" fontSize={12} />
                   <Tooltip
+                    formatter={formatTooltipValue}
                     contentStyle={{
                       background: 'rgba(255,255,255,0.95)',
                       border: 'none',
@@ -118,7 +129,8 @@ export default function Dashboard() {
                   />
                   <Area
                     type="monotone"
-                    dataKey="users"
+                    dataKey="requests"
+                    name="Сообщения пользователей"
                     stroke="#A7F3D0"
                     strokeWidth={3}
                     fillOpacity={1}
@@ -137,15 +149,16 @@ export default function Dashboard() {
           <div className="chart-container">
             {loading ? (
               <p>Загрузка...</p>
-            ) : activityData.length === 0 ? (
+            ) : recommendationActivityData.length === 0 ? (
               <p>Данных пока нет</p>
             ) : (
               <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={activityData}>
+                <LineChart data={recommendationActivityData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                   <XAxis dataKey="date" stroke="#9CA3AF" fontSize={12} />
                   <YAxis stroke="#9CA3AF" fontSize={12} />
                   <Tooltip
+                    formatter={formatTooltipValue}
                     contentStyle={{
                       background: 'rgba(255,255,255,0.95)',
                       border: 'none',
@@ -156,6 +169,7 @@ export default function Dashboard() {
                   <Line
                     type="monotone"
                     dataKey="recommendations"
+                    name="Запросы на рекомендации"
                     stroke="#FB6FE8"
                     strokeWidth={3}
                     dot={{ fill: '#FB6FE8', strokeWidth: 2, r: 4 }}
